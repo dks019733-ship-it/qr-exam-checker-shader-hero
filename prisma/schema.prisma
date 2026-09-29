@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  classes       Class[]
+  exams         Exam[]
+  driveFolders  DriveFolder[]
+  answerSheetTemplate AnswerSheetTemplate?
+  aiChatSessions AiChatSession[]
+  generatedMaterials GeneratedMaterial[]
+  googleForms   GoogleForm[]
+  gradeColumns  GradeColumn[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  userId              String
+  type                String
+  provider            String
+  providerAccountId   String
+  refresh_token       String? @db.Text
+  access_token        String? @db.Text
+  expires_at           Int?
+  token_type           String?
+  scope                String?
+  id_token             String? @db.Text
+  session_state        String?
+  user                 User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  @@unique([identifier, token])
+}
+
+model Class {
+  id        String    @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  students  Student[]
+  exams     Exam[]
+  gradeColumns GradeColumn[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  @@index([ownerId])
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  rollNo    String   @default("")
+  studentNo String
+  name      String
+  isActive  Boolean  @default(true)
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attempts  ExamAttempt[]
+  gradeScores GradeScore[]
+  qrToken   String   @unique @default(cuid())
+  createdAt DateTime @default(now())
+  @@unique([classId, studentNo])
+  @@index([classId, rollNo])
+}
+
+model Exam {
+  id          String       @id @default(cuid())
+  title       String
+  subject     String       @default("")
+  ownerId     String
+  classId     String?
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  class       Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  questions   Question[]
+  attempts    ExamAttempt[]
+  driveFiles  DriveFile[]
+  gradeColumn GradeColumn?
+  status      ExamStatus   @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  @@index([ownerId])
+}
+
+model Question {
+  id          String @id @default(cuid())
+  examId      String
+  number      Int
+  answer      String
+  exam        Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  @@unique([examId, number])
+}
+
+model ExamAttempt {
+  id          String        @id @default(cuid())
+  examId      String
+  studentId   String
+  answersJson Json
+  score       Float?
+  status      AttemptStatus @default(PENDING_REVIEW)
+  exam        Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  @@unique([examId, studentId])
+  @@index([examId])
+  @@index([studentId])
+}
+
+model DriveFolder {
+  id        String @id @default(cuid())
+  ownerId   String
+  owner     User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  folderId  String
+  name      String
+  createdAt DateTime @default(now())
+  @@index([ownerId])
+}
+
+model DriveFile {
+  id         String   @id @default(cuid())
+  examId     String
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  driveFileId String
+  kind       String
+  name       String
+  createdAt  DateTime @default(now())
+  @@index([examId])
+}
+
+enum ExamStatus {
+  DRAFT
+  READY
+  CHECKING
+  REVIEW
+  CONFIRMED
+  ARCHIVED
+}
+
+enum AttemptStatus {
+  PENDING_REVIEW
+  READY_TO_CONFIRM
+  CONFIRMED
+}
+
+
+model AnswerSheetTemplate {
+  id              String   @id @default(cuid())
+  ownerId         String   @unique
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  schoolName      String   @default("โรงเรียนตัวอย่างวิทยา")
+  logoDataUrl     String?  @db.Text
+  examTitle       String   @default("แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน")
+  subject         String   @default("")
+  questionCount   Int      @default(40)
+  classLabel      String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AiChatSession {
+  id        String          @id @default(cuid())
+  ownerId   String
+  title     String          @default("สนทนาใหม่")
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  messages  AiChatMessage[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  @@index([ownerId, updatedAt])
+}
+
+model AiChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  role      AIChatRole
+  content   String      @db.Text
+  session   AiChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  @@index([sessionId, createdAt])
+}
+
+model GeneratedMaterial {
+  id                 String                @id @default(cuid())
+  ownerId            String
+  kind               GeneratedMaterialKind
+  title              String
+  subject            String
+  gradeLevel         String
+  topic              String
+  learningObjectives String                @default("") @db.Text
+  documentType       String?
+  content            Json
+  status             GeneratedMaterialStatus @default(pending_review)
+  reviewNotes        String                @default("") @db.Text
+  reviewedAt         DateTime?
+  owner              User                  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  googleForm         GoogleForm?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  @@index([ownerId, updatedAt])
+}
+
+model GoogleForm {
+  id            String           @id @default(cuid())
+  ownerId       String
+  materialId    String           @unique
+  formId        String           @unique
+  editUrl       String           @db.Text
+  responderUrl  String           @db.Text
+  owner         User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  material      GeneratedMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  gradeColumn   GradeColumn?
+  createdAt     DateTime         @default(now())
+  @@index([ownerId])
+}
+
+enum GradePeriod {
+  // Retained for database compatibility; the gradebook only exposes the two SGS periods below.
+  BEFORE_MIDTERM
+  MIDTERM
+  AFTER_MIDTERM
+}
+
+model GradeColumn {
+  id           String       @id @default(cuid())
+  ownerId      String
+  classId      String
+  title        String
+  period       GradePeriod
+  maxScore     Float        @default(10)
+  examId       String?      @unique
+  googleFormId String?      @unique
+  owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  classroom    Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  exam         Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
+  googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
+  scores       GradeScore[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  @@index([ownerId, classId, period])
+}
+
+model GradeScore {
+  id        String      @id @default(cuid())
+  columnId  String
+  studentId String
+  score     Float?
+  column    GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  updatedAt DateTime    @updatedAt
+  @@unique([columnId, studentId])
+  @@index([studentId])
+}
+
+enum AIChatRole {
+  user
+  assistant
+}
+
+enum GeneratedMaterialKind {
+  exam
+  document
+}
+
+enum GeneratedMaterialStatus {
+  pending_review
+  approved
+}
