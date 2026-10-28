@@ -5,19 +5,32 @@ import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } fr
 
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
 type FormInfo = { items?: FormItem[] };
-type FormAnswer = { textAnswers?: { answers?: { value?: string }[] } };
+type FormAnswer = { textAnswers?: { answers?: { value?: string }[] }; grade?: { score?: number } };
 type FormResponse = { responseId?: string; lastSubmittedTime?: string; totalScore?: number; answers?: Record<string, FormAnswer> };
 type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
+const normalizedLabel = (value: string) => normalized(value).replace(/[^\p{L}\p{N}]/gu, "");
 const normalizedRoll = (value: string) => {
   const text = normalized(value);
   return /^\d+$/u.test(text) ? String(Number(text)) : text;
+};
+const normalizedRoom = (value: string) => {
+  const text = normalized(value).replace(/^(?:ห้อง|ชั้น|มัธยมศึกษาปีที่|มัธยมศึกษา|ม\.?)*/u, "");
+  const match = text.match(/(\d+)\s*[/.-]\s*(\d+)/u);
+  return match ? `${Number(match[1])}/${Number(match[2])}` : text.replace(/[.-]/g, "/");
 };
 function answerFor(response: FormResponse, questionId?: string, itemId?: string) {
   const answer = (questionId ? response.answers?.[questionId] : undefined)
     ?? (itemId ? response.answers?.[itemId] : undefined);
   return answer?.textAnswers?.answers?.map((entry) => entry.value || "").join(" ").trim() || "";
+}
+function responseScore(response: FormResponse, gradedQuestionIds: string[]) {
+  if (typeof response.totalScore === "number" && Number.isFinite(response.totalScore)) return response.totalScore;
+  if (!gradedQuestionIds.length) return null;
+  const grades = gradedQuestionIds.map((questionId) => response.answers?.[questionId]?.grade?.score);
+  if (grades.some((score) => typeof score !== "number" || !Number.isFinite(score))) return null;
+  return (grades as number[]).reduce((total, score) => total + score, 0);
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,16 +48,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const items = form.items || [];
     // Forms API answers are keyed by questionId, while each form item has a separate itemId.
     // Use questionId for question answers, falling back to itemId for older responses.
-    const fieldIds = (label: string) => {
-      const item = items.find((candidate) => normalized(candidate.title || "") === normalized(label));
+    const fieldIds = (labels: string[]) => {
+      const expected = new Set(labels.map(normalizedLabel));
+      const item = items.find((candidate) => expected.has(normalizedLabel(candidate.title || "")));
       return { questionId: item?.questionItem?.question?.questionId, itemId: item?.itemId };
     };
-    const rollIds = fieldIds("เลขที่");
-    const roomIds = fieldIds("ห้อง");
-    const nameIds = fieldIds("ชื่อ-นามสกุล");
-    if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ไม่มีช่อง เลขที่/ห้อง/ชื่อ-นามสกุล ตามที่ระบบใช้จับคู่ กรุณาสร้างฟอร์มจากระบบนี้" }, { status: 400 });
+    const rollIds = fieldIds(["เลขที่", "ลำดับ", "เลขที่นักเรียน"]);
+    const roomIds = fieldIds(["ห้อง", "ห้องเรียน", "ชั้น", "ชั้น/ห้อง", "ระดับชั้น/ห้อง"]);
+    const nameIds = fieldIds(["ชื่อ-นามสกุล", "ชื่อสกุล", "ชื่อ-สกุล", "ชื่อนักเรียน", "ชื่อ"]);
+    if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ต้องมีคำถามสำหรับเลขที่ ห้อง และชื่อ-นามสกุล (ใช้ชื่อช่องใกล้เคียงได้) กรุณาตรวจคำถามในฟอร์ม" }, { status: 400 });
     const maxFormScore = items.reduce((sum, item) => sum + Number(item.questionItem?.question?.grading?.pointValue || 0), 0);
     if (!maxFormScore) return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
+    const gradedQuestionIds = items.flatMap((item) => {
+      const question = item.questionItem?.question;
+      return question?.questionId && Number(question.grading?.pointValue || 0) > 0 ? [question.questionId] : [];
+    });
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
     await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
@@ -54,16 +72,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const matchedResponseIds: string[] = [];
     let skipped = 0;
     let ungraded = 0;
+    let responsesSeen = 0;
     let pageToken: string | undefined;
     for (let page = 0; page < 100; page++) {
       const query = new URLSearchParams({ pageSize: "500" });
       if (pageToken) query.set("pageToken", pageToken);
       const result = await googleFormsRequest<ResponsePage>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}/responses?${query}`);
       for (const response of result.responses || []) {
-        const score = response.totalScore;
+        responsesSeen++;
+        const score = responseScore(response, gradedQuestionIds);
         if (typeof score !== "number") { ungraded++; continue; }
         const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
-        if (room && room !== normalized(column.classroom.name)) { skipped++; continue; }
+        if (room && normalizedRoom(room) !== normalizedRoom(column.classroom.name)) { skipped++; continue; }
         const roll = normalizedRoll(answerFor(response, rollIds.questionId, rollIds.itemId));
         const name = normalized(answerFor(response, nameIds.questionId, nameIds.itemId));
         // A unique roll number is enough to match. Use the name as a fallback,
@@ -98,7 +118,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         update: { score },
       })));
     }
-    return NextResponse.json({ imported: entries.length, pending: pendingRows.length, skipped, ungraded, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
+    return NextResponse.json({ imported: entries.length, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";
