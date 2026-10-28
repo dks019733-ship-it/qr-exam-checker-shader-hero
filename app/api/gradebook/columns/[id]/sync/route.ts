@@ -45,6 +45,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ไม่มีช่อง เลขที่/ห้อง/ชื่อ-นามสกุล ตามที่ระบบใช้จับคู่ กรุณาสร้างฟอร์มจากระบบนี้" }, { status: 400 });
     const maxFormScore = items.reduce((sum, item) => sum + Number(item.questionItem?.question?.grading?.pointValue || 0), 0);
     if (!maxFormScore) return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
+    // Keep the displayed full score aligned with the actual quiz before storing raw responses.
+    await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
     const roster = students.map((student) => ({ ...student, nameKey: normalized(student.name), rolls: [normalized(student.rollNo), normalized(student.studentNo)].filter(Boolean) }));
     const scores = new Map<string, number>();
@@ -68,7 +70,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         if (candidates.length > 1 && name) candidates = candidates.filter((student) => student.nameKey === name);
         if (!candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
         if (candidates.length !== 1) { skipped++; continue; }
-        scores.set(candidates[0].id, Math.min(column.maxScore, Math.max(0, (score / maxFormScore) * column.maxScore)));
+        // Preserve the Forms quiz score as recorded. Teachers can rescale it later in the gradebook.
+        scores.set(candidates[0].id, score);
       }
       pageToken = result.nextPageToken;
       if (!pageToken) break;
@@ -82,7 +85,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         update: { score },
       })));
     }
-    return NextResponse.json({ imported: entries.length, skipped, ungraded, maxFormScore, maxGradeScore: column.maxScore });
+    return NextResponse.json({ imported: entries.length, skipped, ungraded, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";

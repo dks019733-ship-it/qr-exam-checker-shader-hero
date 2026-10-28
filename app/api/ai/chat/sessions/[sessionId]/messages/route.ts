@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { aiErrorResponse, AIRequestError, generateWithGemini, requireAIUser } from "@/lib/ai-server";
+import { sanitizeTeacherAiProfile } from "@/lib/teacher-ai-profile";
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -21,6 +22,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (Number(request.headers.get("content-length") || 0) > 200_000) throw new AIRequestError("ข้อความที่ส่งมีขนาดใหญ่เกินไป", 413);
     const body = await request.json().catch(() => ({}));
     const content = typeof body?.content === "string" ? body.content.trim() : "";
+    const teacherProfile = sanitizeTeacherAiProfile(body?.teacherProfile);
     if (!content) throw new AIRequestError("กรุณาพิมพ์ข้อความก่อนส่ง", 400);
     if (content.length > 12000) throw new AIRequestError("ข้อความยาวเกินไป (สูงสุด 12,000 ตัวอักษร)", 400);
 
@@ -30,7 +32,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const replyText = await generateWithGemini([
       ...history.map((item) => ({ role: item.role === "assistant" ? "model" as const : "user" as const, parts: [{ text: item.content }] })),
       { role: "user", parts: [{ text: content }] },
-    ]);
+    ], { teacherProfile });
     const [, reply] = await prisma.$transaction(async (transaction) => {
       const userMessage = await transaction.aiChatMessage.create({ data: { sessionId, role: "user", content } });
       const savedReply = await transaction.aiChatMessage.create({ data: { sessionId, role: "assistant", content: replyText } });

@@ -12,6 +12,13 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export interface ChatTeacherProfile {
+  name: string;
+  gender: string;
+  outfit: string;
+  instructions: string;
+}
+
 export type MaterialKind = "exam" | "document";
 export type MaterialStatus = "pending_review" | "approved";
 
@@ -76,7 +83,7 @@ export const chatApi = {
   listSessions: () => request<{ sessions: ChatSession[] }>("/api/ai/chat/sessions"),
   createSession: (title?: string) => request<{ session: ChatSession }>("/api/ai/chat/sessions", { method: "POST", body: JSON.stringify({ title }) }),
   listMessages: (sessionId: string) => request<{ messages: ChatMessage[] }>(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`),
-  sendMessage: (sessionId: string, content: string) => request<{ reply: ChatMessage }>(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`, { method: "POST", body: JSON.stringify({ content }) }),
+  sendMessage: (sessionId: string, content: string, teacherProfile?: ChatTeacherProfile) => request<{ reply: ChatMessage }>(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`, { method: "POST", body: JSON.stringify({ content, teacherProfile }) }),
 };
 
 export const materialsApi = {
