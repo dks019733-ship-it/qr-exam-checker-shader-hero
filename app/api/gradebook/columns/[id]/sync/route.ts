@@ -3,15 +3,20 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
 
-type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { grading?: { pointValue?: number } } } };
+type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
 type FormInfo = { items?: FormItem[] };
 type FormAnswer = { textAnswers?: { answers?: { value?: string }[] } };
 type FormResponse = { totalScore?: number; answers?: Record<string, FormAnswer> };
 type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
-function answerFor(response: FormResponse, itemId?: string) {
-  return itemId ? response.answers?.[itemId]?.textAnswers?.answers?.map((answer) => answer.value || "").join(" ").trim() || "" : "";
+const normalizedRoll = (value: string) => {
+  const text = normalized(value);
+  return /^\d+$/u.test(text) ? String(Number(text)) : text;
+};
+function answerFor(response: FormResponse, questionId?: string, itemId?: string) {
+  const answer = (questionId && response.answers?.[questionId]) || (itemId && response.answers?.[itemId]);
+  return answer?.textAnswers?.answers?.map((entry) => entry.value || "").join(" ").trim() || "";
 }
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -27,11 +32,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const token = await getGoogleFormsAccessToken(session.user.id);
     const form = await googleFormsRequest<FormInfo>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}`);
     const items = form.items || [];
-    const fieldId = (label: string) => items.find((item) => normalized(item.title || "") === normalized(label))?.itemId;
-    const rollId = fieldId("เลขที่");
-    const roomId = fieldId("ห้อง");
-    const nameId = fieldId("ชื่อ-นามสกุล");
-    if (!rollId || !roomId || !nameId) return NextResponse.json({ error: "ฟอร์มนี้ไม่มีช่อง เลขที่/ห้อง/ชื่อ-นามสกุล ตามที่ระบบใช้จับคู่ กรุณาสร้างฟอร์มจากระบบนี้" }, { status: 400 });
+    // Forms API answers are keyed by questionId, while each form item has a separate itemId.
+    // Use questionId for question answers, falling back to itemId for older responses.
+    const fieldIds = (label: string) => {
+      const item = items.find((candidate) => normalized(candidate.title || "") === normalized(label));
+      return { questionId: item?.questionItem?.question?.questionId, itemId: item?.itemId };
+    };
+    const rollIds = fieldIds("เลขที่");
+    const roomIds = fieldIds("ห้อง");
+    const nameIds = fieldIds("ชื่อ-นามสกุล");
+    if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ไม่มีช่อง เลขที่/ห้อง/ชื่อ-นามสกุล ตามที่ระบบใช้จับคู่ กรุณาสร้างฟอร์มจากระบบนี้" }, { status: 400 });
     const maxFormScore = items.reduce((sum, item) => sum + Number(item.questionItem?.question?.grading?.pointValue || 0), 0);
     if (!maxFormScore) return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
@@ -47,12 +57,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       for (const response of result.responses || []) {
         const score = response.totalScore;
         if (typeof score !== "number") { ungraded++; continue; }
-        const room = normalized(answerFor(response, roomId));
+        const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
         if (room && room !== normalized(column.classroom.name)) { skipped++; continue; }
-        const roll = normalized(answerFor(response, rollId));
-        const name = normalized(answerFor(response, nameId));
-        if (!name) { skipped++; continue; }
-        const candidates = roster.filter((student) => (roll ? student.rolls.includes(roll) : true) && student.nameKey === name);
+        const roll = normalizedRoll(answerFor(response, rollIds.questionId, rollIds.itemId));
+        const name = normalized(answerFor(response, nameIds.questionId, nameIds.itemId));
+        // A unique roll number is enough to match. Use the name as a fallback,
+        // or to disambiguate duplicated roll numbers if the roster is inconsistent.
+        let candidates = roll ? roster.filter((student) => student.rolls.some((value) => normalizedRoll(value) === roll)) : [];
+        if (candidates.length > 1 && name) candidates = candidates.filter((student) => student.nameKey === name);
+        if (!candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
         if (candidates.length !== 1) { skipped++; continue; }
         scores.set(candidates[0].id, Math.min(column.maxScore, Math.max(0, (score / maxFormScore) * column.maxScore)));
       }

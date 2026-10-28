@@ -11,7 +11,7 @@ const items = [
 
 export function HeroNavigation({ signedIn }: { signedIn: boolean }) {
   const renderItems = () => items.map(([label, href]) => {
-    const className = "rounded-full px-3 py-2 text-xs font-light text-white/85 transition hover:bg-white/15 hover:text-white";
+    const className = "rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 sm:rounded-full sm:px-3 sm:py-2 sm:text-xs sm:font-normal sm:text-slate-600 sm:hover:bg-slate-100";
     if (href.startsWith("#")) return <Link key={label} href={href} className={className}>{label}</Link>;
     return signedIn
       ? <Link key={label} href={href} className={className}>{label}</Link>
@@ -19,10 +19,10 @@ export function HeroNavigation({ signedIn }: { signedIn: boolean }) {
   });
   return (
     <>
-      <nav aria-label="เมนูหลัก" className="hidden items-center space-x-1 lg:flex">{renderItems()}</nav>
-      <details className="relative lg:hidden">
-        <summary className="cursor-pointer list-none rounded-full border border-white/30 px-4 py-2 text-sm text-white">เมนู ☰</summary>
-        <nav aria-label="เมนูหลักบนมือถือ" className="absolute right-0 top-12 z-50 flex min-w-44 flex-col rounded-xl border border-white/20 bg-slate-950/95 p-2 shadow-xl backdrop-blur">
+      <nav aria-label="เมนูหลัก" className="hidden items-center gap-1 lg:flex">{renderItems()}</nav>
+      <details className="relative z-50 shrink-0 lg:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-center rounded-xl border border-slate-300 bg-white/80 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm marker:hidden">☰<span className="ml-1.5">เมนู</span></summary>
+        <nav aria-label="เมนูหลักบนมือถือ" className="fixed inset-x-3 top-[4.5rem] z-[60] mx-auto flex max-h-[calc(100dvh-6rem)] flex-col overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl sm:inset-x-auto sm:right-6 sm:top-20 sm:mx-0 sm:w-64">
           {renderItems()}
         </nav>
       </details>
@@ -32,13 +32,13 @@ export function HeroNavigation({ signedIn }: { signedIn: boolean }) {
 
 export function HeroLogin({ signedIn }: { signedIn: boolean }) {
   return signedIn
-    ? <Link href="/dashboard" className="rounded-full bg-white px-6 py-2.5 text-xs font-medium text-black transition hover:bg-white/90">ไปที่ระบบ</Link>
-    : <SignInButton redirectTo="/dashboard" className="rounded-full bg-white px-6 py-2.5 text-xs font-medium text-black transition hover:bg-white/90" label="เข้าสู่ระบบ" />;
+    ? <Link href="/dashboard" className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5">ไปที่ระบบ</Link>
+    : <SignInButton redirectTo="/dashboard" className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5" label="เข้าสู่ระบบ" />;
 }
 
 export function HeroActions({ signedIn }: { signedIn: boolean }) {
-  const outline = "rounded-full border-2 border-white/40 bg-transparent px-7 py-3.5 text-sm font-medium text-white backdrop-blur-sm transition hover:border-cyan-300 hover:bg-white/10 hover:text-cyan-100";
-  const primary = "rounded-full bg-gradient-to-r from-cyan-500 to-orange-500 px-7 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110 hover:shadow-xl";
+  const outline = "rounded-xl border border-slate-300 bg-white/60 px-5 py-3 text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm transition hover:border-slate-400 hover:bg-white sm:rounded-full sm:px-7 sm:py-3.5";
+  const primary = "rounded-xl bg-emerald-800 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 sm:rounded-full sm:px-7 sm:py-3.5";
   const gated = (href: string, text: string, style: string) => signedIn
     ? <Link href={href} className={style}>{text}</Link>
     : <SignInButton redirectTo={href} className={style} label={text} />;
