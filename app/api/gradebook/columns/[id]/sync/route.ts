@@ -15,7 +15,8 @@ const normalizedRoll = (value: string) => {
   return /^\d+$/u.test(text) ? String(Number(text)) : text;
 };
 function answerFor(response: FormResponse, questionId?: string, itemId?: string) {
-  const answer = (questionId && response.answers?.[questionId]) || (itemId && response.answers?.[itemId]);
+  const answer = (questionId ? response.answers?.[questionId] : undefined)
+    ?? (itemId ? response.answers?.[itemId] : undefined);
   return answer?.textAnswers?.answers?.map((entry) => entry.value || "").join(" ").trim() || "";
 }
 
