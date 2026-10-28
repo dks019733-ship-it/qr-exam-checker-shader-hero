@@ -93,7 +93,7 @@ export default function ShaderHero({ navigation, login, actions }: { navigation:
           >
             <ScanLine className="h-7 w-7" />
           </motion.div>
-          <span className="truncate text-sm font-semibold tracking-wide text-slate-800">QR Exam Checker</span>
+          <span className="truncate text-sm font-semibold tracking-wide text-slate-800">งานของครู</span>
         </Link>
 
         {navigation}
@@ -133,7 +133,7 @@ export default function ShaderHero({ navigation, login, actions }: { navigation:
               animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
               transition={{ duration: 8, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
             >
-              QR EXAM CHECKER
+              งานของครู
             </motion.span>
             <span className="block font-black text-slate-900">ตรวจข้อสอบ</span>
             <span className="block font-light italic text-slate-600">ให้เป็นระบบ</span>
@@ -191,7 +191,7 @@ export default function ShaderHero({ navigation, login, actions }: { navigation:
             </defs>
             <text className="fill-white/80 text-sm font-medium">
               <textPath href="#hero-circle" startOffset="0%">
-                QR EXAM CHECKER • ตรวจข้อสอบอัตโนมัติ • QR EXAM CHECKER •
+                งานของครู • ตรวจข้อสอบอัตโนมัติ • งานของครู •
               </textPath>
             </text>
           </motion.svg>

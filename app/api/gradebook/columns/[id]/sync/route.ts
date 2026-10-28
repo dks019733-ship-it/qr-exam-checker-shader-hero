@@ -6,7 +6,7 @@ import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } fr
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
 type FormInfo = { items?: FormItem[] };
 type FormAnswer = { textAnswers?: { answers?: { value?: string }[] } };
-type FormResponse = { totalScore?: number; answers?: Record<string, FormAnswer> };
+type FormResponse = { responseId?: string; lastSubmittedTime?: string; totalScore?: number; answers?: Record<string, FormAnswer> };
 type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
@@ -50,6 +50,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
     const roster = students.map((student) => ({ ...student, nameKey: normalized(student.name), rolls: [normalized(student.rollNo), normalized(student.studentNo)].filter(Boolean) }));
     const scores = new Map<string, number>();
+    const pendingRows: { columnId: string; responseId: string; rollNo: string; studentName: string; score: number; submittedAt: Date | null }[] = [];
+    const matchedResponseIds: string[] = [];
     let skipped = 0;
     let ungraded = 0;
     let pageToken: string | undefined;
@@ -69,14 +71,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         let candidates = roll ? roster.filter((student) => student.rolls.some((value) => normalizedRoll(value) === roll)) : [];
         if (candidates.length > 1 && name) candidates = candidates.filter((student) => student.nameKey === name);
         if (!candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
-        if (candidates.length !== 1) { skipped++; continue; }
-        // Preserve the Forms quiz score as recorded. Teachers can rescale it later in the gradebook.
-        scores.set(candidates[0].id, score);
+        if (candidates.length === 1) {
+          scores.set(candidates[0].id, score);
+          if (response.responseId) matchedResponseIds.push(response.responseId);
+        } else if (name && response.responseId) {
+          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: answerFor(response, rollIds.questionId, rollIds.itemId), studentName: answerFor(response, nameIds.questionId, nameIds.itemId), score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
+        } else skipped++;
       }
       pageToken = result.nextPageToken;
       if (!pageToken) break;
       if (page === 99) throw new Error("ผลตอบกลับเกินจำนวนที่ระบบนำเข้าได้ในครั้งเดียว");
     }
+    for (let i = 0; i < pendingRows.length; i += 100) {
+      await prisma.$transaction(pendingRows.slice(i, i + 100).map((row) => prisma.pendingFormScore.upsert({
+        where: { columnId_responseId: { columnId: row.columnId, responseId: row.responseId } },
+        create: row,
+        update: { rollNo: row.rollNo, studentName: row.studentName, score: row.score, submittedAt: row.submittedAt },
+      })));
+    }
+    if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });
     const entries = [...scores.entries()];
     for (let i = 0; i < entries.length; i += 25) {
       await Promise.all(entries.slice(i, i + 25).map(([studentId, score]) => prisma.gradeScore.upsert({
@@ -85,7 +98,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         update: { score },
       })));
     }
-    return NextResponse.json({ imported: entries.length, skipped, ungraded, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
+    return NextResponse.json({ imported: entries.length, pending: pendingRows.length, skipped, ungraded, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";

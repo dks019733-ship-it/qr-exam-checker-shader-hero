@@ -19,6 +19,7 @@ export default function MaterialsPage() {
   const [documentType, setDocumentType] = useState("ใบงาน");
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     const selectedKind = new URLSearchParams(window.location.search).get("kind");
@@ -47,6 +48,18 @@ export default function MaterialsPage() {
       setPageError(err.message || "สร้างร่างไม่สำเร็จ");
       setLoading(false);
     }
+  }
+
+  async function deleteSelected() {
+    if (!selectedIds.length || !window.confirm(`ลบงาน ${selectedIds.length} รายการออกจากระบบหรือไม่? Google Forms ที่สร้างไว้ยังอยู่ใน Drive`)) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/ai/materials", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: selectedIds }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "ลบงานไม่สำเร็จ");
+      setMaterials((rows) => rows.filter((row) => !selectedIds.includes(row.id))); setSelectedIds([]); setPageError("");
+    } catch (error) { setPageError(error instanceof Error ? error.message : "ลบงานไม่สำเร็จ"); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -90,15 +103,14 @@ export default function MaterialsPage() {
         </form>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="font-semibold text-slate-900">งานที่สร้างไว้</h2>
-          <p className="mt-1 text-sm text-slate-500">เปิดเพื่อตรวจ แก้ไข หรือดาวน์โหลดงานที่อนุมัติแล้ว</p>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-slate-900">งานที่สร้างไว้</h2><p className="mt-1 text-sm text-slate-500">เลือกงานเพื่อลบหลายรายการพร้อมกันได้</p></div>{selectedIds.length > 0 && <button onClick={() => void deleteSelected()} disabled={loading} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700">ลบที่เลือก ({selectedIds.length})</button>}</div>
           <div className="mt-4 space-y-3">
             {materials.map((item) => (
-              <button key={item.id} onClick={() => router.push(`/dashboard/ai/materials/${item.id}`)} className="w-full rounded-xl border border-slate-200 p-4 text-left transition hover:border-brand-300 hover:bg-brand-50/30">
+              <div key={item.id} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-brand-300 hover:bg-brand-50/30"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} aria-label={`เลือก ${item.title} เพื่อลบ`} className="!w-4 !min-w-4 !p-0 !m-0 mt-1 shrink-0" /><button onClick={() => router.push(`/dashboard/ai/materials/${item.id}`)} className="min-w-0 flex-1 text-left">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{item.status === "approved" ? "อนุมัติแล้ว" : "รอครูตรวจ"}</span>
                 <h3 className="mt-3 font-medium text-slate-900">{item.title}</h3>
                 <p className="mt-1 text-xs text-slate-500">{item.subject} · {item.grade_level} · {item.kind === "exam" ? "ข้อสอบ" : "เอกสาร"}</p>
-              </button>
+              </button></div>
             ))}
             {!materials.length && !pageError && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มีงานที่สร้างไว้</p>}
           </div>

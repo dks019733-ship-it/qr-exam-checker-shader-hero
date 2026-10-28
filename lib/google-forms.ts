@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const FORMS_RESPONSES_SCOPE = "https://www.googleapis.com/auth/forms.responses.readonly";
 
 export async function getGoogleFormsAccessToken(userId: string) {
   const account = await prisma.account.findFirst({
@@ -10,6 +11,9 @@ export async function getGoogleFormsAccessToken(userId: string) {
   if (!account) throw new Error("ไม่พบบัญชี Google ที่เชื่อมไว้ กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
   if (!account.scope?.split(/\s+/).includes(DRIVE_FILE_SCOPE)) {
     throw new Error("บัญชี Google ยังไม่ได้อนุญาตจัดการไฟล์ที่สร้างในแอป กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์");
+  }
+  if (!account.scope?.split(/\s+/).includes(FORMS_RESPONSES_SCOPE)) {
+    throw new Error("บัญชี Google ยังไม่ได้อนุญาตให้อ่านคำตอบ Google Forms กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์");
   }
   if (account.access_token && account.expires_at && account.expires_at * 1000 > Date.now() + 60_000) return account.access_token;
   if (!account.refresh_token) throw new Error("ไม่พบสิทธิ์ต่ออายุบัญชี Google กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
