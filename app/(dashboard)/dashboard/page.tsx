@@ -11,7 +11,7 @@ const cards = [
   { title: "รายงานคะแนน", description: "ดูผลสอบ ยืนยันคะแนน และดาวน์โหลด CSV", icon: GraduationCap, href: "/dashboard/reports", status: "พร้อมใช้งาน" },
   { title: "สมุดคะแนนออนไลน์", description: "รวมข้อสอบและคะแนนเก็บ แบ่งกลางภาคและหลังกลางภาค พร้อมคำนวณยอดงาน/บทตาม SGS", icon: BookOpenCheck, href: "/dashboard/gradebook", status: "พร้อมใช้งาน" },
   { title: "กระดาษคำตอบ", description: "แก้ตราโรงเรียน วิชา ชื่อ รหัส และดูตัวอย่างก่อนพิมพ์", icon: FileImage, href: "/dashboard/answer-sheet", status: "พร้อมใช้งาน" },
-  { title: "แชทกับ AI", description: "เริ่มสนทนาใหม่หรือกลับไปยังห้องสนทนาของคุณ", icon: Sparkles, href: "/dashboard/ai/chat", status: "พร้อมใช้งาน" },
+  { title: "ผู้ช่วย AI สำหรับครู", description: "เลือกแชท สร้างข้อสอบ Google Forms หรือสร้างเอกสาร", icon: Sparkles, href: "/dashboard/ai", status: "พร้อมใช้งาน" },
   { title: "AI สร้าง Google Forms", description: "ให้ AI ร่างข้อสอบ ตรวจและอนุมัติ แล้วสร้าง Google Form พร้อมเฉลยและลิงก์ส่งนักเรียน", icon: ClipboardCheck, href: "/dashboard/ai/materials?kind=exam", status: "พร้อมใช้งาน" },
 ];
 

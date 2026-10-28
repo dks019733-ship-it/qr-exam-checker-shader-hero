@@ -258,6 +258,7 @@ model GradeColumn {
   exam         Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
   googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
   scores       GradeScore[]
+  pendingFormScores PendingFormScore[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   @@index([ownerId, classId, period])
@@ -273,6 +274,21 @@ model GradeScore {
   updatedAt DateTime    @updatedAt
   @@unique([columnId, studentId])
   @@index([studentId])
+}
+
+model PendingFormScore {
+  id          String      @id @default(cuid())
+  columnId    String
+  responseId  String
+  rollNo      String      @default("")
+  studentName String
+  score       Float
+  submittedAt DateTime?
+  column      GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  @@unique([columnId, responseId])
+  @@index([columnId])
 }
 
 enum AIChatRole {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Loader2, Save, Plus } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Save, Plus, Trash2 } from "lucide-react";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; status: string; questions?: { number: number; answer: string }[]; _count?: { attempts: number } };
@@ -19,6 +19,7 @@ export function ExamManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
 
   async function load() {
     setLoading(true);
@@ -82,6 +83,21 @@ export function ExamManager() {
     finally { setSaving(false); }
   }
 
+  async function deleteSelectedExams() {
+    const selected = exams.filter((exam) => selectedExamIds.includes(exam.id));
+    if (!selected.length || !window.confirm(`ลบข้อสอบ ${selected.length} รายการหรือไม่? เฉลย ผลสอบ และไฟล์ที่เชื่อมจะถูกลบ`)) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/exams", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: selectedExamIds }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "ลบข้อสอบไม่สำเร็จ");
+      setExams((current) => current.filter((exam) => !selectedExamIds.includes(exam.id)));
+      if (selectedExamIds.includes(selectedId)) setSelectedId("");
+      setSelectedExamIds([]); setMessage(`ลบข้อสอบ ${body.deleted} รายการแล้ว`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "ลบข้อสอบไม่สำเร็จ"); }
+    finally { setSaving(false); }
+  }
+
   function changeCount(value: number) {
     const next = Math.min(100, Math.max(1, value || 1));
     setCount(next); setAnswers((current) => Array.from({ length: next }, (_, i) => current[i] || ""));
@@ -98,7 +114,7 @@ export function ExamManager() {
           {classes.length ? <select value={classId} onChange={(e) => setClassId(e.target.value)} className="mt-3 w-full rounded-lg border p-2">{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : <p className="mt-3 text-sm text-amber-700">ยังไม่มีห้องเรียน <Link className="underline" href="/dashboard/answer-sheet">ไปสร้างห้องและรายชื่อนักเรียน</Link></p>}
           <button disabled={saving || !classes.length} className="mt-3 inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Plus className="mr-2 h-4 w-4" />สร้างข้อสอบ</button>
         </form>
-        <section className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">ข้อสอบของฉัน</h2>{loading ? <Loader2 className="mt-4 h-5 w-5 animate-spin" /> : exams.length ? <ul className="mt-3 space-y-2">{exams.map((exam) => <li key={exam.id}><button onClick={() => setSelectedId(exam.id)} className={"w-full rounded-lg border p-3 text-left text-sm " + (selectedId === exam.id ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50")}><span className="block font-medium">{exam.title}</span><span className="text-xs text-slate-500">{exam.class?.name || "ยังไม่เลือกห้อง"} · {exam._count?.attempts || 0} คน</span></button></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">ยังไม่มีข้อสอบ</p>}</section>
+        <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h2 className="font-semibold">ข้อสอบของฉัน</h2>{selectedExamIds.length > 0 && <button onClick={() => void deleteSelectedExams()} disabled={saving} className="inline-flex items-center gap-1 text-xs text-red-700"><Trash2 className="h-3.5 w-3.5"/>ลบ ({selectedExamIds.length})</button>}</div>{loading ? <Loader2 className="mt-4 h-5 w-5 animate-spin" /> : exams.length ? <ul className="mt-3 space-y-2">{exams.map((exam) => <li key={exam.id} className="flex items-center gap-2"><input type="checkbox" checked={selectedExamIds.includes(exam.id)} onChange={(event) => setSelectedExamIds((current) => event.target.checked ? [...current, exam.id] : current.filter((id) => id !== exam.id))} aria-label={`เลือกข้อสอบ ${exam.title} เพื่อลบ`} /><button onClick={() => setSelectedId(exam.id)} className={"min-w-0 flex-1 rounded-lg border p-3 text-left text-sm " + (selectedId === exam.id ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50")}><span className="block font-medium">{exam.title}</span><span className="text-xs text-slate-500">{exam.class?.name || "ยังไม่เลือกห้อง"} · {exam._count?.attempts || 0} คน</span></button></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">ยังไม่มีข้อสอบ</p>}</section>
       </aside>
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         {!selected ? <div className="py-10 text-center text-sm text-slate-500"><BookOpen className="mx-auto mb-3 h-8 w-8" />สร้างหรือเลือกข้อสอบเพื่อกำหนดเฉลย</div> : <form onSubmit={saveExam}>

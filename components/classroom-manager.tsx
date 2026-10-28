@@ -16,6 +16,8 @@ export function ClassroomManager() {
   const [studentRows, setStudentRows] = useState("เลขที่,รหัสนักเรียน,ชื่อ-สกุล\n1,M401001,นักเรียนตัวอย่าง");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentNo, setStudentNo] = useState("");
   const [rollNo, setRollNo] = useState("");
   const [studentName, setStudentName] = useState("");
@@ -150,6 +152,7 @@ export function ClassroomManager() {
   }, []);
 
   useEffect(() => {
+    setSelectedStudentIds([]);
     loadStudents(classId).catch((error) => setNotice(error.message || "โหลดรายชื่อนักเรียนไม่สำเร็จ"));
   // Keep the chosen student when a row list refreshes; class changes always reload from the server.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +193,7 @@ export function ClassroomManager() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "นำเข้านักเรียนไม่สำเร็จ");
       await loadStudents(classId);
-      setNotice(`นำเข้ารายชื่อนักเรียน ${body.count} คนแล้ว`);
+      setNotice(`นำเข้ารายชื่อนักเรียน ${body.count} คนแล้ว${body.matchedFormScores ? ` · จับคู่คะแนน Forms ${body.matchedFormScores} รายการอัตโนมัติ` : ""}${body.pendingFormScores ? ` · ยังรอจับคู่อีก ${body.pendingFormScores} รายการ` : ""}`);
     } catch (error: any) { setNotice(error.message || "นำเข้านักเรียนไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
@@ -206,7 +209,7 @@ export function ClassroomManager() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "นำเข้านักเรียนไม่สำเร็จ");
       await loadStudents(classId);
-      setNotice(`นำเข้าห้อง ${selectedClass?.name}: ${body.count} คนแล้ว${preview.length > 500 ? " (จำกัด 500 คนต่อครั้ง)" : ""}`);
+      setNotice(`นำเข้าห้อง ${selectedClass?.name}: ${body.count} คนแล้ว${body.matchedFormScores ? ` · จับคู่คะแนน Forms ${body.matchedFormScores} รายการอัตโนมัติ` : ""}${body.pendingFormScores ? ` · ยังรอจับคู่อีก ${body.pendingFormScores} รายการ` : ""}${preview.length > 500 ? " (จำกัด 500 คนต่อครั้ง)" : ""}`);
       setFileName(""); setHeaders([]); setSheetRows([]);
     } catch (error: any) { setNotice(error.message || "นำเข้านักเรียนไม่สำเร็จ"); }
     finally { setBusy(false); }
@@ -254,13 +257,41 @@ export function ClassroomManager() {
     finally { setBusy(false); }
   }
 
+  async function deleteSelectedClasses() {
+    const selected = classes.filter((row) => selectedClassIds.includes(row.id));
+    if (!selected.length || !window.confirm(`ลบห้อง ${selected.map((row) => row.name).join(", ")} หรือไม่? นักเรียน คะแนน และข้อมูลในสมุดคะแนนของห้องจะถูกลบถาวร`)) return;
+    setBusy(true); setNotice("");
+    try {
+      const response = await fetch("/api/classes", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: selected.map((row) => row.id) }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "ลบห้องเรียนไม่สำเร็จ");
+      const next = classes.filter((row) => !selectedClassIds.includes(row.id));
+      setClasses(next); setSelectedClassIds([]);
+      if (selectedClassIds.includes(classId)) { setClassId(next[0]?.id || ""); setStudents([]); }
+      setNotice(`ลบห้องเรียน ${body.deleted} ห้องแล้ว`);
+    } catch (error: any) { setNotice(error.message || "ลบห้องเรียนไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteSelectedStudents() {
+    const selected = students.filter((row) => selectedStudentIds.includes(row.id));
+    if (!selected.length || !window.confirm(`เอานักเรียน ${selected.length} คนออกจากรายชื่อหรือไม่? ประวัติคะแนนเดิมจะยังอยู่`)) return;
+    setBusy(true); setNotice("");
+    try {
+      const responses = await Promise.all(selected.map((row) => fetch(`/api/students/${encodeURIComponent(row.id)}`, { method: "DELETE" })));
+      if (responses.some((response) => !response.ok)) throw new Error("ลบบางรายชื่อไม่สำเร็จ กรุณาลองใหม่");
+      setSelectedStudentIds([]); await loadStudents(classId); setNotice(`เอารายชื่อ ${selected.length} คนออกแล้ว`);
+    } catch (error: any) { setNotice(error.message || "ลบนักเรียนไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
+
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-6xl">
     <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />กลับแดชบอร์ด</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-3"><Users className="h-5 w-5" /></div><div><h1 className="text-2xl font-semibold">จัดการห้องเรียนและนักเรียน</h1><p className="mt-1 text-sm text-slate-600">สร้างห้อง นำเข้ารายชื่อ และแก้ไขข้อมูลนักเรียนได้ที่หน้านี้</p></div></div></header>
     {notice && <p role="status" className="mt-4 rounded-xl border bg-white px-4 py-3 text-sm">{notice}</p>}
     {loading ? <div className="mt-8 flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลด...</div> : <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
       <section className="space-y-5">
-        <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">ห้องเรียน</h2><label className="mt-4 block text-sm">เลือกห้อง<select value={classId} onChange={(event) => setClassId(event.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="">เลือกห้องเรียน</option>{classes.map((row) => <option key={row.id} value={row.id}>{row.name} · {row._count?.students ?? (row.id === classId ? students.length : 0)} คน</option>)}</select></label><div className="mt-3 flex gap-2"><input value={className} onChange={(event) => setClassName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createClass(); } }} placeholder="เช่น ม.4/1" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" /><button disabled={busy} onClick={createClass} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Plus className="mr-1 h-4 w-4" />สร้าง</button></div></div>
+        <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h2 className="font-semibold">ห้องเรียน</h2>{selectedClassIds.length > 0 && <button onClick={() => void deleteSelectedClasses()} disabled={busy} className="text-xs text-red-700">ลบที่เลือก ({selectedClassIds.length})</button>}</div><label className="mt-4 block text-sm">เลือกห้อง<select value={classId} onChange={(event) => setClassId(event.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="">เลือกห้องเรียน</option>{classes.map((row) => <option key={row.id} value={row.id}>{row.name} · {row._count?.students ?? (row.id === classId ? students.length : 0)} คน</option>)}</select></label><div className="mt-2 max-h-28 space-y-1 overflow-auto">{classes.map((row) => <label key={row.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={selectedClassIds.includes(row.id)} onChange={(event) => setSelectedClassIds((current) => event.target.checked ? [...current, row.id] : current.filter((id) => id !== row.id))} />เลือก {row.name} เพื่อลบ</label>)}</div><div className="mt-3 flex gap-2"><input value={className} onChange={(event) => setClassName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createClass(); } }} placeholder="เช่น ม.4/1" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" /><button disabled={busy} onClick={createClass} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Plus className="mr-1 h-4 w-4" />สร้าง</button></div></div>
         <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">นำเข้ารายชื่อนักเรียนจาก Excel</h2><p className="mt-1 text-xs text-slate-500">รองรับ .xlsx, .xls และ .csv · เลือกห้องที่สร้างไว้ก่อน ระบบจะนำเข้าเฉพาะแถวที่ห้องตรงกัน</p>
           <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void readRosterFile(event.dataTransfer.files[0]); }} className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-slate-50 px-4 py-6 text-center hover:bg-slate-100"><Upload className="mb-2 h-6 w-6 text-slate-500"/><span className="text-sm font-medium">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</span><span className="mt-1 text-xs text-slate-500">{fileName || "ไฟล์ต้องมีคอลัมน์ห้อง, เลขที่/รหัส และชื่อ"}</span><input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => void readRosterFile(event.target.files?.[0])}/></label>
           {headers.length > 0 && <div className="mt-4 space-y-3"><p className="text-sm font-medium">ตรวจคอลัมน์ที่ระบบอ่านเจอ</p><div className="grid gap-2 sm:grid-cols-2">{([["ห้อง", roomColumn, setRoomColumn], ["เลขที่", rollNoColumn, setRollNoColumn], ["รหัสนักเรียน", studentNoColumn, setStudentNoColumn], ["ชื่อ-นามสกุล", nameColumn, setNameColumn]] as const).map(([label, value, setter]) => <label key={label} className="text-xs text-slate-600">{label}<select value={value} onChange={(event) => (setter as (index: number) => void)(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2 text-sm"><option value={-1}>เลือกคอลัมน์</option>{headers.map((header, index) => <option key={`${index}-${header}`} value={index}>{header}</option>)}</select></label>)}</div>
@@ -270,8 +301,8 @@ export function ClassroomManager() {
           <details className="mt-4 border-t pt-3"><summary className="cursor-pointer text-xs text-slate-600">หรือวางข้อมูลเอง</summary><p className="mt-2 text-xs text-slate-500">หนึ่งคนต่อบรรทัด: เลขที่,รหัสนักเรียน,ชื่อ-นามสกุล (สูงสุด 500 คน)</p><textarea value={studentRows} onChange={(event) => setStudentRows(event.target.value)} rows={5} className="mt-2 w-full rounded-lg border p-3 font-mono text-xs" /><button disabled={busy || !classId} onClick={importStudents} className="mt-2 inline-flex items-center rounded-lg border px-3 py-2 text-sm disabled:opacity-50"><Upload className="mr-2 h-4 w-4" />นำเข้าในห้องที่เลือก</button></details>
         </div>
       </section>
-      <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">รายชื่อนักเรียน{classId ? ` · ${classes.find((row) => row.id === classId)?.name || ""}` : ""}</h2><p className="mt-1 text-xs text-slate-500">{students.length} คนในห้องที่เลือก</p></div><div className="flex flex-wrap items-center gap-2"><label className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัส" className="rounded-lg border py-2 pl-9 pr-3 text-sm" /></label><button disabled={busy || !students.length} onClick={removeClassStudents} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5"/>เอารายชื่อเก่าออกทั้งห้อง</button></div></div>
-        {!classId ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">เลือกหรือสร้างห้องเรียนก่อน</p> : !filteredStudents.length ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">ยังไม่มีนักเรียนในห้องนี้ นำเข้ารายชื่อจากช่องด้านซ้ายได้เลย</p> : <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">{filteredStudents.map((student) => <li key={student.id}><button onClick={() => selectStudent(student.id)} className={`w-full rounded-lg border p-3 text-left text-sm ${selectedId === student.id ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50"}`}><span className="font-medium">เลขที่ {student.rollNo}</span><span className="ml-3 text-slate-600">รหัส {student.studentNo}</span><span className="ml-3">{student.name}</span></button></li>)}</ul>}
+      <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">รายชื่อนักเรียน{classId ? ` · ${classes.find((row) => row.id === classId)?.name || ""}` : ""}</h2><p className="mt-1 text-xs text-slate-500">{students.length} คนในห้องที่เลือก</p></div><div className="flex flex-wrap items-center gap-2"><label className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อหรือรหัส" className="rounded-lg border py-2 pl-9 pr-3 text-sm" /></label>{selectedStudentIds.length > 0 && <button disabled={busy} onClick={() => void deleteSelectedStudents()} className="text-xs text-red-700">ลบที่เลือก ({selectedStudentIds.length})</button>}<button disabled={busy || !students.length} onClick={removeClassStudents} className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-2 text-xs text-red-700 hover:bg-red-50 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5"/>เอารายชื่อเก่าออกทั้งห้อง</button></div></div>
+        {!classId ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">เลือกหรือสร้างห้องเรียนก่อน</p> : !filteredStudents.length ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">ยังไม่มีนักเรียนในห้องนี้ นำเข้ารายชื่อจากช่องด้านซ้ายได้เลย</p> : <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">{filteredStudents.map((student) => <li key={student.id} className="flex items-center gap-2"><input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={(event) => setSelectedStudentIds((current) => event.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id))} aria-label={`เลือก ${student.name} เพื่อลบ`} /><button onClick={() => selectStudent(student.id)} className={`min-w-0 flex-1 rounded-lg border p-3 text-left text-sm ${selectedId === student.id ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50"}`}><span className="font-medium">เลขที่ {student.rollNo}</span><span className="ml-3 text-slate-600">รหัส {student.studentNo}</span><span className="ml-3">{student.name}</span></button></li>)}</ul>}
         {selectedId && <div className="mt-5 border-t pt-4"><h3 className="text-sm font-semibold">แก้ไขข้อมูลนักเรียน</h3><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm">เลขที่<input value={rollNo} onChange={(event) => setRollNo(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label><label className="text-sm">รหัสนักเรียน<input value={studentNo} onChange={(event) => setStudentNo(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label><label className="text-sm sm:col-span-2">ชื่อ-นามสกุล<input value={studentName} onChange={(event) => setStudentName(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2" /></label></div><div className="mt-3 flex gap-2"><button disabled={busy} onClick={saveStudent} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Save className="mr-2 h-4 w-4" />บันทึกข้อมูล</button><button disabled={busy} onClick={removeStudent} className="inline-flex items-center rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="mr-2 h-4 w-4"/>เอาออกจากห้อง</button></div></div>}
       </section>
     </div>}

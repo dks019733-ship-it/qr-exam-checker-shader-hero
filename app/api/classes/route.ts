@@ -27,3 +27,13 @@ export async function POST(request: Request) {
   const created = await prisma.class.create({ data: { ownerId: session.user.id, name } });
   return NextResponse.json(created, { status: 201 });
 }
+
+export async function DELETE(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null);
+  const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.filter((id: unknown) => typeof id === "string" && id.length <= 100))] as string[] : [];
+  if (!ids.length || ids.length > 100) return NextResponse.json({ error: "เลือกห้องเรียน 1–100 ห้องก่อนลบ" }, { status: 400 });
+  const result = await prisma.class.deleteMany({ where: { id: { in: ids }, ownerId: session.user.id } });
+  return NextResponse.json({ deleted: result.count });
+}

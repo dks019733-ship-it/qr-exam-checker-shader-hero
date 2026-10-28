@@ -6,7 +6,7 @@ import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } fr
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { grading?: { pointValue?: number } } } };
 type FormInfo = { items?: FormItem[] };
 type FormAnswer = { textAnswers?: { answers?: { value?: string }[] } };
-type FormResponse = { totalScore?: number; answers?: Record<string, FormAnswer> };
+type FormResponse = { responseId?: string; lastSubmittedTime?: string; totalScore?: number; answers?: Record<string, FormAnswer> };
 type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
@@ -37,8 +37,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
     const roster = students.map((student) => ({ ...student, nameKey: normalized(student.name), rolls: [normalized(student.rollNo), normalized(student.studentNo)].filter(Boolean) }));
     const scores = new Map<string, number>();
+    const pendingRows: { columnId: string; responseId: string; rollNo: string; studentName: string; score: number; submittedAt: Date | null }[] = [];
+    const matchedResponseIds: string[] = [];
     let skipped = 0;
     let ungraded = 0;
+    let pending = 0;
     let pageToken: string | undefined;
     for (let page = 0; page < 100; page++) {
       const query = new URLSearchParams({ pageSize: "500" });
@@ -50,16 +53,31 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         const room = normalized(answerFor(response, roomId));
         if (room && room !== normalized(column.classroom.name)) { skipped++; continue; }
         const roll = normalized(answerFor(response, rollId));
-        const name = normalized(answerFor(response, nameId));
-        if (!name) { skipped++; continue; }
+        const rawName = answerFor(response, nameId);
+        const name = normalized(rawName);
+        if (!name || !response.responseId) { skipped++; continue; }
         const candidates = roster.filter((student) => (roll ? student.rolls.includes(roll) : true) && student.nameKey === name);
-        if (candidates.length !== 1) { skipped++; continue; }
-        scores.set(candidates[0].id, Math.min(column.maxScore, Math.max(0, (score / maxFormScore) * column.maxScore)));
+        if (candidates.length === 1) {
+          scores.set(candidates[0].id, score);
+          matchedResponseIds.push(response.responseId);
+        } else {
+          pending++;
+          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: answerFor(response, rollId), studentName: rawName, score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
+        }
       }
       pageToken = result.nextPageToken;
       if (!pageToken) break;
       if (page === 99) throw new Error("ผลตอบกลับเกินจำนวนที่ระบบนำเข้าได้ในครั้งเดียว");
     }
+    await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+    for (let i = 0; i < pendingRows.length; i += 100) {
+      await prisma.$transaction(pendingRows.slice(i, i + 100).map((row) => prisma.pendingFormScore.upsert({
+        where: { columnId_responseId: { columnId: row.columnId, responseId: row.responseId } },
+        create: row,
+        update: { rollNo: row.rollNo, studentName: row.studentName, score: row.score, submittedAt: row.submittedAt },
+      })));
+    }
+    if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });
     const entries = [...scores.entries()];
     for (let i = 0; i < entries.length; i += 25) {
       await Promise.all(entries.slice(i, i + 25).map(([studentId, score]) => prisma.gradeScore.upsert({
@@ -68,7 +86,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         update: { score },
       })));
     }
-    return NextResponse.json({ imported: entries.length, skipped, ungraded, maxFormScore, maxGradeScore: column.maxScore });
+    return NextResponse.json({ imported: entries.length, pending, skipped, ungraded, maxFormScore, maxGradeScore: maxFormScore });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";

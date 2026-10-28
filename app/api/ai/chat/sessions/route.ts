@@ -18,3 +18,14 @@ export async function POST(request: Request) {
     return Response.json({ session: { id: row.id, title: row.title, created_at: row.createdAt.toISOString(), updated_at: row.updatedAt.toISOString() } }, { status: 201 });
   } catch (error) { return aiErrorResponse(error); }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const ownerId = await requireAIUser();
+    const body = await request.json().catch(() => null);
+    const ids = Array.isArray(body?.ids) ? [...new Set(body.ids.filter((id: unknown) => typeof id === "string" && id.length <= 100))] as string[] : [];
+    if (!ids.length || ids.length > 100) return Response.json({ error: "เลือกบทสนทนา 1–100 รายการก่อนลบ" }, { status: 400 });
+    const result = await prisma.aiChatSession.deleteMany({ where: { id: { in: ids }, ownerId } });
+    return Response.json({ deleted: result.count });
+  } catch (error) { return aiErrorResponse(error); }
+}

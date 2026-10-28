@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "QR Exam Checker",
-  description: "ตรวจข้อสอบด้วย QR และใบคำตอบอย่างเป็นระบบ"
+  title: "งานของครู | พื้นที่รวมเครื่องมือช่วยงานสอน",
+  description: "จัดการชั้นเรียน ข้อสอบ สมุดคะแนน และเครื่องมือ AI สำหรับครูในที่เดียว"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
