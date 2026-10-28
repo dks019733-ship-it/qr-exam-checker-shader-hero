@@ -26,7 +26,7 @@ export default async function HomePage() {
       </section>
       <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8">
         <div className="mb-10 max-w-2xl">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">QR EXAM CHECKER</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">งานของครู · TEACHER WORKSPACE</p>
           <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">ตรวจข้อสอบให้เป็นระบบ ตั้งแต่ QR ถึงรายงาน</h2>
           <p className="mt-4 text-muted-foreground">จัดการข้อสอบ นักเรียน และใบคำตอบ พร้อมผู้ช่วย AI สำหรับแชทและสร้างเอกสารในระบบเดียว</p>
           <div className="mt-6">
@@ -35,7 +35,7 @@ export default async function HomePage() {
                 ไปที่แดชบอร์ด<ArrowRight className="h-4 w-4" />
               </Link>
             ) : (
-              <SignInButton redirectTo="/dashboard/ai/chat" />
+              <SignInButton redirectTo="/dashboard" />
             )}
           </div>
         </div>
@@ -46,15 +46,15 @@ export default async function HomePage() {
               <h3 className="font-semibold">{title}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
               {title === "AI สำหรับครู" && (session?.user ? (
-                <Link href="/dashboard/ai/chat" className="mt-4 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">เปิดแชท AI</Link>
+                <Link href="/dashboard/ai" className="mt-4 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">เลือกเครื่องมือ AI</Link>
               ) : (
-                <SignInButton redirectTo="/dashboard/ai/chat" className="mt-4 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800" />
+                <SignInButton redirectTo="/dashboard/ai" className="mt-4 inline-flex rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800" />
               ))}
             </article>
           ))}
         </div>
       </section>
-      <footer className="border-t px-5 py-8 text-center text-sm text-muted-foreground">QR Exam Checker · Secure exam workflow</footer>
+      <footer className="border-t px-5 py-8 text-center text-sm text-muted-foreground">งานของครู · เครื่องมือช่วยจัดการงานสอน</footer>
     </main>
   );
 }

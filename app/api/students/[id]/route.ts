@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { reconcilePendingFormScores } from "@/lib/gradebook-import";
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -27,7 +28,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       data: { rollNo, studentNo, name },
       select: { id: true, rollNo: true, studentNo: true, name: true, qrToken: true },
     });
-    return NextResponse.json(updated);
+    const reconciled = await reconcilePendingFormScores(student.classId);
+    return NextResponse.json({ ...updated, matchedFormScores: reconciled.matched });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return NextResponse.json({ error: "รหัสนักเรียนนี้มีอยู่แล้วในห้องเรียน" }, { status: 409 });

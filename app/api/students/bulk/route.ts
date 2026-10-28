@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { bulkStudentSchema } from "@/lib/answer-sheet";
+import { reconcilePendingFormScores } from "@/lib/gradebook-import";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
     });
   });
   await prisma.$transaction(operations);
+  const reconciled = await reconcilePendingFormScores(parsed.data.classId);
 
-  return NextResponse.json({ ok: true, count: normalized.length });
+  return NextResponse.json({ ok: true, count: normalized.length, matchedFormScores: reconciled.matched, pendingFormScores: reconciled.pending });
 }
