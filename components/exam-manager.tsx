@@ -85,7 +85,7 @@ export function ExamManager() {
 
   async function deleteSelectedExams() {
     const selected = exams.filter((exam) => selectedExamIds.includes(exam.id));
-    if (!selected.length || !window.confirm(`ลบข้อสอบ ${selected.length} รายการหรือไม่? เฉลย ผลสอบ และไฟล์ที่เชื่อมจะถูกลบ`)) return;
+    if (!selected.length || !window.confirm(`ลบข้อสอบ ${selected.length} รายการหรือไม่? เฉลยและผลสอบที่บันทึกในระบบจะถูกลบ ส่วนไฟล์ที่อยู่ใน Google Drive จะยังอยู่`)) return;
     setSaving(true);
     try {
       const response = await fetch("/api/exams", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: selectedExamIds }) });

@@ -51,7 +51,7 @@ export default function MaterialsPage() {
   }
 
   async function deleteSelected() {
-    if (!selectedIds.length || !window.confirm(`ลบงานที่เลือก ${selectedIds.length} รายการหรือไม่? งานและ Google Form ที่เชื่อมอยู่จะถูกลบออกจากรายการนี้`)) return;
+    if (!selectedIds.length || !window.confirm(`ลบงานที่เลือก ${selectedIds.length} รายการออกจากระบบหรือไม่? แบบฟอร์มที่สร้างไว้จะยังอยู่ใน Google Drive`)) return;
     setLoading(true);
     try {
       const response = await fetch("/api/ai/materials", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: selectedIds }) });
