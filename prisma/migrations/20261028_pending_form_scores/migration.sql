@@ -13,9 +13,5 @@ CREATE TABLE IF NOT EXISTS "PendingFormScore" (
 CREATE UNIQUE INDEX IF NOT EXISTS "PendingFormScore_columnId_responseId_key" ON "PendingFormScore"("columnId", "responseId");
 CREATE INDEX IF NOT EXISTS "PendingFormScore_columnId_idx" ON "PendingFormScore"("columnId");
 ALTER TABLE "PendingFormScore" ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'PendingFormScore_columnId_fkey') THEN
-        ALTER TABLE "PendingFormScore" ADD CONSTRAINT "PendingFormScore_columnId_fkey"
-            FOREIGN KEY ("columnId") REFERENCES "GradeColumn"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-    END IF;
-END $$;
+ALTER TABLE "PendingFormScore" ADD CONSTRAINT "PendingFormScore_columnId_fkey"
+    FOREIGN KEY ("columnId") REFERENCES "GradeColumn"("id") ON DELETE CASCADE ON UPDATE CASCADE;
