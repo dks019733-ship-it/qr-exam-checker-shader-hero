@@ -68,3 +68,79 @@ input:focus, select:focus, textarea:focus { border-color: hsl(var(--foreground) 
 button, a { -webkit-tap-highlight-color: transparent; }
 @media print { .print\\:hidden { display: none !important; } }
 @media print { .no-print { display: none !important; } }
+
+.worksheet-paper-cute {
+  color: #263d32;
+  font-family: "Noto Sans Thai", "Leelawadee UI", sans-serif;
+}
+.worksheet-banner-cute,
+.worksheet-instructions-cute,
+.worksheet-fields-cute {
+  border-color: #b7d9c1;
+  background: #f0faf2;
+  color: #385a45;
+}
+.worksheet-banner-formal {
+  border-color: #d7dce0;
+  background: #f6f7f8;
+  color: #39434b;
+}
+.worksheet-cute-top {
+  border-color: #a9d8b8;
+  background:
+    radial-gradient(circle at 12px 12px, rgba(113, 180, 136, .16) 2px, transparent 2.5px) 0 0 / 24px 24px,
+    linear-gradient(140deg, #f0fff2, #fff9e9 65%, #f6f0ff);
+  color: #315a40;
+}
+.worksheet-cute-sticker {
+  flex: none;
+  background: #ffdf95;
+  color: #6a4b18;
+  transform: rotate(3deg);
+}
+.worksheet-student-fields {
+  color: #4a5b4e;
+}
+.worksheet-blank {
+  display: inline-block;
+  min-width: 5rem;
+  border-bottom: 1px solid #9ca99e;
+}
+.worksheet-section-cute {
+  border: 1px solid #c8e3cf;
+  background: linear-gradient(120deg, #fff 60%, #f6fff7);
+}
+.worksheet-section-number {
+  background: #dff3e3;
+  color: #36704a;
+}
+.worksheet-activities {
+  list-style: decimal;
+}
+.worksheet-activity-item {
+  padding-left: .25rem;
+}
+.worksheet-answer-line {
+  border-bottom-color: #abb9ad;
+}
+@media print {
+  @page { size: A4 portrait; margin: 14mm 15mm; }
+  .worksheet-paper-cute,
+  .worksheet-paper-cute .worksheet-cute-top,
+  .worksheet-paper-cute .worksheet-section-cute,
+  .worksheet-paper-cute .worksheet-fields-cute,
+  .worksheet-paper-cute .worksheet-instructions-cute {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .worksheet-paper-cute textarea,
+  .worksheet-paper-cute input {
+    color: #263d32 !important;
+  }
+  .worksheet-paper-cute .worksheet-section-cute {
+    break-inside: avoid;
+  }
+  .worksheet-paper-cute .worksheet-answer-line {
+    min-height: 7mm;
+  }
+}

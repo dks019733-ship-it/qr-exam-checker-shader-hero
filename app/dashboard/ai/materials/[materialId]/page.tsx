@@ -22,6 +22,7 @@ export default function MaterialReviewPage() {
   const [corrections, setCorrections] = useState<{ number: number; oldAnswer: string; newAnswer: string; reason: string }[]>([]);
   const [unresolvedQuestions, setUnresolvedQuestions] = useState<number[]>([]);
   const locked = material?.status === "approved";
+  const cuteWorksheet = material?.kind === "document" && material.document_type === "ใบงาน" && content.worksheetStyle !== "editable";
 
   useEffect(() => {
     materialsApi.get(params.materialId)
@@ -31,7 +32,9 @@ export default function MaterialReviewPage() {
         const reviewedContent = row.content || {};
         setContent(row.kind === "exam" && reviewedContent.questions
           ? { ...reviewedContent, totalPoints: reviewedContent.questions.length, questions: reviewedContent.questions.map((question) => ({ ...question, points: 1 })) }
-          : reviewedContent);
+          : row.kind === "document" && row.document_type === "ใบงาน"
+            ? { ...reviewedContent, worksheetStyle: reviewedContent.worksheetStyle || "cute" }
+            : reviewedContent);
         setReviewNotes(row.review_notes || "");
         setGoogleForm(row.google_form || null);
       })
@@ -125,11 +128,35 @@ export default function MaterialReviewPage() {
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${locked ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{locked ? "ครูอนุมัติแล้ว" : "รอครูตรวจสอบ"}</span>
       </div>
 
-      <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 print:rounded-none print:border-0 print:p-0 print:shadow-none">
-        <p className="mb-2 text-sm font-medium text-brand-700">{material.kind === "exam" ? "ข้อสอบ" : material.document_type || "เอกสาร"} · {material.subject} · {material.grade_level}</p>
-        <input aria-label="ชื่อชิ้นงาน" disabled={locked} value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputClass} mb-4 text-2xl font-semibold`} />
-        <p className="mb-5 text-sm text-slate-500">หัวข้อ: {material.topic}</p>
-        {content.overview !== undefined && <label className="mb-5 block text-sm font-medium text-slate-700">ภาพรวม<textarea disabled={locked} rows={3} value={content.overview || ""} onChange={(e) => setContent((current) => ({ ...current, overview: e.target.value }))} className={`${inputClass} mt-1`} /></label>}
+      <article className={`worksheet-paper rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8 print:rounded-none print:border-0 print:p-0 print:shadow-none ${cuteWorksheet ? "worksheet-paper-cute" : ""}`}>
+        {material.kind === "document" && material.document_type === "ใบงาน" && (
+          <div className={`worksheet-banner no-print mb-5 rounded-2xl border p-4 ${cuteWorksheet ? "worksheet-banner-cute" : "worksheet-banner-formal"}`}>
+            <p className="text-sm font-bold">{cuteWorksheet ? "ใบงานฉบับน่ารัก · สำหรับพิมพ์เป็น PDF" : "ใบงานฉบับจริงจัง · ดาวน์โหลด Word เพื่อแก้ไขต่อ"}</p>
+            <p className="mt-1 text-xs">จัดรูปแบบเป็นใบงานสำหรับนักเรียน มีช่องข้อมูล คำชี้แจง กิจกรรมเป็นข้อ และพื้นที่เขียนคำตอบ ครูตรวจแก้ก่อนอนุมัติได้</p>
+          </div>
+        )}
+        {cuteWorksheet && (
+          <div className="worksheet-cute-top mb-5 rounded-2xl border-2 p-5">
+            <p className="text-center text-xs font-bold tracking-[0.18em]">ใบงาน · LEARNING WORKSHEET</p>
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-xs font-semibold">{material.subject} · {material.grade_level}</p>
+                <input aria-label="ชื่อใบงาน" disabled={locked} value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputClass} mt-2 border-0 bg-transparent px-0 text-2xl font-bold`} />
+                <p className="mt-1 text-sm">หัวข้อ: {material.topic}</p>
+              </div>
+              <span className="worksheet-cute-sticker rounded-full px-3 py-2 text-sm font-bold">ลงมือทำกัน!</span>
+            </div>
+            <div className="worksheet-student-fields mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+              <span className="col-span-2">ชื่อ-นามสกุล ______________________________</span>
+              <span>ชั้น _____________</span><span>เลขที่ _____________</span>
+              <span>วันที่ ______ / ______ / ______</span>
+            </div>
+          </div>
+        )}
+        <p className={`mb-2 text-sm font-medium text-brand-700 ${cuteWorksheet ? "print:hidden" : ""}`}>{material.kind === "exam" ? "ข้อสอบ" : material.document_type || "เอกสาร"} · {material.subject} · {material.grade_level}</p>
+        {!cuteWorksheet && <input aria-label="ชื่อชิ้นงาน" disabled={locked} value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputClass} mb-4 text-2xl font-semibold`} />}
+        {!cuteWorksheet && <p className="mb-5 text-sm text-slate-500">หัวข้อ: {material.topic}</p>}
+        {!!content.overview?.trim() && <label className="mb-5 block text-sm font-medium text-slate-700">ภาพรวม<textarea disabled={locked} rows={3} value={content.overview || ""} onChange={(e) => setContent((current) => ({ ...current, overview: e.target.value }))} className={`${inputClass} mt-1`} /></label>}
 
         {material.kind === "exam" ? (
           <>
@@ -149,10 +176,39 @@ export default function MaterialReviewPage() {
           </>
         ) : (
           <div className="space-y-5">
+            {material.document_type === "ใบงาน" && !cuteWorksheet && (
+              <div className="worksheet-student-fields no-print grid grid-cols-2 gap-3 rounded-xl border bg-slate-50 p-4 text-sm sm:grid-cols-4">
+                <label className="col-span-2">ชื่อ-นามสกุล <span className="worksheet-blank" /></label>
+                <label>ชั้น <span className="worksheet-blank" /></label>
+                <label>เลขที่ <span className="worksheet-blank" /></label>
+                <label>วันที่ <span className="worksheet-blank" /></label>
+              </div>
+            )}
+            {!!content.learningObjectives?.length && (
+              <section className={`rounded-xl border p-4 ${cuteWorksheet ? "worksheet-instructions-cute" : "border-slate-200 bg-slate-50"}`}>
+                <h2 className="text-sm font-bold">จุดประสงค์การเรียนรู้</h2>
+                {!locked && <label className="no-print mt-2 block text-xs text-slate-600">แก้ไขได้ หนึ่งข้อขึ้นบรรทัดใหม่<textarea rows={Math.max(2, content.learningObjectives.length)} value={content.learningObjectives.join("\n")} onChange={(e) => setContent((current) => ({ ...current, learningObjectives: e.target.value.split("\n").map((item) => item.trim()).filter(Boolean) }))} className={`${inputClass} mt-1`} /></label>}
+                <ul className="mt-2 list-inside list-disc space-y-1 text-sm leading-6">
+                  {content.learningObjectives.map((objective, index) => <li key={`${index}-${objective}`}>{objective}</li>)}
+                </ul>
+              </section>
+            )}
+            {content.instructions !== undefined && <label className={`block rounded-xl border p-4 text-sm font-medium ${cuteWorksheet ? "worksheet-instructions-cute" : "border-slate-200 bg-slate-50 text-slate-700"}`}>คำชี้แจง<textarea disabled={locked} rows={2} value={content.instructions || ""} onChange={(e) => setContent((current) => ({ ...current, instructions: e.target.value }))} className={`${inputClass} mt-1`} /></label>}
             {(content.sections || []).map((section, index) => (
-              <section key={index} className="rounded-xl border border-slate-200 p-4 print:break-inside-avoid print:border-0 print:p-0">
-                <input aria-label={`หัวข้อส่วนที่ ${index + 1}`} disabled={locked} value={section.heading || ""} onChange={(e) => updateSection(index, { heading: e.target.value })} className={`${inputClass} text-lg font-semibold`} />
-                <textarea aria-label={`เนื้อหาส่วนที่ ${index + 1}`} disabled={locked} rows={6} value={section.body || ""} onChange={(e) => updateSection(index, { body: e.target.value })} className={`${inputClass} mt-2`} />
+              <section key={index} className={`worksheet-section rounded-xl border p-4 print:break-inside-avoid print:p-4 ${cuteWorksheet ? "worksheet-section-cute" : "border-slate-200"}`}>
+                <div className="flex items-start gap-2">
+                  {cuteWorksheet && <span className="worksheet-section-number flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold">{index + 1}</span>}
+                  <input aria-label={`หัวข้อส่วนที่ ${index + 1}`} disabled={locked} value={section.heading || ""} onChange={(e) => updateSection(index, { heading: e.target.value })} className={`${inputClass} text-lg font-semibold`} />
+                </div>
+                <textarea aria-label={`เนื้อหาส่วนที่ ${index + 1}`} disabled={locked} rows={2} value={section.body || ""} onChange={(e) => updateSection(index, { body: e.target.value })} className={`${inputClass} mt-2`} />
+                {!locked && <label className="no-print mt-3 block text-xs font-medium text-slate-600">กิจกรรม / คำถาม (หนึ่งข้อขึ้นบรรทัดใหม่)<textarea disabled={locked} rows={Math.max(3, Math.min(8, section.items?.length || 3))} value={(section.items || []).join("\n")} onChange={(e) => updateSection(index, { items: e.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} className={`${inputClass} mt-1`} placeholder="1. สิ่งที่ให้นักเรียนทำหรือคำถามปลายเปิด" /></label>}
+                {!!section.items?.length && <ol className="worksheet-activities mt-3 space-y-4 pl-6 text-sm leading-7">
+                  {section.items.map((item, itemIndex) => <li key={`${itemIndex}-${item}`} className="worksheet-activity-item pl-1">
+                    <span>{item}</span>
+                    {Array.from({ length: Math.min(12, Math.max(0, section.responseLines ?? 3)) }, (_, line) => <div key={line} className="worksheet-answer-line h-7 border-b border-dotted border-slate-300" />)}
+                  </li>)}
+                </ol>}
+                {!locked && <label className="no-print mt-3 inline-flex items-center gap-2 text-xs text-slate-600">จำนวนบรรทัดตอบต่อข้อ<input type="number" min={0} max={12} value={section.responseLines ?? 3} onChange={(e) => updateSection(index, { responseLines: Math.max(0, Math.min(12, Number(e.target.value))) })} className="!w-20 rounded-lg border px-2 py-1" /></label>}
               </section>
             ))}
             {!locked && <button onClick={() => setContent((current) => ({ ...current, sections: [...(current.sections || []), { heading: "หัวข้อใหม่", body: "" }] }))} className="no-print rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">+ เพิ่มหัวข้อ</button>}
@@ -174,10 +230,10 @@ export default function MaterialReviewPage() {
             <button disabled={saving} onClick={() => save("pending_review")} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">{saving ? "กำลังบันทึก..." : "บันทึกฉบับตรวจแก้"}</button>
             <button disabled={saving} onClick={() => save("approved")} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{saving ? "กำลังบันทึก..." : "ตรวจแล้ว อนุมัติและล็อกฉบับนี้"}</button>
           </> : <>
-            <button onClick={downloadDocx} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">ดาวน์โหลด Word (.docx)</button>
-            <button onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">พิมพ์ / บันทึกเป็น PDF</button>
+            {(material.kind !== "document" || !cuteWorksheet) && <button onClick={downloadDocx} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">ดาวน์โหลด Word (.docx)</button>}
+            {(material.kind !== "document" || cuteWorksheet) && <button onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{cuteWorksheet ? "พิมพ์ / บันทึกใบงาน PDF" : "พิมพ์ / บันทึกเป็น PDF"}</button>}
             {material.kind === "exam" && !googleForm && <button disabled={creatingForm} onClick={createGoogleForm} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{creatingForm ? "กำลังสร้าง Google Form..." : "สร้าง Google Form ให้นักเรียนทำ"}</button>}
-            <p className="self-center text-xs text-slate-500">ในหน้าต่างพิมพ์ เลือก “บันทึกเป็น PDF”</p>
+            {material.kind === "document" && material.document_type === "ใบงาน" && <p className="self-center text-xs text-slate-500">{cuteWorksheet ? "พิมพ์บนกระดาษ A4 แล้วเลือก “บันทึกเป็น PDF” เพื่อได้ใบงานพร้อมพิมพ์" : "ดาวน์โหลด Word เพื่อแก้ไขต่อ หรือพิมพ์เป็น PDF ได้เช่นกัน"}</p>}
           </>}
         </div>
         {googleForm && <section className="no-print mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
