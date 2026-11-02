@@ -30,7 +30,7 @@ Set `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, and `AUTH_SECRET`.
 
 ## AI exam to Google Forms
 
-Teachers can review and approve an AI-generated exam, then create a published Google Forms quiz with answer keys and points. The form also asks for the student's student number. The existing `drive.file` OAuth permission is used to create the form; enable **Google Forms API** in the same Google Cloud project used by the OAuth client. Response import from Google Forms/Sheets is a separate feature and will require read-only response permission.
+Teachers can review and approve an AI-generated exam, then create a published Google Forms quiz with answer keys and points. The form also asks for the student's student number. Enable **Google Forms API** in the same Google Cloud project used by the OAuth client. Creating forms requires the `forms.body` OAuth scope; syncing responses separately requires the read-only `forms.responses.readonly` scope. After changing OAuth scopes, teachers must sign out and sign in again to grant them.
 
 After pulling a version that adds the `GoogleForm` Prisma model, run `npx prisma db push` and `npx prisma generate` against the intended database. Then restart the app. In AI materials, open an exam, review and approve it, and use **สร้าง Google Form ให้นักเรียนทำ**. The teacher can open the edit link or share the responder link shown on that page.
 
