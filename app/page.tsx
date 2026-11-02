@@ -16,7 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { SignInButton } from "@/components/auth-buttons";
+import { SignInButton, SignOutButton } from "@/components/auth-buttons";
 
 const tools = [
   {
@@ -149,13 +149,16 @@ export default async function HomePage() {
             <Link href="#privacy" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#5e6d5b] transition hover:bg-[#f0f3eb] hover:text-[#1c241b]">ความเป็นส่วนตัว</Link>
           </nav>
 
-          <WorkspaceLink
-            signedIn={signedIn}
-            href={signedIn ? "#tools" : "/"}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#4d5f4a] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#374535] sm:px-5"
-          >
-            {signedIn ? "ดูเครื่องมือ" : "เข้าสู่ระบบ"}
-          </WorkspaceLink>
+          <div className="flex shrink-0 items-center gap-2">
+            <WorkspaceLink
+              signedIn={signedIn}
+              href="#tools"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#4d5f4a] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#374535] sm:px-5"
+            >
+              {signedIn ? "ดูเครื่องมือ" : "เข้าสู่ระบบ"}
+            </WorkspaceLink>
+            {signedIn && <SignOutButton />}
+          </div>
         </header>
       </div>
 
