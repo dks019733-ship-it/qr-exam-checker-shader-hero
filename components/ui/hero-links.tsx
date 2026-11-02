@@ -15,7 +15,7 @@ export function HeroNavigation({ signedIn }: { signedIn: boolean }) {
     if (href.startsWith("#")) return <Link key={label} href={href} className={className}>{label}</Link>;
     return signedIn
       ? <Link key={label} href={href} className={className}>{label}</Link>
-      : <SignInButton key={label} redirectTo={href} className={className} label={label} />;
+      : <SignInButton key={label} className={className} label={label} />;
   });
   return (
     <>
@@ -32,8 +32,8 @@ export function HeroNavigation({ signedIn }: { signedIn: boolean }) {
 
 export function HeroLogin({ signedIn }: { signedIn: boolean }) {
   return signedIn
-    ? <Link href="/dashboard" className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5">ไปที่ระบบ</Link>
-    : <SignInButton redirectTo="/dashboard" className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5" label="เข้าสู่ระบบ" />;
+    ? <Link href="/#tools" className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5">ดูเครื่องมือ</Link>
+    : <SignInButton className="shrink-0 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white transition hover:bg-slate-700 sm:rounded-full sm:px-6 sm:py-2.5" label="เข้าสู่ระบบ" />;
 }
 
 export function HeroActions({ signedIn }: { signedIn: boolean }) {
@@ -41,6 +41,6 @@ export function HeroActions({ signedIn }: { signedIn: boolean }) {
   const primary = "rounded-xl bg-emerald-800 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-900 sm:rounded-full sm:px-7 sm:py-3.5";
   const gated = (href: string, text: string, style: string) => signedIn
     ? <Link href={href} className={style}>{text}</Link>
-    : <SignInButton redirectTo={href} className={style} label={text} />;
-  return <div className="flex flex-wrap items-center gap-4">{gated("/dashboard/answer-sheet", "สร้างกระดาษคำตอบ", outline)}{gated("/dashboard", "เริ่มใช้งาน", primary)}</div>;
+    : <SignInButton className={style} label={text} />;
+  return <div className="flex flex-wrap items-center gap-4">{gated("/dashboard/answer-sheet", "สร้างกระดาษคำตอบ", outline)}{gated("/", "เริ่มใช้งาน", primary)}</div>;
 }

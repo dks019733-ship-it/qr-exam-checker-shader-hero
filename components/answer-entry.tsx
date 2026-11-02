@@ -52,7 +52,7 @@ export function AnswerEntry() {
   if (loading) return <div className="p-10"><Loader2 className="h-5 w-5 animate-spin" /></div>;
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-5xl">
-    <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับแดชบอร์ด</Link>
+    <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><h1 className="text-2xl font-semibold">ตรวจและบันทึกคำตอบ</h1><p className="mt-2 text-sm text-slate-600">ตอนนี้กรอกคำตอบจากกระดาษที่ตรวจแล้ว ระบบคิดคะแนนและส่งให้ครูยืนยันก่อนประกาศ</p></header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
     {!eligibleExams.length ? <div className="mt-5 rounded-2xl border bg-white p-6">ยังไม่มีข้อสอบที่ตั้งเฉลยแล้ว <Link className="underline" href="/dashboard/exams">ไปสร้างข้อสอบ</Link></div> : <form onSubmit={submit} className="mt-5 rounded-2xl border bg-white p-5 shadow-sm">

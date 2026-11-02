@@ -103,7 +103,6 @@ function WorkspaceLink({
   if (!signedIn) {
     return (
       <SignInButton
-        redirectTo={href}
         className={className}
         label={typeof children === "string" ? children : undefined}
         {...(typeof children === "string" ? {} : { children })}
@@ -152,10 +151,10 @@ export default async function HomePage() {
 
           <WorkspaceLink
             signedIn={signedIn}
-            href="/dashboard"
+            href={signedIn ? "#tools" : "/"}
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#4d5f4a] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#374535] sm:px-5"
           >
-            {signedIn ? "ไปที่พื้นที่ทำงาน" : "เข้าสู่ระบบ"}
+            {signedIn ? "ดูเครื่องมือ" : "เข้าสู่ระบบ"}
           </WorkspaceLink>
         </header>
       </div>
@@ -190,10 +189,10 @@ export default async function HomePage() {
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <WorkspaceLink
                   signedIn={signedIn}
-                  href="/dashboard"
+                  href={signedIn ? "#tools" : "/"}
                   className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#4d5f4a] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-[#4d5f4a]/20 transition hover:bg-[#374535]"
                 >
-                  {signedIn ? "เริ่มใช้งานแดชบอร์ด" : "เริ่มใช้งาน"}
+                  {signedIn ? "เลือกเครื่องมือที่ต้องการ" : "เริ่มใช้งาน"}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </WorkspaceLink>
                 <Link
@@ -357,10 +356,10 @@ export default async function HomePage() {
             <div className="lg:col-span-4 lg:flex lg:justify-end">
               <WorkspaceLink
                 signedIn={signedIn}
-                href="/dashboard"
+                href={signedIn ? "#tools" : "/"}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#d8e6d5] px-6 py-3 text-sm font-bold text-[#2d3a2b] transition hover:bg-[#a3bfa0]"
               >
-                {signedIn ? "ไปที่พื้นที่ทำงาน" : "เข้าสู่ระบบเพื่อเริ่ม"}
+                {signedIn ? "ดูเครื่องมือ" : "เข้าสู่ระบบเพื่อเริ่ม"}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </WorkspaceLink>
             </div>
