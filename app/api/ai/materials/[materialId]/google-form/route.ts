@@ -106,7 +106,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ma
       }, { status: 409 });
     }
     const quizItems = questions.map(formItem);
-    const accessToken = await getGoogleFormsAccessToken(ownerId);
+    const accessToken = await getGoogleFormsAccessToken(ownerId, "create");
     const created = await googleFormsRequest<CreatedForm>(accessToken, "/forms?unpublished=true", {
       method: "POST",
       body: JSON.stringify({ info: { title: material.title, documentTitle: material.title } }),

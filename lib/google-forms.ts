@@ -1,19 +1,18 @@
 import { prisma } from "@/lib/prisma";
 
-const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const FORMS_BODY_SCOPE = "https://www.googleapis.com/auth/forms.body";
 const FORMS_RESPONSES_SCOPE = "https://www.googleapis.com/auth/forms.responses.readonly";
 
-export async function getGoogleFormsAccessToken(userId: string) {
+export async function getGoogleFormsAccessToken(userId: string, purpose: "create" | "responses") {
   const account = await prisma.account.findFirst({
     where: { userId, provider: "google" },
     select: { provider: true, providerAccountId: true, access_token: true, refresh_token: true, expires_at: true, scope: true },
   });
   if (!account) throw new Error("ไม่พบบัญชี Google ที่เชื่อมไว้ กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
-  if (!account.scope?.split(/\s+/).includes(DRIVE_FILE_SCOPE)) {
-    throw new Error("บัญชี Google ยังไม่ได้อนุญาตจัดการไฟล์ที่สร้างในแอป กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์");
-  }
-  if (!account.scope?.split(/\s+/).includes(FORMS_RESPONSES_SCOPE)) {
-    throw new Error("บัญชี Google ยังไม่ได้อนุญาตให้อ่านคำตอบ Google Forms กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์");
+  const requiredScope = purpose === "create" ? FORMS_BODY_SCOPE : FORMS_RESPONSES_SCOPE;
+  if (!account.scope?.split(/\s+/).includes(requiredScope)) {
+    const permission = purpose === "create" ? "สร้างและแก้ไข Google Forms" : "อ่านคำตอบ Google Forms";
+    throw new Error(`บัญชี Google ยังไม่ได้อนุญาต${permission} กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์`);
   }
   if (account.access_token && account.expires_at && account.expires_at * 1000 > Date.now() + 60_000) return account.access_token;
   if (!account.refresh_token) throw new Error("ไม่พบสิทธิ์ต่ออายุบัญชี Google กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
@@ -48,11 +47,17 @@ export async function googleFormsRequest<T>(accessToken: string, path: string, i
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message = response.status === 403
-      ? "Google ปฏิเสธการเข้าถึง Google Forms ตรวจว่าเปิด Google Forms API แล้ว และบัญชีนี้เป็นเจ้าของฟอร์มหรือมีสิทธิ์เข้าถึง จากนั้นออกจากระบบและเข้าสู่ระบบใหม่เพื่อยืนยันสิทธิ์"
-      : response.status === 429
-        ? "ใช้งาน Google Forms API ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่"
-        : `Google Forms สร้างแบบทดสอบไม่สำเร็จ (${response.status})`;
+    const reason = body?.error?.errors?.[0]?.reason;
+    const apiMessage = typeof body?.error?.message === "string" ? body.error.message : "";
+    const message = response.status === 403 && (reason === "SERVICE_DISABLED" || /has not been used|disabled/i.test(apiMessage))
+      ? "ยังไม่ได้เปิด Google Forms API ใน Google Cloud project ที่ใช้กับ OAuth กรุณาเปิด API แล้วลองใหม่"
+      : response.status === 403 && (reason === "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || /insufficient.*scope|insufficient authentication scopes/i.test(apiMessage))
+        ? "บัญชี Google ยังไม่ได้อนุญาตสิทธิ์ที่จำเป็น กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่เพื่อยืนยันสิทธิ์"
+          : response.status === 403
+          ? "Google ปฏิเสธการเข้าถึง Google Forms ตรวจว่าเปิด Google Forms API แล้ว และบัญชีนี้มีสิทธิ์เข้าถึง จากนั้นออกจากระบบและเข้าสู่ระบบใหม่เพื่อยืนยันสิทธิ์"
+            : response.status === 429
+              ? "ใช้งาน Google Forms API ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่"
+              : `Google Forms สร้างแบบทดสอบไม่สำเร็จ (${response.status})`;
     throw new GoogleFormsAPIError(response.status, message);
   }
   return body as T;
