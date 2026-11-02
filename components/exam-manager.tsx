@@ -104,7 +104,7 @@ export function ExamManager() {
   }
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-6xl">
-    <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับแดชบอร์ด</Link>
+    <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><h1 className="text-2xl font-semibold">จัดการข้อสอบ</h1><p className="mt-2 text-sm text-slate-600">สร้างข้อสอบ เลือกห้อง และกำหนดเฉลยปรนัย 4 ตัวเลือก</p></header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
     <div className="mt-5 grid gap-5 lg:grid-cols-[300px_1fr]">

@@ -48,7 +48,7 @@ export const PrismaHero = () => {
         <nav className="absolute left-1/2 top-0 z-20 -translate-x-1/2">
           <div className="flex items-center gap-4 rounded-b-2xl bg-black/80 px-4 py-2.5 backdrop-blur sm:gap-8 sm:px-7">
             {["ภาพรวม", "นักเรียน", "ข้อสอบ", "ตรวจข้อสอบ", "รายงาน"].map((item) => (
-              <a key={item} href="/dashboard" className="text-[11px] text-white/70 transition hover:text-white sm:text-xs">{item}</a>
+              <a key={item} href="/" className="text-[11px] text-white/70 transition hover:text-white sm:text-xs">{item}</a>
             ))}
           </div>
         </nav>
@@ -67,7 +67,7 @@ export const PrismaHero = () => {
               <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: .8, delay: .4 }} className="max-w-md text-sm leading-6 text-white/75 sm:text-base">
                 ระบบตรวจข้อสอบสำหรับครูที่เชื่อม Google Drive ของตัวเอง จัดการนักเรียน สร้าง QR อ่านใบคำตอบ และให้ครูยืนยันคะแนนก่อนบันทึกผล
               </motion.p>
-              <motion.a initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: .8, delay: .6 }} href="/dashboard" className="group mt-6 inline-flex items-center gap-3 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition-all hover:gap-4">
+              <motion.a initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: .8, delay: .6 }} href="/" className="group mt-6 inline-flex items-center gap-3 rounded-full bg-white px-5 py-2 text-sm font-medium text-black transition-all hover:gap-4">
                 เข้าสู่ระบบ
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black"><ArrowRight className="h-4 w-4 text-white" /></span>
               </motion.a>

@@ -1,13 +1,12 @@
-import { signIn, signOut } from "@/lib/auth";
-import { LogOut } from "lucide-react";
+import { signIn } from "@/lib/auth";
 import type { ReactNode } from "react";
 
-export function SignInButton({ className, redirectTo = "/dashboard", label, children }: { className?: string; redirectTo?: string; label?: string; children?: ReactNode }) {
+export function SignInButton({ className, label, children }: { className?: string; label?: string; children?: ReactNode }) {
   return (
     <form
       action={async () => {
         "use server";
-        await signIn("google", { redirectTo });
+        await signIn("google", { redirectTo: "/" });
       }}
     >
       <button
@@ -18,28 +17,6 @@ export function SignInButton({ className, redirectTo = "/dashboard", label, chil
         }
       >
         {children ?? label ?? <><GoogleIcon className="h-4 w-4" />เข้าสู่ระบบด้วย Google</>}
-      </button>
-    </form>
-  );
-}
-
-export function SignOutButton({ className }: { className?: string }) {
-  return (
-    <form
-      action={async () => {
-        "use server";
-        await signOut({ redirectTo: "/" });
-      }}
-    >
-      <button
-        type="submit"
-        className={
-          className ??
-          "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-muted"
-        }
-      >
-        <LogOut className="h-4 w-4" />
-        ออกจากระบบ
       </button>
     </form>
   );

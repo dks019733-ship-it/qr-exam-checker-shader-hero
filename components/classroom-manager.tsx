@@ -286,7 +286,7 @@ export function ClassroomManager() {
   }
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-6xl">
-    <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />กลับแดชบอร์ด</Link>
+    <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-950"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center gap-3"><div className="rounded-xl bg-slate-100 p-3"><Users className="h-5 w-5" /></div><div><h1 className="text-2xl font-semibold">จัดการห้องเรียนและนักเรียน</h1><p className="mt-1 text-sm text-slate-600">สร้างห้อง นำเข้ารายชื่อ และแก้ไขข้อมูลนักเรียนได้ที่หน้านี้</p></div></div></header>
     {notice && <p role="status" className="mt-4 rounded-xl border bg-white px-4 py-3 text-sm">{notice}</p>}
     {loading ? <div className="mt-8 flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลด...</div> : <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
