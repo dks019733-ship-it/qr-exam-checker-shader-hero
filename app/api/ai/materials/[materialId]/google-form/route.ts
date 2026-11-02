@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { AIRequestError, generateWithGemini, requireAIUser } from "@/lib/ai-server";
-import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
+import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAccessError, GoogleFormsAPIError } from "@/lib/google-forms";
 import { toMaterialDto, type ExamQuestion, type MaterialContent } from "@/lib/ai-materials";
 
 type CreatedForm = { formId: string; responderUri?: string };
@@ -145,6 +145,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ma
     return Response.json({ googleForm: { form_id: saved.formId, edit_url: saved.editUrl, responder_url: saved.responderUrl } }, { status: 201 });
   } catch (error) {
     if (error instanceof AIRequestError) return Response.json({ error: error.message }, { status: error.status });
+    if (error instanceof GoogleFormsAccessError) return Response.json({ error: error.message, action: "reauthorize" }, { status: 403 });
     if (error instanceof GoogleFormsAPIError) return Response.json({ error: error.message }, { status: error.status });
     console.error("[Google Forms] create failed", error);
     return Response.json({ error: "สร้าง Google Form ไม่สำเร็จ กรุณาตรวจการเปิด Forms API และลองอีกครั้ง" }, { status: 500 });

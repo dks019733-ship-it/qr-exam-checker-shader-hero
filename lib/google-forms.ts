@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 const FORMS_BODY_SCOPE = "https://www.googleapis.com/auth/forms.body";
 const FORMS_RESPONSES_SCOPE = "https://www.googleapis.com/auth/forms.responses.readonly";
 
+export class GoogleFormsAccessError extends Error {}
+
 export async function getGoogleFormsAccessToken(userId: string, purpose: "create" | "responses") {
   const account = await prisma.account.findFirst({
     where: { userId, provider: "google" },
@@ -12,7 +14,7 @@ export async function getGoogleFormsAccessToken(userId: string, purpose: "create
   const requiredScope = purpose === "create" ? FORMS_BODY_SCOPE : FORMS_RESPONSES_SCOPE;
   if (!account.scope?.split(/\s+/).includes(requiredScope)) {
     const permission = purpose === "create" ? "สร้างและแก้ไข Google Forms" : "อ่านคำตอบ Google Forms";
-    throw new Error(`บัญชี Google ยังไม่ได้อนุญาต${permission} กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้งเพื่อยืนยันสิทธิ์`);
+    throw new GoogleFormsAccessError(`บัญชี Google ยังไม่ได้อนุญาต${permission} กรุณายืนยันสิทธิ์ Google ใหม่`);
   }
   if (account.access_token && account.expires_at && account.expires_at * 1000 > Date.now() + 60_000) return account.access_token;
   if (!account.refresh_token) throw new Error("ไม่พบสิทธิ์ต่ออายุบัญชี Google กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
