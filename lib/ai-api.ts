@@ -10,6 +10,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  image?: { data: string; mimeType: string };
 }
 
 export interface ChatTeacherProfile {
@@ -35,10 +36,11 @@ export interface ExamQuestion {
 export interface MaterialContent {
   overview?: string;
   instructions?: string;
+  worksheetStyle?: "cute" | "editable";
   learningObjectives?: string[];
   totalPoints?: number;
   questions?: ExamQuestion[];
-  sections?: { heading: string; body: string }[];
+  sections?: { heading: string; body: string; items?: string[]; responseLines?: number }[];
 }
 
 export interface GeneratedMaterial {
@@ -83,13 +85,25 @@ export const chatApi = {
   listSessions: () => request<{ sessions: ChatSession[] }>("/api/ai/chat/sessions"),
   createSession: (title?: string) => request<{ session: ChatSession }>("/api/ai/chat/sessions", { method: "POST", body: JSON.stringify({ title }) }),
   listMessages: (sessionId: string) => request<{ messages: ChatMessage[] }>(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`),
-  sendMessage: (sessionId: string, content: string, teacherProfile?: ChatTeacherProfile) => request<{ reply: ChatMessage }>(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`, { method: "POST", body: JSON.stringify({ content, teacherProfile }) }),
+  sendMessage: async (sessionId: string, content: string, teacherProfile: ChatTeacherProfile | undefined, files: File[] = [], mode = "chat") => {
+    const body = new FormData();
+    body.set("content", content);
+    body.set("mode", mode);
+    if (teacherProfile) body.set("teacherProfile", JSON.stringify(teacherProfile));
+    for (const file of files) body.append("files", file);
+    const response = await fetch(`/api/ai/chat/sessions/${encodeURIComponent(sessionId)}/messages`, { method: "POST", body });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `เกิดข้อผิดพลาด (${response.status})`);
+    }
+    return response.json() as Promise<{ reply: ChatMessage; image?: { data: string; mimeType: string } }>;
+  },
 };
 
 export const materialsApi = {
   list: () => request<{ materials: GeneratedMaterial[] }>("/api/ai/materials"),
   get: (id: string) => request<{ material: GeneratedMaterial }>(`/api/ai/materials/${encodeURIComponent(id)}`),
-  generate: (input: { kind: MaterialKind; subject: string; gradeLevel: string; topic: string; learningObjectives?: string; questionCount?: number; questionTypes?: string[]; difficulty?: string; documentType?: string }) => request<{ material: GeneratedMaterial }>("/api/ai/materials/generate", { method: "POST", body: JSON.stringify(input) }),
+  generate: (input: { kind: MaterialKind; subject: string; gradeLevel: string; topic: string; learningObjectives?: string; questionCount?: number; questionTypes?: string[]; difficulty?: string; documentType?: string; worksheetStyle?: "cute" | "editable" }) => request<{ material: GeneratedMaterial }>("/api/ai/materials/generate", { method: "POST", body: JSON.stringify(input) }),
   review: (id: string, input: { title?: string; content?: MaterialContent; reviewNotes?: string; status?: MaterialStatus }) => request<{ material: GeneratedMaterial }>(`/api/ai/materials/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }),
   exportDocx: (id: string) => requestBlob(`/api/ai/materials/${encodeURIComponent(id)}/export/docx`),
 };

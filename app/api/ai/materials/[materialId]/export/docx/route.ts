@@ -20,6 +20,10 @@ export async function GET(_request: Request, { params }: RouteContext) {
       { text: `วิชา ${material.subject} | ระดับชั้น ${material.gradeLevel}`, bold: true },
       { text: `หัวข้อ: ${material.topic}` },
     ];
+    if (material.kind === "document" && material.documentType === "ใบงาน") {
+      paragraphs.push({ text: "ชื่อ-นามสกุล ______________________________________  ชั้น __________  เลขที่ ______", bold: true });
+      paragraphs.push({ text: "วันที่ ______ / ______ / ______" });
+    }
     if (content.overview) paragraphs.push({ text: content.overview });
     for (const objective of content.learningObjectives || []) paragraphs.push({ text: `• ${objective}` });
     if (material.kind === "exam") {
@@ -32,9 +36,14 @@ export async function GET(_request: Request, { params }: RouteContext) {
         paragraphs.push({ text: `คะแนน: ${question.points}` });
       }
     } else {
+      if (content.instructions) paragraphs.push({ text: `คำชี้แจง: ${content.instructions}`, bold: true });
       for (const section of content.sections || []) {
         paragraphs.push({ text: section.heading, style: "Heading2" });
-        paragraphs.push({ text: section.body });
+        if (section.body) paragraphs.push({ text: section.body });
+        for (const [index, item] of (section.items || []).entries()) {
+          paragraphs.push({ text: `${index + 1}. ${item}` });
+          for (let line = 0; line < Math.min(12, Math.max(0, section.responseLines ?? 3)); line++) paragraphs.push({ text: "________________________________________________________________________________" });
+        }
       }
     }
     paragraphs.push({ text: "สถานะ: ผ่านการตรวจสอบและอนุมัติโดยครู" });

@@ -21,6 +21,7 @@ export default function MaterialsPage() {
   const [questionCount, setQuestionCount] = useState(10);
   const [difficulty, setDifficulty] = useState("ปานกลาง");
   const [documentType, setDocumentType] = useState("ใบงาน");
+  const [worksheetStyle, setWorksheetStyle] = useState<"cute" | "editable">("cute");
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -64,7 +65,7 @@ export default function MaterialsPage() {
         difficulty,
         ...(kind === "exam"
           ? { questionCount, questionTypes: ["ปรนัย", "อัตนัยสั้น"] }
-          : { documentType }),
+          : { documentType, ...(documentType === "ใบงาน" ? { worksheetStyle } : {}) }),
       });
       router.push(`/dashboard/ai/materials/${material.id}`);
     } catch (err: any) {
@@ -122,6 +123,13 @@ export default function MaterialsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">ประเภทเอกสาร<select value={documentType} onChange={(e) => setDocumentType(e.target.value)} className={fieldClass}><option>ใบงาน</option><option>แผนการจัดการเรียนรู้</option><option>เอกสารประกอบการสอน</option></select></label>
               <label className="block text-sm font-medium text-slate-700">รายละเอียดเพิ่มเติม<input value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={fieldClass} /></label>
+              {documentType === "ใบงาน" && <label className="block text-sm font-medium text-slate-700 sm:col-span-2">รูปแบบใบงาน
+                <select value={worksheetStyle} onChange={(e) => setWorksheetStyle(e.target.value as "cute" | "editable")} className={fieldClass}>
+                  <option value="cute">น่ารักสำหรับนักเรียน · พิมพ์/บันทึกเป็น PDF</option>
+                  <option value="editable">เรียบจริงจัง · แก้ไขต่อใน Word</option>
+                </select>
+                <span className="mt-1 block text-xs font-normal text-slate-500">ทั้งสองแบบครูตรวจและแก้เนื้อหาก่อนอนุมัติได้ แบบน่ารักเน้นจัดหน้าและทำกิจกรรม ส่วนแบบจริงจังดาวน์โหลดไปแก้ใน Word ได้</span>
+              </label>}
             </div>
           )}
 
