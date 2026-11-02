@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { GeneratedMaterial, MaterialContent, materialsApi } from "@/lib/ai-api";
 
 const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-800 disabled:opacity-100";
@@ -18,6 +19,7 @@ export default function MaterialReviewPage() {
   const [error, setError] = useState("");
   const [googleForm, setGoogleForm] = useState<GeneratedMaterial["google_form"]>(null);
   const [creatingForm, setCreatingForm] = useState(false);
+  const [needsGoogleReauth, setNeedsGoogleReauth] = useState(false);
   const [correctionNotice, setCorrectionNotice] = useState("");
   const [corrections, setCorrections] = useState<{ number: number; oldAnswer: string; newAnswer: string; reason: string }[]>([]);
   const [unresolvedQuestions, setUnresolvedQuestions] = useState<number[]>([]);
@@ -98,6 +100,7 @@ export default function MaterialReviewPage() {
     try {
       const response = await fetch(`/api/ai/materials/${encodeURIComponent(material.id)}/google-form`, { method: "POST" });
       const body = await response.json().catch(() => ({}));
+      setNeedsGoogleReauth(body.action === "reauthorize");
       if (!response.ok && body.material) {
         setMaterial(body.material);
         setTitle(body.material.title);
@@ -217,7 +220,10 @@ export default function MaterialReviewPage() {
 
         {material.learning_objectives && <p className="mt-6 text-sm text-slate-600">จุดประสงค์ที่ระบุ: {material.learning_objectives}</p>}
         {!locked && <label className="no-print mt-6 block text-sm font-medium text-slate-700">หมายเหตุการตรวจ<textarea rows={2} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} className={`${inputClass} mt-1`} placeholder="จดสิ่งที่แก้ไขหรือควรตรวจเพิ่มเติม" /></label>}
-        {error && <p role="alert" className="no-print mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <div role="alert" className="no-print mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p>{error}</p>
+          {needsGoogleReauth && <button onClick={() => void signIn("google", { redirectTo: window.location.href })} className="mt-2 rounded-lg border border-red-300 bg-white px-3 py-2 font-medium hover:bg-red-100">ยืนยันสิทธิ์ Google ใหม่</button>}
+        </div>}
         {correctionNotice && <section role="status" className="no-print mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
           <p className="font-semibold">ตรวจเฉลยที่ AI ปรับก่อนอนุมัติใหม่</p>
           <p className="mt-1">{correctionNotice}</p>
