@@ -10,7 +10,7 @@
 5. เพิ่ม Environment Variables ตาม `.env.example`
    - เพิ่ม `GEMINI_API_KEY` และ `GEMINI_MODEL=gemini-3.5-flash-lite` สำหรับผู้ช่วย AI
    - ถ้าใช้ Supabase ให้ตั้ง `DATABASE_URL` เป็น Transaction pooler และ `DIRECT_URL` เป็น Session pooler
-6. เพิ่มตารางตาม `prisma/schema.prisma` ในฐานข้อมูล production โดยใช้ `npx prisma db push` กับ production `DATABASE_URL` หนึ่งครั้งก่อนเปิดใช้งาน AI
+6. เพิ่มตารางตาม `prisma/schema.prisma` ในฐานข้อมูล production โดยใช้ `npx prisma db push` กับ production `DATABASE_URL` ก่อนเปิดใช้งาน AI และรันซ้ำเมื่อมีการเพิ่มตารางหรือแก้ schema (รวมตาราง `TeacherAiMemory` สำหรับความจำส่วนตัวของครู)
 7. Deploy
 8. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
 9. ทดสอบ Google Login
@@ -25,7 +25,7 @@
 ## สิ่งที่ยังต้องพัฒนาก่อนถือว่า Production Complete
 
 - Google Drive: สร้างโฟลเดอร์และอัปโหลด/จัดระเบียบไฟล์จริง
-- AI: ตั้ง Gemini key และเพิ่ม AI tables ใน production database ก่อนเปิดใช้งาน
+- AI: ตั้ง Gemini key และ sync schema ล่าสุดกับ production database ก่อนเปิดใช้งานแชท ความจำครู หรือสร้างภาพด้วย Gemini
 - OMR: อ่านคำตอบจากภาพจริง พร้อม confidence/จุดที่อ่านไม่ได้
 - Manual Review และการยืนยันคะแนน
 - Excel/PDF report export

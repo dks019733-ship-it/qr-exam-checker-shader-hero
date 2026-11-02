@@ -13,6 +13,14 @@ export function MessageBubble({ message, profile }: { message: ChatMessage; prof
         <div className={`whitespace-pre-wrap rounded-[1.25rem] px-4 py-3 text-sm leading-7 shadow-sm ${isUser ? "rounded-br-md bg-[#596f5d] text-white" : "rounded-bl-md border border-[#e7e1d5] bg-[#fffefa] text-[#343c35]"}`}>
           {message.content}
         </div>
+        {message.image && (
+          <div className="mt-2 overflow-hidden rounded-2xl border border-[#e7e1d5] bg-white p-2 shadow-sm">
+            <img src={`data:${message.image.mimeType};base64,${message.image.data}`} alt="ภาพประกอบใบงานที่สร้างด้วย Gemini" className="max-h-[32rem] w-full rounded-xl object-contain" />
+            <a href={`data:${message.image.mimeType};base64,${message.image.data}`} download={`worksheet-illustration.${message.image.mimeType === "image/jpeg" ? "jpg" : message.image.mimeType === "image/webp" ? "webp" : "png"}`} className="mt-2 inline-flex rounded-lg bg-[#f2f1e9] px-3 py-2 text-xs font-medium text-[#465548] hover:bg-[#e8e8dd]">
+              ดาวน์โหลดภาพ
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
