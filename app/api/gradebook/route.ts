@@ -19,9 +19,22 @@ export async function GET(request: Request) {
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
   const [students, columns] = await Promise.all([
     prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true }, orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }] }),
-    prisma.gradeColumn.findMany({ where: { ownerId, classId }, include: { scores: true, exam: { select: { title: true } }, googleForm: { include: { material: { select: { title: true } } } } }, orderBy: { createdAt: "asc" } }),
+    prisma.gradeColumn.findMany({ where: { ownerId, classId }, include: { scores: true, pendingFormScores: { orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }] }, exam: { select: { title: true } }, googleForm: { include: { material: { select: { title: true } } } } }, orderBy: { createdAt: "asc" } }),
   ]);
-  return NextResponse.json({ classes, classroom, students, columns, exams, googleForms });
+  const matchingStudents = await prisma.student.findMany({
+    where: { class: { ownerId }, isActive: true },
+    include: { class: { select: { name: true } } },
+    orderBy: [{ class: { name: "asc" } }, { rollNo: "asc" }, { studentNo: "asc" }],
+  });
+  return NextResponse.json({
+    classes,
+    classroom,
+    students,
+    matchingStudents: matchingStudents.map(({ id, rollNo, studentNo, name, class: studentClass }) => ({ id, rollNo, studentNo, name, className: studentClass.name })),
+    columns,
+    exams,
+    googleForms,
+  });
 }
 
 export async function POST(request: Request) {
