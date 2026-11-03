@@ -9,7 +9,7 @@ import { pushLineMessage } from "@/lib/line-guardian";
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
 export async function isSystemOwner(): Promise<boolean> {
-  const configuredOwner = process.env.SYSTEM_OWNER_EMAIL;
+  const configuredOwner = process.env.SYSTEM_OWNER_EMAIL?.trim();
   if (!configuredOwner) return false;
 
   const session = await auth();
@@ -27,11 +27,15 @@ export async function isSystemOwner(): Promise<boolean> {
 
 export function isValidCronSecret(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!expected || !supplied) return false;
+  const authorization = request.headers.get("authorization");
+  if (!expected || !authorization) return false;
 
-  const expectedBuffer = Buffer.from(expected);
-  const suppliedBuffer = Buffer.from(supplied);
+  // Require exactly one non-whitespace bearer token; reject malformed headers.
+  const match = /^Bearer ([^\s]+)$/i.exec(authorization);
+  if (!match) return false;
+
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const suppliedBuffer = Buffer.from(match[1], "utf8");
   return expectedBuffer.length === suppliedBuffer.length
     && timingSafeEqual(expectedBuffer, suppliedBuffer);
 }
@@ -83,6 +87,13 @@ export async function recordSystemIncident(input: {
       `เวลา: ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`,
       "พิมพ์ “สถานะระบบ” ใน LINE เพื่อดูผลตรวจล่าสุด",
     ].filter(Boolean).join("\n");
-    await pushLineMessage(ownerLineId, notification);
+
+    // Notification is best-effort and must never turn an incident write into
+    // an application failure when LINE is unavailable.
+    try {
+      await pushLineMessage(ownerLineId, notification);
+    } catch {
+      // Intentionally suppress provider failures; incident persistence is primary.
+    }
   }
 }
