@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:guardian": "node --test tests/line-signature.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
