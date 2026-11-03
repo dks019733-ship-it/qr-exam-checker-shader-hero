@@ -9,20 +9,25 @@ import { pushLineMessage } from "@/lib/line-guardian";
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
 export async function isSystemOwner(): Promise<boolean> {
-  const configuredOwner = process.env.SYSTEM_OWNER_EMAIL?.trim();
-  if (!configuredOwner) return false;
+  try {
+    const configuredOwner = process.env.SYSTEM_OWNER_EMAIL?.trim();
+    if (!configuredOwner) return false;
 
-  const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) return false;
+    const session = await auth();
+    const userId = session?.user?.id;
+    if (!userId) return false;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { email: true, emailVerified: true },
-  });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, emailVerified: true },
+    });
 
-  if (!user?.email || !user.emailVerified) return false;
-  return normalizeEmail(user.email) === normalizeEmail(configuredOwner);
+    if (!user?.email || !user.emailVerified) return false;
+    return normalizeEmail(user.email) === normalizeEmail(configuredOwner);
+  } catch {
+    // Authorization fails closed, but a database outage must not crash the public homepage.
+    return false;
+  }
 }
 
 export function isValidCronSecret(request: Request): boolean {
