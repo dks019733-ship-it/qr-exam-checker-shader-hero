@@ -377,3 +377,52 @@ model LineWebhookEvent {
 
   @@index([processedAt])
 }
+
+
+enum SystemGuardianTaskStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum SystemGuardianTaskType {
+  SYSTEM_HEALTH_CHECK
+}
+
+model SystemGuardianTask {
+  id               String                    @id @default(cuid())
+  type             SystemGuardianTaskType
+  status           SystemGuardianTaskStatus  @default(QUEUED)
+  requestedBy      String
+  source           String                    @default("WEB")
+  notifyLineUserId String?
+  currentStep      String?
+  progressPercent  Int                       @default(0)
+  resultSummary    String?                   @db.Text
+  failureCode      String?
+  attempts         Int                       @default(0)
+  maxAttempts      Int                       @default(2)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  events           SystemGuardianTaskEvent[]
+
+  @@index([status, createdAt])
+  @@index([requestedBy, createdAt])
+}
+
+model SystemGuardianTaskEvent {
+  id              String                   @id @default(cuid())
+  taskId          String
+  status          SystemGuardianTaskStatus
+  step            String
+  message         String                   @db.Text
+  progressPercent Int?
+  createdAt       DateTime                 @default(now())
+  task            SystemGuardianTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
