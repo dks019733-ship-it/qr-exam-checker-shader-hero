@@ -3,20 +3,18 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 const LINE_API = "https://api.line.me/v2/bot";
+const LINE_REQUEST_TIMEOUT_MS = 5_000;
 
 export function verifyLineSignature(rawBody: string, signature: string | null): boolean {
   const secret = process.env.LINE_CHANNEL_SECRET;
-  if (!secret || !signature) return false;
+  if (!secret || !signature || !/^[A-Za-z0-9+/]+={0,2}$/.test(signature)) return false;
 
   const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest();
-  let supplied: Buffer;
-  try {
-    supplied = Buffer.from(signature, "base64");
-  } catch {
-    return false;
-  }
+  const supplied = Buffer.from(signature, "base64");
 
-  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  // Buffer.from(base64) is permissive; require the canonical encoding LINE sends.
+  if (supplied.length !== expected.length || supplied.toString("base64") !== signature) return false;
+  return timingSafeEqual(supplied, expected);
 }
 
 async function lineRequest(path: string, body: unknown): Promise<boolean> {
@@ -32,9 +30,11 @@ async function lineRequest(path: string, body: unknown): Promise<boolean> {
       },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(LINE_REQUEST_TIMEOUT_MS),
     });
     return response.ok;
   } catch {
+    // Do not expose LINE credentials or upstream response details to callers/logs.
     return false;
   }
 }
