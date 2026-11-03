@@ -26,7 +26,7 @@ export async function isSystemOwner(): Promise<boolean> {
 
 export function isValidCronSecret(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\\s+/i, "");
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   if (!expected || !supplied) return false;
 
   const expectedBuffer = Buffer.from(expected);
