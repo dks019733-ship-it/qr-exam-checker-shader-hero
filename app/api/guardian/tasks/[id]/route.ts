@@ -52,26 +52,31 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
 
   const { id } = await context.params;
   try {
-    const result = await prisma.systemGuardianTask.updateMany({
-      where: { id, status: "QUEUED" },
-      data: {
-        status: "CANCELLED",
-        currentStep: "ยกเลิกโดยเจ้าของระบบ",
-        completedAt: new Date(),
-      },
+    const cancelled = await prisma.$transaction(async (tx) => {
+      const result = await tx.systemGuardianTask.updateMany({
+        where: { id, status: "QUEUED" },
+        data: {
+          status: "CANCELLED",
+          currentStep: "ยกเลิกโดยเจ้าของระบบ",
+          completedAt: new Date(),
+        },
+      });
+      if (result.count !== 1) return false;
+
+      await tx.systemGuardianTaskEvent.create({
+        data: {
+          taskId: id,
+          status: "CANCELLED",
+          step: "CANCELLED",
+          message: "เจ้าของระบบยกเลิกงานก่อนเริ่มดำเนินการ",
+        },
+      });
+      return true;
     });
-    if (result.count === 0) {
+
+    if (!cancelled) {
       return NextResponse.json({ error: "Task is not queued or does not exist" }, { status: 409 });
     }
-
-    await prisma.systemGuardianTaskEvent.create({
-      data: {
-        taskId: id,
-        status: "CANCELLED",
-        step: "CANCELLED",
-        message: "เจ้าของระบบยกเลิกงานก่อนเริ่มดำเนินการ",
-      },
-    });
     return NextResponse.json({ ok: true, status: "CANCELLED" });
   } catch {
     return NextResponse.json({ error: "Unable to cancel Guardian task" }, { status: 503 });
