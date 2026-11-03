@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { SignInButton, SignOutButton } from "@/components/auth-buttons";
+import { SystemGuardianPanel } from "@/components/system-guardian-panel";
+import { isSystemOwner } from "@/lib/system-guardian";
 
 const tools = [
   {
@@ -120,6 +122,7 @@ function WorkspaceLink({
 export default async function HomePage() {
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
+  const systemOwner = signedIn ? await isSystemOwner() : false;
 
   return (
     <main className="min-h-screen bg-[#f8f7f4] text-[#1c241b]">
@@ -163,6 +166,7 @@ export default async function HomePage() {
       </div>
 
       <div className="mx-auto max-w-7xl space-y-20 px-4 pb-14 pt-8 sm:px-6 sm:pt-10 lg:px-8">
+        {systemOwner && <SystemGuardianPanel />}
         <section
           id="overview"
           aria-labelledby="hero-title"
