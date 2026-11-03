@@ -6,6 +6,40 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+async function recoverStaleTask(): Promise<void> {
+  const staleBefore = new Date(Date.now() - 10 * 60 * 1000);
+  const stale = await prisma.systemGuardianTask.findFirst({
+    where: { status: "RUNNING", updatedAt: { lt: staleBefore } },
+    orderBy: { updatedAt: "asc" },
+    select: { id: true, notifyLineUserId: true },
+  });
+  if (!stale) return;
+
+  const recovered = await prisma.systemGuardianTask.updateMany({
+    where: { id: stale.id, status: "RUNNING", updatedAt: { lt: staleBefore } },
+    data: {
+      status: "FAILED",
+      currentStep: "งานหมดเวลารอและถูกปิดสถานะ",
+      failureCode: "WORKER_TIMEOUT",
+      resultSummary: "ไม่พบการอัปเดตจาก worker ภายใน 10 นาที งานถูกปิดเพื่อไม่ให้ค้างในสถานะกำลังทำ",
+      completedAt: new Date(),
+    },
+  });
+  if (recovered.count !== 1) return;
+
+  await prisma.systemGuardianTaskEvent.create({
+    data: {
+      taskId: stale.id,
+      status: "FAILED",
+      step: "WORKER_TIMEOUT",
+      message: "ปิดงานที่ค้างเกิน 10 นาทีแล้ว สามารถ retry ได้หากยังอยู่ในขีดจำกัด",
+    },
+  });
+  if (stale.notifyLineUserId) {
+    await pushLineMessage(stale.notifyLineUserId, "System Guardian\nงานตรวจสอบหมดเวลารอและถูกปิดสถานะแล้ว สามารถสั่ง “ลองงานที่ล้มเหลวใหม่” ได้หากยังไม่เกินจำนวน retry");
+  }
+}
+
 async function processNextTask(): Promise<boolean> {
   const candidate = await prisma.systemGuardianTask.findFirst({
     where: { status: "QUEUED", type: "SYSTEM_HEALTH_CHECK" },
@@ -14,7 +48,7 @@ async function processNextTask(): Promise<boolean> {
   });
   if (!candidate) return false;
 
-  // Atomic claim prevents two overlapping cron invocations from executing one task twice.
+  // Atomic claim prevents overlapping cron invocations from executing one task twice.
   const claimed = await prisma.systemGuardianTask.updateMany({
     where: { id: candidate.id, status: "QUEUED" },
     data: {
@@ -27,17 +61,17 @@ async function processNextTask(): Promise<boolean> {
   });
   if (claimed.count !== 1) return false;
 
-  await prisma.systemGuardianTaskEvent.create({
-    data: {
-      taskId: candidate.id,
-      status: "RUNNING",
-      step: "DATABASE_CHECK",
-      message: "เริ่มตรวจสอบการเชื่อมต่อฐานข้อมูล",
-      progressPercent: 25,
-    },
-  });
-
   try {
+    await prisma.systemGuardianTaskEvent.create({
+      data: {
+        taskId: candidate.id,
+        status: "RUNNING",
+        step: "DATABASE_CHECK",
+        message: "เริ่มตรวจสอบการเชื่อมต่อฐานข้อมูล",
+        progressPercent: 25,
+      },
+    });
+
     await prisma.$queryRaw`SELECT 1`;
     const openIncidents = await prisma.systemIncident.count({
       where: { status: { in: ["OPEN", "ACKNOWLEDGED"] } },
@@ -69,14 +103,15 @@ async function processNextTask(): Promise<boolean> {
     }
     return true;
   } catch {
-    const summary = "ตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้";
+    // If the database itself is unavailable, these writes can fail too; the stale-task
+    // recovery above closes the task on a later successful cron invocation.
     await prisma.systemGuardianTask.update({
       where: { id: candidate.id },
       data: {
         status: "FAILED",
         currentStep: "การตรวจสอบล้มเหลว",
         progressPercent: 25,
-        resultSummary: summary,
+        resultSummary: "ตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้",
         failureCode: "HEALTH_CHECK_FAILED",
         completedAt: new Date(),
       },
@@ -86,12 +121,12 @@ async function processNextTask(): Promise<boolean> {
         taskId: candidate.id,
         status: "FAILED",
         step: "FAILED",
-        message: summary,
+        message: "ตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้",
         progressPercent: 25,
       },
     });
     if (candidate.notifyLineUserId) {
-      await pushLineMessage(candidate.notifyLineUserId, `System Guardian\n${summary}`);
+      await pushLineMessage(candidate.notifyLineUserId, "System Guardian\nตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้");
     }
     return true;
   }
@@ -104,6 +139,7 @@ export async function GET(request: Request) {
 
   try {
     await prisma.$queryRaw`SELECT 1`;
+    await recoverStaleTask();
     const taskProcessed = await processNextTask();
     return NextResponse.json({
       ok: true,
