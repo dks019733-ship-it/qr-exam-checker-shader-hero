@@ -12,15 +12,21 @@ export async function isSystemOwner(): Promise<boolean> {
   if (!configuredOwner) return false;
 
   const session = await auth();
-  const sessionEmail = session?.user?.email;
-  if (!sessionEmail) return false;
+  const userId = session?.user?.id;
+  if (!userId) return false;
 
-  return normalizeEmail(sessionEmail) === normalizeEmail(configuredOwner);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, emailVerified: true },
+  });
+
+  if (!user?.email || !user.emailVerified) return false;
+  return normalizeEmail(user.email) === normalizeEmail(configuredOwner);
 }
 
 export function isValidCronSecret(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer\\s+/i, "");
   if (!expected || !supplied) return false;
 
   const expectedBuffer = Buffer.from(expected);
