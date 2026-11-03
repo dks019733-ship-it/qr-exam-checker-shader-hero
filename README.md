@@ -119,7 +119,7 @@ Set these in the hosting provider's server-side environment settings. Never comm
 
 ### Database and scheduled worker activation
 
-The Guardian task and event models are additive Prisma schema changes. Before enabling this feature, review the schema against the production database and apply the approved database update during a maintenance window. This branch does not run schema changes automatically at application startup.
+The Guardian incident, audit, LINE event, task, and task-event models are additive Prisma schema changes. Review `prisma/migrations/20261103090000_add_system_guardian/migration.sql` against the target database, take/verify a backup, then apply it with `npx prisma migrate deploy` during an approved maintenance window. Do not use `prisma db push` as an unreviewed production shortcut. This branch does not run schema changes automatically at application startup.
 
 The worker endpoint is `GET /api/guardian/cron` and requires `Authorization: Bearer <CRON_SECRET>`. Configure a scheduler compatible with the deployed Vercel plan to call this endpoint regularly. Without a scheduler, tasks remain queued; do not describe the queue as active until a scheduled invocation has been verified.
 
