@@ -27,7 +27,8 @@ function isLineEvent(value: unknown): value is LineEvent {
     && typeof event.source.userId === "string"
     && event.message?.type === "text"
     && typeof event.message.text === "string"
-    && event.message.text.length <= 5_000;
+    && event.message.text.length <= 5_000
+    && (event.replyToken === undefined || (typeof event.replyToken === "string" && event.replyToken.length > 0 && event.replyToken.length <= 256));
 }
 
 async function deliver(event: LineEvent, ownerLineId: string, text: string) {
