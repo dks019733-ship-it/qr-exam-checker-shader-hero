@@ -66,9 +66,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
     await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
     const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
+    const savedReviews = await prisma.formResponseReview.findMany({ where: { columnId: column.id }, select: { responseId: true, studentId: true, score: true } });
+    const reviewByResponse = new Map(savedReviews.map((review) => [review.responseId, review]));
     const roster = students.map((student) => ({ ...student, nameKey: normalized(student.name), rolls: [normalized(student.rollNo), normalized(student.studentNo)].filter(Boolean) }));
     const scores = new Map<string, number>();
-    const pendingRows: { columnId: string; responseId: string; rollNo: string; studentName: string; score: number; submittedAt: Date | null }[] = [];
+    const pendingRows: { columnId: string; responseId: string; rollNo: string; studentName: string; room: string; manualReviewRequired: boolean; score: number; submittedAt: Date | null }[] = [];
     const matchedResponseIds: string[] = [];
     let skipped = 0;
     let ungraded = 0;
@@ -80,22 +82,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       const result = await googleFormsRequest<ResponsePage>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}/responses?${query}`);
       for (const response of result.responses || []) {
         responsesSeen++;
-        const score = responseScore(response, gradedQuestionIds);
+        const savedReview = response.responseId ? reviewByResponse.get(response.responseId) : undefined;
+        const score = savedReview?.score ?? responseScore(response, gradedQuestionIds);
         if (typeof score !== "number") { ungraded++; continue; }
         const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
-        if (room && normalizedRoom(room) !== normalizedRoom(column.classroom.name)) { skipped++; continue; }
+        const roomMismatch = !!room && normalizedRoom(room) !== normalizedRoom(column.classroom.name) && !savedReview?.studentId;
         const roll = normalizedRoll(answerFor(response, rollIds.questionId, rollIds.itemId));
         const name = normalized(answerFor(response, nameIds.questionId, nameIds.itemId));
         // A unique roll number is enough to match. Use the name as a fallback,
         // or to disambiguate duplicated roll numbers if the roster is inconsistent.
-        let candidates = roll ? roster.filter((student) => student.rolls.some((value) => normalizedRoll(value) === roll)) : [];
+        let candidates = !roomMismatch && roll ? roster.filter((student) => student.rolls.some((value) => normalizedRoll(value) === roll)) : [];
         if (candidates.length > 1 && name) candidates = candidates.filter((student) => student.nameKey === name);
-        if (!candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
-        if (candidates.length === 1) {
-          scores.set(candidates[0].id, score);
+        if (!roomMismatch && !candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
+        const manuallyMatched = savedReview?.studentId ? roster.find((student) => student.id === savedReview.studentId) : undefined;
+        const matchedStudent = manuallyMatched || (candidates.length === 1 ? candidates[0] : undefined);
+        if (matchedStudent) {
+          scores.set(matchedStudent.id, score);
           if (response.responseId) matchedResponseIds.push(response.responseId);
-        } else if (name && response.responseId) {
-          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: answerFor(response, rollIds.questionId, rollIds.itemId), studentName: answerFor(response, nameIds.questionId, nameIds.itemId), score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
+        } else if (response.responseId) {
+          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: answerFor(response, rollIds.questionId, rollIds.itemId), studentName: answerFor(response, nameIds.questionId, nameIds.itemId) || "ไม่ระบุชื่อในฟอร์ม", room, manualReviewRequired: roomMismatch, score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
         } else skipped++;
       }
       pageToken = result.nextPageToken;
@@ -106,7 +111,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       await prisma.$transaction(pendingRows.slice(i, i + 100).map((row) => prisma.pendingFormScore.upsert({
         where: { columnId_responseId: { columnId: row.columnId, responseId: row.responseId } },
         create: row,
-        update: { rollNo: row.rollNo, studentName: row.studentName, score: row.score, submittedAt: row.submittedAt },
+        update: { rollNo: row.rollNo, studentName: row.studentName, room: row.room, manualReviewRequired: row.manualReviewRequired, score: row.score, submittedAt: row.submittedAt },
       })));
     }
     if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });

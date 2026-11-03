@@ -83,6 +83,7 @@ model Student {
   class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   attempts  ExamAttempt[]
   gradeScores GradeScore[]
+  formResponseReviews FormResponseReview[]
   qrToken   String   @unique @default(cuid())
   createdAt DateTime @default(now())
   @@unique([classId, studentNo])
@@ -271,6 +272,7 @@ model GradeColumn {
   googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
   scores       GradeScore[]
   pendingFormScores PendingFormScore[]
+  formResponseReviews FormResponseReview[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   @@index([ownerId, classId, period])
@@ -294,6 +296,8 @@ model PendingFormScore {
   responseId  String
   rollNo      String      @default("")
   studentName String
+  room        String      @default("")
+  manualReviewRequired Boolean @default(false)
   score       Float
   submittedAt DateTime?
   column      GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
@@ -301,6 +305,22 @@ model PendingFormScore {
   updatedAt   DateTime    @updatedAt
   @@unique([columnId, responseId])
   @@index([columnId])
+}
+
+model FormResponseReview {
+  id            String      @id @default(cuid())
+  columnId      String
+  responseId    String
+  studentId     String?
+  score         Float
+  questionScores Json
+  column        GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  student       Student?    @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@unique([columnId, responseId])
+  @@index([columnId])
+  @@index([studentId])
 }
 
 enum AIChatRole {
