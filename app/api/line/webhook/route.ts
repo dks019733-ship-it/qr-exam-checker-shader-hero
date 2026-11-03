@@ -44,7 +44,7 @@ function commandResponse(command: string, openIncidents: number, dbOk: boolean):
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  if (rawBody.length > 64_000) {
+  if (Buffer.byteLength(rawBody, "utf8") > 64_000) {
     return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
 
@@ -64,6 +64,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: "owner_not_configured" });
   }
 
+  let deliveryFailed = false;
+
   for (const event of payload.events ?? []) {
     if (
       event.type !== "message" ||
@@ -73,14 +75,16 @@ export async function POST(request: Request) {
       !event.webhookEventId
     ) continue;
 
+    let storedEventId: string;
     try {
-      await prisma.lineWebhookEvent.create({
+      const storedEvent = await prisma.lineWebhookEvent.create({
         data: {
           webhookEventId: event.webhookEventId,
           sourceUserId: event.source.userId,
           eventType: event.type,
         },
       });
+      storedEventId = storedEvent.id;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         continue;
@@ -106,12 +110,18 @@ export async function POST(request: Request) {
     }
 
     if (event.replyToken) {
-      await replyLineMessage(
+      const replied = await replyLineMessage(
         event.replyToken,
         commandResponse(command, openIncidents, dbOk),
       );
+      if (!replied) {
+        deliveryFailed = true;
+        await prisma.lineWebhookEvent.delete({ where: { id: storedEventId } }).catch(() => undefined);
+      }
     }
   }
 
-  return NextResponse.json({ ok: true });
+  return deliveryFailed
+    ? NextResponse.json({ error: "Temporary message delivery failure" }, { status: 503 })
+    : NextResponse.json({ ok: true });
 }
