@@ -82,7 +82,7 @@ export async function recordSystemIncident(input: {
       input.route ? `เส้นทาง: ${input.route}` : "",
       `เวลา: ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`,
       "พิมพ์ “สถานะระบบ” ใน LINE เพื่อดูผลตรวจล่าสุด",
-    ].filter(Boolean).join("\\n");
+    ].filter(Boolean).join("\n");
     await pushLineMessage(ownerLineId, notification);
   }
 }
