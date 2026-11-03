@@ -4,6 +4,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { SystemIncidentSeverity } from "@prisma/client";
+import { pushLineMessage } from "@/lib/line-guardian";
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
@@ -47,6 +48,11 @@ export async function recordSystemIncident(input: {
     .update([input.source, input.title, input.route ?? "", String(input.httpStatus ?? "")].join(":"))
     .digest("hex");
 
+  const previous = await prisma.systemIncident.findUnique({
+    where: { fingerprint },
+    select: { status: true },
+  });
+
   await prisma.systemIncident.upsert({
     where: { fingerprint },
     create: {
@@ -67,4 +73,16 @@ export async function recordSystemIncident(input: {
       resolvedAt: null,
     },
   });
+
+  const ownerLineId = process.env.LINE_OWNER_USER_ID;
+  if (ownerLineId && (!previous || previous.status === "RESOLVED")) {
+    const notification = [
+      `System Guardian: ${input.severity}`,
+      input.title.slice(0, 160),
+      input.route ? `เส้นทาง: ${input.route}` : "",
+      `เวลา: ${new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}`,
+      "พิมพ์ “สถานะระบบ” ใน LINE เพื่อดูผลตรวจล่าสุด",
+    ].filter(Boolean).join("\\n");
+    await pushLineMessage(ownerLineId, notification);
+  }
 }
