@@ -234,8 +234,9 @@ export async function POST(request: Request) {
 
     const delivered = await deliver(event, ownerLineId, responseText);
     if (!delivered) {
-      await prisma.lineWebhookEvent.delete({ where: { id: storedEventId } }).catch(() => undefined);
-      return NextResponse.json({ error: "Message delivery unavailable" }, { status: 503 });
+      // Keep the event claim: command execution may already have created a task.
+      // Retrying this webhook could otherwise enqueue duplicate work.
+      continue;
     }
   }
 
