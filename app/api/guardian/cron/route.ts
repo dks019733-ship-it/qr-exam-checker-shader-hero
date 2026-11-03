@@ -139,6 +139,9 @@ export async function GET(request: Request) {
 
   try {
     await prisma.$queryRaw`SELECT 1`;
+    await prisma.lineWebhookEvent.deleteMany({
+      where: { processedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+    });
     await recoverStaleTask();
     const taskProcessed = await processNextTask();
     return NextResponse.json({
