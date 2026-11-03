@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { replyLineMessage, verifyLineSignature } from "@/lib/line-guardian";
+import { pushLineMessage, replyLineMessage, verifyLineSignature } from "@/lib/line-guardian";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,21 +42,40 @@ function commandResponse(command: string, openIncidents: number, dbOk: boolean):
   return "ไม่รู้จักคำสั่งนี้ พิมพ์ “ช่วยเหลือ” เพื่อดูคำสั่งที่รองรับ";
 }
 
+function isLineEvent(value: unknown): value is LineEvent {
+  if (!value || typeof value !== "object") return false;
+  const event = value as LineEvent;
+  return event.type === "message"
+    && typeof event.webhookEventId === "string"
+    && event.webhookEventId.length > 0
+    && event.webhookEventId.length <= 200
+    && event.source?.type === "user"
+    && typeof event.source.userId === "string"
+    && event.message?.type === "text"
+    && typeof event.message.text === "string"
+    && event.message.text.length <= 5_000;
+}
+
 export async function POST(request: Request) {
   const rawBody = await request.text();
   if (Buffer.byteLength(rawBody, "utf8") > 64_000) {
     return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
 
+  // Verify the exact, unmodified body before JSON parsing.
   if (!verifyLineSignature(rawBody, request.headers.get("x-line-signature"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let payload: { events?: LineEvent[] };
+  let payload: { events?: unknown };
   try {
-    payload = JSON.parse(rawBody);
+    payload = JSON.parse(rawBody) as { events?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  if (!payload || !Array.isArray(payload.events) || payload.events.length > 100) {
+    return NextResponse.json({ error: "Invalid events payload" }, { status: 400 });
   }
 
   const ownerLineId = process.env.LINE_OWNER_USER_ID;
@@ -64,40 +83,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: "owner_not_configured" });
   }
 
-  let deliveryFailed = false;
+  for (const candidate of payload.events) {
+    if (!isLineEvent(candidate)) continue;
 
-  for (const event of payload.events ?? []) {
-    if (
-      event.type !== "message" ||
-      event.message?.type !== "text" ||
-      event.source?.type !== "user" ||
-      event.source.userId !== ownerLineId ||
-      !event.webhookEventId
-    ) continue;
+    const event = candidate;
+    if (event.source?.userId !== ownerLineId) continue;
+    const command = event.message?.text?.slice(0, 120) ?? "";
+    const normalized = command.trim().replace(/\s+/g, " ").toLowerCase();
+    const supported = ["ช่วยเหลือ", "help", "เมนู", "ตรวจสอบระบบ", "สถานะระบบ", "สถานะการซ่อม", "status"].includes(normalized);
+    if (!supported) continue;
 
     let storedEventId: string;
     try {
       const storedEvent = await prisma.lineWebhookEvent.create({
         data: {
-          webhookEventId: event.webhookEventId,
-          sourceUserId: event.source.userId,
-          eventType: event.type,
+          webhookEventId: event.webhookEventId!,
+          sourceUserId: event.source!.userId!,
+          eventType: event.type!,
         },
+        select: { id: true },
       });
       storedEventId = storedEvent.id;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        // A previously accepted delivery is already being/has been handled.
         continue;
       }
-      // A persistence failure must not execute the same command without idempotency.
-      continue;
+      // Do not acknowledge a command if durable idempotency storage is unavailable.
+      return NextResponse.json({ error: "Temporarily unavailable" }, { status: 503 });
     }
 
-    const command = (event.message.text ?? "").slice(0, 120);
     let dbOk = false;
     let openIncidents = 0;
-
-    if (["ตรวจสอบระบบ", "สถานะระบบ", "สถานะการซ่อม", "status"].includes(command.trim().toLowerCase())) {
+    if (["ตรวจสอบระบบ", "สถานะระบบ", "สถานะการซ่อม", "status"].includes(normalized)) {
       try {
         await prisma.$queryRaw`SELECT 1`;
         dbOk = true;
@@ -109,19 +127,21 @@ export async function POST(request: Request) {
       }
     }
 
-    if (event.replyToken) {
-      const replied = await replyLineMessage(
-        event.replyToken,
-        commandResponse(command, openIncidents, dbOk),
-      );
-      if (!replied) {
-        deliveryFailed = true;
+    const responseText = commandResponse(command, openIncidents, dbOk);
+    const replied = event.replyToken
+      ? await replyLineMessage(event.replyToken, responseText)
+      : false;
+
+    if (!replied) {
+      // Reply tokens are short-lived and one-use. Fall back to a push message;
+      // retain the idempotency record once either delivery path succeeds.
+      const pushed = await pushLineMessage(ownerLineId, responseText);
+      if (!pushed) {
         await prisma.lineWebhookEvent.delete({ where: { id: storedEventId } }).catch(() => undefined);
+        return NextResponse.json({ error: "Message delivery unavailable" }, { status: 503 });
       }
     }
   }
 
-  return deliveryFailed
-    ? NextResponse.json({ error: "Temporary message delivery failure" }, { status: 503 })
-    : NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true });
 }
