@@ -366,3 +366,14 @@ model SystemGuardianAuditLog {
   @@index([actorEmail, createdAt])
   @@index([action, createdAt])
 }
+
+
+model LineWebhookEvent {
+  id              String   @id @default(cuid())
+  webhookEventId  String   @unique
+  sourceUserId    String?
+  eventType        String
+  processedAt      DateTime @default(now())
+
+  @@index([processedAt])
+}
