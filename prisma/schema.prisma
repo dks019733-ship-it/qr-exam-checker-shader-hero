@@ -266,16 +266,20 @@ model GradeColumn {
   maxScore     Float        @default(10)
   examId       String?      @unique
   googleFormId String?      @unique
+  sourceColumnId String?
   owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   classroom    Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
   exam         Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
   googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
+  sourceColumn GradeColumn? @relation("GradeColumnDestinations", fields: [sourceColumnId], references: [id], onDelete: Cascade)
+  destinationColumns GradeColumn[] @relation("GradeColumnDestinations")
   scores       GradeScore[]
   pendingFormScores PendingFormScore[]
   formResponseReviews FormResponseReview[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   @@index([ownerId, classId, period])
+  @@unique([sourceColumnId, classId])
 }
 
 model GradeScore {

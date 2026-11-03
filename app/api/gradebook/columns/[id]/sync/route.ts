@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
+import { getFormScoreColumnIds, getFormScoreDestination, getOtherFormScoreColumnIds } from "@/lib/gradebook-form-destination";
+import { matchFormStudent } from "@/lib/google-form-student-match";
 
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
 type FormInfo = { items?: FormItem[] };
@@ -11,10 +13,6 @@ type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
 const normalizedLabel = (value: string) => normalized(value).replace(/[^\p{L}\p{N}]/gu, "");
-const normalizedRoll = (value: string) => {
-  const text = normalized(value);
-  return /^\d+$/u.test(text) ? String(Number(text)) : text;
-};
 const normalizedRoom = (value: string) => {
   const text = normalized(value).replace(/^(?:ห้อง|ชั้น|มัธยมศึกษาปีที่|มัธยมศึกษา|ม\.?)*/u, "");
   const match = text.match(/(\d+)\s*[/.-]\s*(\d+)/u);
@@ -65,11 +63,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     });
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
     await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
-    const students = await prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } });
+    const students = await prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } });
     const savedReviews = await prisma.formResponseReview.findMany({ where: { columnId: column.id }, select: { responseId: true, studentId: true, score: true } });
     const reviewByResponse = new Map(savedReviews.map((review) => [review.responseId, review]));
-    const roster = students.map((student) => ({ ...student, nameKey: normalized(student.name), rolls: [normalized(student.rollNo), normalized(student.studentNo)].filter(Boolean) }));
-    const scores = new Map<string, number>();
+    const roster = students.map((student) => ({
+      id: student.id,
+      rollNo: student.rollNo,
+      studentNo: student.studentNo,
+      name: student.name,
+      classId: student.class.id,
+      className: student.class.name,
+    }));
+    const scoresByClass = new Map<string, Map<string, number>>();
     const pendingRows: { columnId: string; responseId: string; rollNo: string; studentName: string; room: string; manualReviewRequired: boolean; score: number; submittedAt: Date | null }[] = [];
     const matchedResponseIds: string[] = [];
     let skipped = 0;
@@ -86,21 +91,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         const score = savedReview?.score ?? responseScore(response, gradedQuestionIds);
         if (typeof score !== "number") { ungraded++; continue; }
         const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
-        const roomMismatch = !!room && normalizedRoom(room) !== normalizedRoom(column.classroom.name) && !savedReview?.studentId;
-        const roll = normalizedRoll(answerFor(response, rollIds.questionId, rollIds.itemId));
-        const name = normalized(answerFor(response, nameIds.questionId, nameIds.itemId));
-        // A unique roll number is enough to match. Use the name as a fallback,
-        // or to disambiguate duplicated roll numbers if the roster is inconsistent.
-        let candidates = !roomMismatch && roll ? roster.filter((student) => student.rolls.some((value) => normalizedRoll(value) === roll)) : [];
-        if (candidates.length > 1 && name) candidates = candidates.filter((student) => student.nameKey === name);
-        if (!roomMismatch && !candidates.length && name) candidates = roster.filter((student) => student.nameKey === name);
+        const roll = answerFor(response, rollIds.questionId, rollIds.itemId);
+        const name = answerFor(response, nameIds.questionId, nameIds.itemId);
         const manuallyMatched = savedReview?.studentId ? roster.find((student) => student.id === savedReview.studentId) : undefined;
-        const matchedStudent = manuallyMatched || (candidates.length === 1 ? candidates[0] : undefined);
+        const matchedStudent = manuallyMatched || matchFormStudent(roster, roll, room, name);
         if (matchedStudent) {
-          scores.set(matchedStudent.id, score);
+          const classScores = scoresByClass.get(matchedStudent.classId) || new Map<string, number>();
+          classScores.set(matchedStudent.id, score);
+          scoresByClass.set(matchedStudent.classId, classScores);
           if (response.responseId) matchedResponseIds.push(response.responseId);
         } else if (response.responseId) {
-          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: answerFor(response, rollIds.questionId, rollIds.itemId), studentName: answerFor(response, nameIds.questionId, nameIds.itemId) || "ไม่ระบุชื่อในฟอร์ม", room, manualReviewRequired: roomMismatch, score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
+          pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: roll, studentName: name || "ไม่ระบุชื่อในฟอร์ม", room, manualReviewRequired: !!room && normalizedRoom(room) !== normalizedRoom(column.classroom.name), score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
         } else skipped++;
       }
       pageToken = result.nextPageToken;
@@ -115,15 +116,41 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       })));
     }
     if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });
-    const entries = [...scores.entries()];
-    for (let i = 0; i < entries.length; i += 25) {
-      await Promise.all(entries.slice(i, i + 25).map(([studentId, score]) => prisma.gradeScore.upsert({
-        where: { columnId_studentId: { columnId: column.id, studentId } },
-        create: { columnId: column.id, studentId, score },
-        update: { score },
-      })));
+    const formColumnIds = await getFormScoreColumnIds(column.id);
+    const matchedStudentIds = [...new Set([...scoresByClass.values()].flatMap((classScores) => [...classScores.keys()]))];
+    const existingScores = await prisma.gradeScore.findMany({
+      where: { columnId: { in: formColumnIds } },
+      select: { studentId: true },
+    });
+    const matchedStudentIdSet = new Set(matchedStudentIds);
+    const staleStudentIds = [...new Set(existingScores.map(({ studentId }) => studentId))]
+      .filter((studentId) => !matchedStudentIdSet.has(studentId));
+    for (let i = 0; i < staleStudentIds.length; i += 500) {
+      await prisma.gradeScore.deleteMany({
+        where: { columnId: { in: formColumnIds }, studentId: { in: staleStudentIds.slice(i, i + 500) } },
+      });
     }
-    return NextResponse.json({ imported: entries.length, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
+    let imported = 0;
+    for (const [classId, classScores] of scoresByClass) {
+      const destinationColumnId = await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classId);
+      const staleColumnIds = await getOtherFormScoreColumnIds(column.id, destinationColumnId);
+      const entries = [...classScores.entries()];
+      imported += entries.length;
+      for (let i = 0; i < entries.length; i += 25) {
+        const batch = entries.slice(i, i + 25);
+        await prisma.$transaction([
+          ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
+            where: { columnId: { in: staleColumnIds }, studentId: { in: batch.map(([studentId]) => studentId) } },
+          })] : []),
+          ...batch.map(([studentId, score]) => prisma.gradeScore.upsert({
+            where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
+            create: { columnId: destinationColumnId, studentId, score },
+            update: { score },
+          })),
+        ]);
+      }
+    }
+    return NextResponse.json({ imported, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";
