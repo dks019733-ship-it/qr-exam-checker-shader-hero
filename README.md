@@ -96,3 +96,35 @@ For a deployed domain, configure the Google OAuth client with:
 ### Current status
 
 Deployment scaffolding is ready, but production Google credentials and a production PostgreSQL database must be supplied outside source control. The OMR scanner, real Google Drive file workflow, review/confirmation workflow, exports, and backup/recovery are not yet complete and should not be represented as production-ready.
+
+
+## System Guardian and LINE task queue
+
+System Guardian is an owner-only operational monitor. It currently supports:
+- Database readiness checks and incident history.
+- A persistent task queue for the allowlisted `SYSTEM_HEALTH_CHECK` operation only.
+- Task states `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, and `CANCELLED`, with a persisted event timeline.
+- Owner-only web controls to enqueue a health check and cancel a task only while it remains queued.
+- LINE one-to-one commands from the configured owner account: `ช่วยเหลือ`, `ตรวจสอบระบบ`, `สถานะระบบ`, `สถานะการซ่อม`, `วิเคราะห์ปัญหาล่าสุด`, `ลองงานที่ล้มเหลวใหม่`, and `หยุดงาน`.
+- A cron worker that atomically claims and processes at most one queued health-check task per invocation. Stale running tasks are marked failed after 10 minutes.
+
+### Required server environment variables
+
+Set these in the hosting provider's server-side environment settings. Never commit actual values:
+- `SYSTEM_OWNER_EMAIL`
+- `CRON_SECRET`
+- `LINE_CHANNEL_ACCESS_TOKEN`
+- `LINE_CHANNEL_SECRET`
+- `LINE_OWNER_USER_ID`
+
+### Database and scheduled worker activation
+
+The Guardian incident, audit, LINE event, task, and task-event models are additive Prisma schema changes. Review `prisma/migrations/20261103090000_add_system_guardian/migration.sql` against the target database, take/verify a backup, then apply it with `npx prisma migrate deploy` during an approved maintenance window. Do not use `prisma db push` as an unreviewed production shortcut. This branch does not run schema changes automatically at application startup.
+
+The worker endpoint is `GET /api/guardian/cron` and requires `Authorization: Bearer <CRON_SECRET>`. Configure a scheduler compatible with the deployed Vercel plan to call this endpoint regularly. Without a scheduler, tasks remain queued; do not describe the queue as active until a scheduled invocation has been verified.
+
+After deployment, configure the LINE webhook URL as `https://YOUR-DOMAIN/api/line/webhook` in LINE Developers and verify it there. A successful Vercel deployment alone does not prove that LINE webhook delivery works.
+
+### Safety boundary
+
+Guardian does not execute arbitrary shell commands, SQL, JavaScript, generated code, migrations, deployment actions, or student/exam/grade mutations. The only worker operation currently implemented is a database health check. Code changes, data correction, schema changes, and deployments still require a reviewed pull request and explicit human approval.

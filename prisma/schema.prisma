@@ -341,3 +341,104 @@ enum GeneratedMaterialStatus {
   pending_review
   approved
 }
+
+enum SystemIncidentSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum SystemIncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model SystemIncident {
+  id          String                 @id @default(cuid())
+  fingerprint String                 @unique
+  source      String
+  severity    SystemIncidentSeverity
+  status      SystemIncidentStatus   @default(OPEN)
+  title       String
+  summary     String                 @db.Text
+  route       String?
+  httpStatus  Int?
+  occurrenceCount Int                @default(1)
+  firstSeenAt DateTime               @default(now())
+  lastSeenAt  DateTime               @default(now())
+  resolvedAt DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  @@index([status, severity, lastSeenAt])
+  @@index([source, lastSeenAt])
+}
+
+model SystemGuardianAuditLog {
+  id          String   @id @default(cuid())
+  actorEmail  String
+  action      String
+  targetType  String?
+  targetId    String?
+  outcome     String
+  details     Json?
+  createdAt   DateTime @default(now())
+  @@index([actorEmail, createdAt])
+  @@index([action, createdAt])
+}
+
+model LineWebhookEvent {
+  id              String   @id @default(cuid())
+  webhookEventId  String   @unique
+  sourceUserId    String?
+  eventType       String
+  processedAt     DateTime @default(now())
+  @@index([processedAt])
+}
+
+enum SystemGuardianTaskStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum SystemGuardianTaskType {
+  SYSTEM_HEALTH_CHECK
+}
+
+model SystemGuardianTask {
+  id               String                   @id @default(cuid())
+  type             SystemGuardianTaskType
+  status           SystemGuardianTaskStatus  @default(QUEUED)
+  requestedBy      String
+  source           String                   @default("WEB")
+  notifyLineUserId String?
+  currentStep      String?
+  progressPercent  Int                      @default(0)
+  resultSummary    String?                  @db.Text
+  failureCode      String?
+  attempts         Int                      @default(0)
+  maxAttempts      Int                      @default(2)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  events           SystemGuardianTaskEvent[]
+  @@index([status, createdAt])
+  @@index([requestedBy, createdAt])
+}
+
+model SystemGuardianTaskEvent {
+  id              String                   @id @default(cuid())
+  taskId          String
+  status          SystemGuardianTaskStatus
+  step            String
+  message         String                   @db.Text
+  progressPercent Int?
+  createdAt       DateTime                 @default(now())
+  task            SystemGuardianTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  @@index([taskId, createdAt])
+}
