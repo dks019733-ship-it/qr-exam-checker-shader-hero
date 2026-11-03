@@ -13,16 +13,17 @@ type Question = {
   choices: string[];
 };
 type Answer = Question & { answer: string; score: number };
-type StudentOption = { id: string; rollNo: string; studentNo: string; name: string };
+type StudentOption = { id: string; rollNo: string; studentNo: string; name: string; className: string };
 type ReviewResponse = {
   responseId: string;
   submittedAt: string | null;
   rollNo: string;
+  formRoom: string;
   room: string;
   manualReviewRequired: boolean;
   studentName: string;
   studentId: string | null;
-  matchedStudent: { rollNo: string; studentNo: string; name: string } | null;
+  matchedStudent: { rollNo: string; studentNo: string; name: string; className: string } | null;
   score: number;
   questionScores: Record<string, number>;
   answers: Answer[];
@@ -143,7 +144,8 @@ export function GoogleFormReview({ columnId }: { columnId: string }) {
           responses: current.responses.map((item) => item.responseId === selected.responseId ? {
             ...item,
             studentId,
-            matchedStudent: { rollNo: savedStudent.rollNo, studentNo: savedStudent.studentNo, name: savedStudent.name },
+            room: savedStudent.className,
+            matchedStudent: { rollNo: savedStudent.rollNo, studentNo: savedStudent.studentNo, name: savedStudent.name, className: savedStudent.className },
             score: body.score,
           } : item),
         } : current);
@@ -185,8 +187,8 @@ export function GoogleFormReview({ columnId }: { columnId: string }) {
         </aside>
         {!visibleResponses.length ? <section className="min-w-0 rounded-2xl border bg-white p-8 text-center text-sm text-slate-600 shadow-sm">ไม่มีคำตอบในห้องที่เลือก</section> : selected && <section className="min-w-0 overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-[#faf9f5] p-4 sm:p-5">
-            <div className="min-w-0"><h2 className="text-lg font-semibold">{selected.matchedStudent ? `${selected.matchedStudent.rollNo || selected.matchedStudent.studentNo} · ${selected.matchedStudent.name}` : `${selected.rollNo ? `เลขที่ ${selected.rollNo} · ` : ""}${selected.studentName === "ไม่ระบุชื่อในฟอร์ม" ? "ไม่ได้กรอกชื่อ" : selected.studentName || "ยังไม่ระบุชื่อ"}`}</h2><p className="mt-1 text-xs text-slate-500">{selected.submittedAt ? new Date(selected.submittedAt).toLocaleString("th-TH") : "ไม่พบเวลาส่งคำตอบ"} · ห้องในฟอร์ม {selected.room || "ไม่ระบุ"} · คะแนนเดิมจากฟอร์ม {selected.score}</p></div>
-            <label className="grid gap-1 text-xs font-medium">จับคู่กับนักเรียน<select className="min-w-64 rounded-lg border border-[#d9dfd5] bg-white px-3 py-2 text-sm" value={studentIds[selected.responseId] || ""} onChange={(event) => setStudentIds((current) => ({ ...current, [selected.responseId]: event.target.value }))}><option value="">เลือกนักเรียน</option>{payload.students.map((student) => <option key={student.id} value={student.id}>{student.rollNo || student.studentNo} · {student.name} ({student.studentNo})</option>)}</select></label>
+            <div className="min-w-0"><h2 className="text-lg font-semibold">{selected.matchedStudent ? `${selected.matchedStudent.className} · เลขที่ ${selected.matchedStudent.rollNo || selected.matchedStudent.studentNo} · ${selected.matchedStudent.name}` : `${selected.rollNo ? `เลขที่ ${selected.rollNo} · ` : ""}${selected.studentName === "ไม่ระบุชื่อในฟอร์ม" ? "ไม่ได้กรอกชื่อ" : selected.studentName || "ยังไม่ระบุชื่อ"}`}</h2><p className="mt-1 text-xs text-slate-500">{selected.submittedAt ? new Date(selected.submittedAt).toLocaleString("th-TH") : "ไม่พบเวลาส่งคำตอบ"} · ห้องในฟอร์ม {selected.formRoom || "ไม่ระบุ"}{selected.matchedStudent && selected.room !== selected.formRoom ? ` · บันทึกเข้าห้อง ${selected.room}` : ""} · คะแนนเดิมจากฟอร์ม {selected.score}</p></div>
+            <label className="grid gap-1 text-xs font-medium">จับคู่กับนักเรียน<select className="min-w-64 rounded-lg border border-[#d9dfd5] bg-white px-3 py-2 text-sm" value={studentIds[selected.responseId] || ""} onChange={(event) => setStudentIds((current) => ({ ...current, [selected.responseId]: event.target.value }))}><option value="">เลือกนักเรียน</option>{payload.students.map((student) => <option key={student.id} value={student.id}>{student.className} · {student.rollNo || student.studentNo} · {student.name} ({student.studentNo})</option>)}</select></label>
           </div>
           {!selected.answers.length ? <p className="p-6 text-sm text-slate-600">ไม่พบข้อสอบที่มีคะแนนในฟอร์มนี้</p> : <div className="divide-y">{selected.answers.map((answer, index) => {
             const chosen = new Set(answer.answer.split(" · ").map((value) => value.trim()));

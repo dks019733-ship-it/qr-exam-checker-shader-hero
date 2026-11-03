@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAccessError, GoogleFormsAPIError } from "@/lib/google-forms";
+import { getFormScoreColumnIds, getFormScoreDestination, getOtherFormScoreColumnIds } from "@/lib/gradebook-form-destination";
+import { compareFormStudents, matchFormStudent } from "@/lib/google-form-student-match";
 
 type FormItem = {
   itemId?: string;
@@ -20,10 +22,6 @@ type FormResponse = { responseId?: string; lastSubmittedTime?: string; totalScor
 type ResponsePage = { responses?: FormResponse[]; nextPageToken?: string };
 
 const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+/g, "").toLocaleLowerCase("th-TH");
-const normalizedRoll = (value: string) => {
-  const text = normalized(value);
-  return /^\d+$/u.test(text) ? String(Number(text)) : text;
-};
 const answerText = (answer?: FormAnswer) => answer?.textAnswers?.answers?.map((entry) => entry.value || "").join(" · ") || "";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -51,7 +49,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       }];
     });
     const [students, savedReviews, pendingScores] = await Promise.all([
-      prisma.student.findMany({ where: { classId: column.classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } }),
+      prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
       prisma.formResponseReview.findMany({ where: { columnId: id }, select: { responseId: true, studentId: true, score: true, questionScores: true } }),
       prisma.pendingFormScore.findMany({ where: { columnId: id }, select: { responseId: true, rollNo: true, studentName: true, room: true, manualReviewRequired: true, score: true } }),
     ]);
@@ -59,8 +57,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const pendingByResponse = new Map(pendingScores.map((item) => [item.responseId, item]));
     const roster = students.map((student) => ({
       ...student,
-      nameKey: normalized(student.name),
-      rolls: [normalizedRoll(student.rollNo), normalizedRoll(student.studentNo)].filter(Boolean),
+      classId: student.class.id,
+      className: student.class.name,
     }));
 
     const responses: FormResponse[] = [];
@@ -89,14 +87,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       const rollNo = answerForTitle(["เลขที่", "ลำดับ", "เลขที่นักเรียน"]) || pending?.rollNo || "";
       const room = answerForTitle(["ห้อง", "ห้องเรียน", "ชั้น", "ชั้น/ห้อง", "ระดับชั้น/ห้อง"]) || pending?.room || "";
       const studentName = answerForTitle(["ชื่อ-นามสกุล", "ชื่อสกุล", "ชื่อ-สกุล", "ชื่อนักเรียน", "ชื่อ"]) || pending?.studentName || "";
-      const rollKey = normalizedRoll(rollNo);
-      const nameKey = normalized(studentName);
-      let candidates = rollKey ? roster.filter((student) => student.rolls.includes(rollKey)) : [];
-      if (candidates.length > 1 && nameKey) candidates = candidates.filter((student) => student.nameKey === nameKey);
-      if (!candidates.length && nameKey) candidates = roster.filter((student) => student.nameKey === nameKey);
       const matchedStudent = saved?.studentId
         ? roster.find((student) => student.id === saved.studentId)
-        : candidates.length === 1 ? candidates[0] : undefined;
+        : matchFormStudent(roster, rollNo, room, studentName);
       const storedQuestionScores = saved?.questionScores && typeof saved.questionScores === "object" && !Array.isArray(saved.questionScores)
         ? saved.questionScores as Record<string, number>
         : {};
@@ -116,11 +109,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         responseId: response.responseId,
         submittedAt: response.lastSubmittedTime || null,
         rollNo,
-        room,
+        formRoom: room,
+        room: matchedStudent?.className || room,
         manualReviewRequired: pending?.manualReviewRequired || false,
         studentName,
         studentId: matchedStudent?.id || null,
-        matchedStudent: matchedStudent ? { rollNo: matchedStudent.rollNo || matchedStudent.studentNo, studentNo: matchedStudent.studentNo, name: matchedStudent.name } : null,
+        matchedStudent: matchedStudent ? { rollNo: matchedStudent.rollNo || matchedStudent.studentNo, studentNo: matchedStudent.studentNo, name: matchedStudent.name, className: matchedStudent.className } : null,
         score: saved?.score ?? pending?.score ?? autoScore,
         questionScores: Object.fromEntries(questionRows.map((question) => [question.id, question.score])),
         answers: questionRows,
@@ -129,7 +123,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     entries.sort((a, b) => {
       const byRoom = (a.room || "").localeCompare(b.room || "", "th", { numeric: true });
       if (byRoom) return byRoom;
-      if (a.studentId && b.studentId) return a.matchedStudent!.rollNo.localeCompare(b.matchedStudent!.rollNo, "th", { numeric: true }) || a.matchedStudent!.name.localeCompare(b.matchedStudent!.name, "th");
+      if (a.studentId && b.studentId) return compareFormStudents(
+        roster.find((student) => student.id === a.studentId)!,
+        roster.find((student) => student.id === b.studentId)!,
+      );
       if (a.studentId) return -1;
       if (b.studentId) return 1;
       return (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) || (a.studentName || "").localeCompare(b.studentName || "", "th");
@@ -137,7 +134,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({
       column: { id: column.id, title: column.title, className: column.classroom.name, maxScore: column.maxScore, formId: column.googleForm.formId },
       questions,
-      students: roster.map(({ id, rollNo, studentNo, name }) => ({ id, rollNo: rollNo || studentNo, studentNo, name })),
+      students: roster.map(({ id, rollNo, studentNo, name, className }) => ({ id, rollNo: rollNo || studentNo, studentNo, name, className })).sort(compareFormStudents),
       responses: entries,
     });
   } catch (error) {
@@ -164,8 +161,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     include: { googleForm: { select: { formId: true } } },
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ไม่พบช่องคะแนน Google Forms" }, { status: 404 });
-  const student = await prisma.student.findFirst({ where: { id: studentId, classId: column.classId, isActive: true }, select: { id: true } });
-  if (!student) return NextResponse.json({ error: "นักเรียนไม่ได้อยู่ในห้องนี้หรือถูกปิดใช้งาน" }, { status: 400 });
+  const student = await prisma.student.findFirst({ where: { id: studentId, class: { ownerId: session.user.id }, isActive: true }, select: { id: true, classId: true } });
+  if (!student) return NextResponse.json({ error: "ไม่พบนักเรียนในห้องเรียนของครู" }, { status: 400 });
 
   try {
     const token = await getGoogleFormsAccessToken(session.user.id, "responses");
@@ -190,8 +187,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     if (!Object.keys(questionScores).length) return NextResponse.json({ error: "ไม่พบคะแนนรายข้อที่บันทึกได้" }, { status: 400 });
     const maxScore = [...validQuestions.values()].reduce((sum, points) => sum + points, 0);
+    const destinationColumnId = await getFormScoreDestination({ ...column, maxScore }, student.classId);
+    const staleColumnIds = await getOtherFormScoreColumnIds(column.id, destinationColumnId);
+    const previousReview = await prisma.formResponseReview.findUnique({
+      where: { columnId_responseId: { columnId: id, responseId } },
+      select: { studentId: true },
+    });
 
     await prisma.$transaction([
+      ...(previousReview?.studentId && previousReview.studentId !== studentId ? [prisma.gradeScore.deleteMany({
+        where: {
+          columnId: { in: await getFormScoreColumnIds(column.id) },
+          studentId: previousReview.studentId,
+        },
+      })] : []),
+      ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
+        where: { columnId: { in: staleColumnIds }, studentId },
+      })] : []),
       prisma.gradeColumn.update({ where: { id }, data: { maxScore } }),
       prisma.formResponseReview.upsert({
         where: { columnId_responseId: { columnId: id, responseId } },
@@ -199,8 +211,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         update: { studentId, score: total, questionScores },
       }),
       prisma.gradeScore.upsert({
-        where: { columnId_studentId: { columnId: id, studentId } },
-        create: { columnId: id, studentId, score: total },
+        where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
+        create: { columnId: destinationColumnId, studentId, score: total },
         update: { score: total },
       }),
       prisma.pendingFormScore.deleteMany({ where: { columnId: id, responseId } }),

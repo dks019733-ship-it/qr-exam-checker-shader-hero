@@ -13,7 +13,7 @@ type PendingFormScore = { id: string; responseId: string; rollNo: string; studen
 type Column = { id: string; title: string; period: Period; maxScore: number; examId: string | null; googleFormId: string | null; scores: Score[]; pendingFormScores: PendingFormScore[]; exam: { title: string } | null; googleForm: { material: { title: string } } | null };
 type ExamOption = { id: string; title: string; classId: string | null; _count: { questions: number }; gradeColumn: { id: string } | null };
 type FormOption = { id: string; material: { title: string }; gradeColumn: { id: string } | null };
-type Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[] };
+type Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; matchingStudents?: (Student & { className: string })[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[] };
 type SheetScore = { columnId: string; score: number };
 type SheetRow = { room?: string; rollNo?: string; studentNo?: string; name?: string; scores: SheetScore[] };
 
@@ -57,6 +57,7 @@ export function Gradebook() {
 
   const students = payload?.students || [];
   const sortedStudents = useMemo(() => [...students].sort((a, b) => (a.rollNo || a.studentNo).localeCompare(b.rollNo || b.studentNo, "th", { numeric: true }) || a.studentNo.localeCompare(b.studentNo, "th", { numeric: true })), [students]);
+  const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
   const columns = payload?.columns || [];
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
@@ -270,7 +271,7 @@ export function Gradebook() {
           <td className="p-3">{pending.rollNo || "—"}</td><td className="p-3">{pending.studentName === "ไม่ระบุชื่อในฟอร์ม" ? "ไม่ได้กรอกชื่อ" : pending.studentName}</td>
           <td className="p-3">{pending.room || "—"}{pending.manualReviewRequired && <div className="text-xs font-medium text-amber-700">ห้องไม่ตรง กรุณาตรวจสอบ</div>}</td>
           <td className="p-3 font-semibold">{pending.score} / {column.maxScore}</td>
-          <td className="p-3"><select className={inputClass} value={pendingAssignments[pending.id] || ""} onChange={(event) => setPendingAssignments((current) => ({ ...current, [pending.id]: event.target.value }))}><option value="">เลือกนักเรียน</option>{sortedStudents.map((student) => <option key={student.id} value={student.id}>{student.rollNo || student.studentNo} · {student.name} ({student.studentNo})</option>)}</select></td>
+          <td className="p-3"><select className={inputClass} value={pendingAssignments[pending.id] || ""} onChange={(event) => setPendingAssignments((current) => ({ ...current, [pending.id]: event.target.value }))}><option value="">เลือกนักเรียน</option>{matchingStudents.map((student) => <option key={student.id} value={student.id}>{student.className} · {student.rollNo || student.studentNo} · {student.name} ({student.studentNo})</option>)}</select></td>
           <td className="p-3"><button onClick={() => void matchPendingScore(column, pending)} disabled={busy || !pendingAssignments[pending.id]} className="whitespace-nowrap rounded-lg bg-[#425a49] px-3 py-2 text-xs font-medium text-white disabled:opacity-50">จับคู่และบันทึก</button></td>
         </tr>)}</tbody></table></div>
       </section>}
