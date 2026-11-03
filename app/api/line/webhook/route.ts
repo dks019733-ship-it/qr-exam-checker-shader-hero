@@ -15,7 +15,7 @@ type LineEvent = {
 };
 
 function commandResponse(command: string, openIncidents: number, dbOk: boolean): string {
-  const normalized = command.trim().replace(/\\s+/g, " ");
+  const normalized = command.trim().replace(/\s+/g, " ");
 
   if (["ช่วยเหลือ", "help", "เมนู"].includes(normalized.toLowerCase())) {
     return [
