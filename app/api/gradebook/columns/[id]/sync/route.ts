@@ -63,8 +63,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     });
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
     await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
-    const students = await prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } });
-    const savedReviews = await prisma.formResponseReview.findMany({ where: { columnId: column.id }, select: { responseId: true, studentId: true, score: true } });
+    const [students, classrooms, savedReviews] = await Promise.all([
+      prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
+      prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true } }),
+      prisma.formResponseReview.findMany({ where: { columnId: column.id }, select: { responseId: true, studentId: true, score: true } }),
+    ]);
     const reviewByResponse = new Map(savedReviews.map((review) => [review.responseId, review]));
     const roster = students.map((student) => ({
       id: student.id,
@@ -131,8 +134,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       });
     }
     let imported = 0;
+    const destinations = new Map<string, string>();
+    for (const classroom of classrooms) {
+      destinations.set(classroom.id, await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classroom.id));
+    }
     for (const [classId, classScores] of scoresByClass) {
-      const destinationColumnId = await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classId);
+      const destinationColumnId = destinations.get(classId);
+      if (!destinationColumnId) throw new Error("ไม่พบช่องคะแนนปลายทางของห้องเรียน");
       const staleColumnIds = await getOtherFormScoreColumnIds(column.id, destinationColumnId);
       const entries = [...classScores.entries()];
       imported += entries.length;

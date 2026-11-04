@@ -48,8 +48,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         choices: (question.choiceQuestion?.options || []).map((option) => option.value || ""),
       }];
     });
-    const [students, savedReviews, pendingScores] = await Promise.all([
+    const [students, classrooms, savedReviews, pendingScores] = await Promise.all([
       prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
+      prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       prisma.formResponseReview.findMany({ where: { columnId: id }, select: { responseId: true, studentId: true, score: true, questionScores: true } }),
       prisma.pendingFormScore.findMany({ where: { columnId: id }, select: { responseId: true, rollNo: true, studentName: true, room: true, manualReviewRequired: true, score: true } }),
     ]);
@@ -123,17 +124,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     entries.sort((a, b) => {
       const byRoom = (a.room || "").localeCompare(b.room || "", "th", { numeric: true });
       if (byRoom) return byRoom;
-      if (a.studentId && b.studentId) return compareFormStudents(
-        roster.find((student) => student.id === a.studentId)!,
-        roster.find((student) => student.id === b.studentId)!,
+      const byRollNo = (a.matchedStudent?.rollNo || a.rollNo || "").localeCompare(
+        b.matchedStudent?.rollNo || b.rollNo || "",
+        "th",
+        { numeric: true },
       );
-      if (a.studentId) return -1;
-      if (b.studentId) return 1;
-      return (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) || (a.studentName || "").localeCompare(b.studentName || "", "th");
+      return byRollNo || (a.studentName || "").localeCompare(b.studentName || "", "th");
     });
     return NextResponse.json({
       column: { id: column.id, title: column.title, className: column.classroom.name, maxScore: column.maxScore, formId: column.googleForm.formId },
       questions,
+      classrooms,
       students: roster.map(({ id, rollNo, studentNo, name, className }) => ({ id, rollNo: rollNo || studentNo, studentNo, name, className })).sort(compareFormStudents),
       responses: entries,
     });
