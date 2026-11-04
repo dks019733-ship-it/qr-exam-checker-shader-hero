@@ -16,7 +16,21 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qr_exam_checker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qr_exam_checker"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/qr_exam_checker?schema=public
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/qr_exam_checker?schema=public
@@ -49,11 +63,17 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Prepare disposable PostgreSQL schema
+        run: npx prisma db push --skip-generate
+
       - name: TypeScript check
         run: npx tsc --noEmit
 
       - name: Guardian unit tests
         run: npm run test:guardian
+
+      - name: Guardian PostgreSQL concurrency tests
+        run: npm run test:guardian:integration
 
       - name: Spreadsheet import/export regression test
         run: npm run test:spreadsheet
