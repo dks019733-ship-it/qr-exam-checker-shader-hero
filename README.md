@@ -65,6 +65,14 @@ The app requests `drive.file`, which is intentionally narrower than full Drive a
 
 The logo is validated as PNG/JPEG/WebP and limited to 500 KB. It is stored with the owner-scoped answer-sheet template so it does not depend on a public upload directory.
 
+## Find your LINE User ID
+
+The LINE User ID is not the LINE display name or LINE ID used to search for friends. After deploying this version, add `LINE_CHANNEL_SECRET` and `LINE_CHANNEL_ACCESS_TOKEN` to the Vercel Production environment, then set the LINE Developers Messaging API webhook URL to:
+
+`https://YOUR-DOMAIN/api/line/webhook`
+
+Enable the webhook and verify the URL in LINE Developers. Send `myid` to your LINE Official Account in a **private chat**; the bot replies with that account's User ID. Copy it into `LINE_OWNER_USER_ID` in Vercel. The endpoint verifies LINE's request signature and does not log or persist the ID. It deliberately does not respond with IDs in group chats.
+
 
 ## Merged UX + Shader build
 This package combines the UX-complete branch with the Shader Hero branch.
