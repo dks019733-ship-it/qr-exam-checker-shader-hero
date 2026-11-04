@@ -31,6 +31,7 @@ type ReviewResponse = {
 type Payload = {
   column: { id: string; title: string; className: string; maxScore: number };
   questions: Question[];
+  classrooms: { id: string; name: string }[];
   students: StudentOption[];
   responses: ReviewResponse[];
 };
@@ -84,7 +85,10 @@ export function GoogleFormReview({ columnId }: { columnId: string }) {
     return () => window.clearInterval(timer);
   }, [load]);
 
-  const roomOptions = useMemo(() => [...new Set((payload?.responses || []).map((item) => item.room.trim()).filter(Boolean))]
+  const roomOptions = useMemo(() => [...new Set([
+    ...(payload?.classrooms || []).map((classroom) => classroom.name.trim()),
+    ...(payload?.responses || []).map((item) => item.room.trim()),
+  ].filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "th", { numeric: true })), [payload]);
   const hasUnspecifiedRoom = (payload?.responses || []).some((item) => !item.room.trim());
   const visibleResponses = useMemo(() => (payload?.responses || []).filter((item) => !roomFilter
