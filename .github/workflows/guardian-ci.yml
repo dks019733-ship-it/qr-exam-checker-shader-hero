@@ -55,5 +55,8 @@ jobs:
       - name: Guardian unit tests
         run: npm run test:guardian
 
+      - name: Spreadsheet import/export regression test
+        run: npm run test:spreadsheet
+
       - name: Production build
         run: npm run build

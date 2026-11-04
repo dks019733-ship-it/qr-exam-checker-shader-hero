@@ -11,7 +11,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "postinstall": "prisma generate",
-    "test:guardian": "node --test tests/line-signature.test.mjs tests/guardian-task-finalize.test.mjs tests/guardian-task-retry.test.mjs"
+    "test:guardian": "node --test tests/line-signature.test.mjs tests/guardian-task-finalize.test.mjs tests/guardian-task-retry.test.mjs",
+    "test:spreadsheet": "node --test tests/spreadsheet.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -30,7 +31,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwind-merge": "^3.3.1",
-    "xlsx": "^0.18.5",
+    "xlsx": "npm:@e965/xlsx@0.20.3",
     "zod": "^4.1.5"
   },
   "devDependencies": {
@@ -43,5 +44,13 @@
     "prisma": "^6.16.2",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "deepmerge-ts": "^8.0.0"
+    },
+    "next": {
+      "postcss": "^8.5.32"
+    }
   }
 }
