@@ -1,0 +1,39 @@
+name: System Guardian hourly worker
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-hourly-worker
+  cancel-in-progress: false
+
+jobs:
+  invoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      CRON_URL: https://ngankhongkhru.vercel.app/api/guardian/cron
+    steps:
+      - name: Require cron secret
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Add the CRON_SECRET repository Actions secret before running the Guardian worker."
+            exit 1
+          fi
+
+      - name: Invoke System Guardian worker
+        run: |
+          curl \
+            --request GET \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --max-time 60 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$CRON_URL"
