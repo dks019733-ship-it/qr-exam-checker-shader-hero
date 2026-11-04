@@ -123,6 +123,11 @@ The Guardian incident, audit, LINE event, task, task-event, and retry-link model
 
 The worker endpoint is `GET /api/guardian/cron` and requires `Authorization: Bearer <CRON_SECRET>`. Configure a scheduler compatible with the deployed Vercel plan to call this endpoint regularly. Without a scheduler, tasks remain queued; do not describe the queue as active until a scheduled invocation has been verified.
 
+The hourly workflow runs only after it is merged to the default branch. Before using **Run workflow**:
+- Add `SYSTEM_OWNER_EMAIL`, `CRON_SECRET`, `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, and `LINE_OWNER_USER_ID` to the Vercel project's Production environment. Use the verified owner email from the app's database; keep all values server-side.
+- Add a GitHub repository Actions secret named `CRON_SECRET` with the same value as Vercel's `CRON_SECRET`. Never put the value in source control or chat.
+- The workflow targets `https://ngankhongkhru.vercel.app/api/guardian/cron`. GitHub scheduled runs can be delayed; tasks remain queued until an invocation succeeds.
+
 After deployment, configure the LINE webhook URL as `https://YOUR-DOMAIN/api/line/webhook` in LINE Developers and verify it there. A successful Vercel deployment alone does not prove that LINE webhook delivery works.
 
 ### Current operational limits
