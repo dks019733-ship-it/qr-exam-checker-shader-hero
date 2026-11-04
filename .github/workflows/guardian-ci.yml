@@ -1,0 +1,82 @@
+name: Guardian PR checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feat/system-guardian-line]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qr_exam_checker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d qr_exam_checker"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/qr_exam_checker?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/qr_exam_checker?schema=public
+      AUTH_SECRET: ci-only-placeholder-secret
+      AUTH_GOOGLE_ID: ci-placeholder
+      AUTH_GOOGLE_SECRET: ci-placeholder
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      SYSTEM_OWNER_EMAIL: owner@example.com
+      CRON_SECRET: ci-only-placeholder-cron-secret
+      LINE_CHANNEL_ACCESS_TOKEN: ci-placeholder
+      LINE_CHANNEL_SECRET: ci-placeholder
+      LINE_OWNER_USER_ID: U00000000000000000000000000000000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Prepare disposable PostgreSQL schema
+        run: npx prisma db push --skip-generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Guardian unit tests
+        run: npm run test:guardian
+
+      - name: Guardian PostgreSQL concurrency tests
+        run: npm run test:guardian:integration
+
+      - name: Spreadsheet import/export regression test
+        run: npm run test:spreadsheet
+
+      - name: Production build
+        run: npm run build
