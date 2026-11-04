@@ -422,11 +422,14 @@ model SystemGuardianTask {
   failureCode      String?
   attempts         Int                      @default(0)
   maxAttempts      Int                      @default(2)
+  retryOfId        String?                  @unique
   startedAt        DateTime?
   completedAt      DateTime?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
   events           SystemGuardianTaskEvent[]
+  retryOf          SystemGuardianTask?      @relation("SystemGuardianTaskRetries", fields: [retryOfId], references: [id], onDelete: SetNull)
+  retries           SystemGuardianTask[]     @relation("SystemGuardianTaskRetries")
   @@index([status, createdAt])
   @@index([requestedBy, createdAt])
 }

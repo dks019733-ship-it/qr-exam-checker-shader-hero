@@ -1,1 +1,1 @@
-export function verifyLineSignature(rawBody: string, signature: string | null): boolean;
+export function verifyLineSignature(rawBody: string | Buffer, signature: string | null): boolean;

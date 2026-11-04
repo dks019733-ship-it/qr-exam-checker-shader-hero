@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isValidCronSecret, recordSystemIncident } from "@/lib/system-guardian";
 import { pushLineMessage } from "@/lib/line-guardian";
 import { prisma } from "@/lib/prisma";
+import { finalizeGuardianTask } from "@/lib/guardian-task-finalize.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,26 +16,30 @@ async function recoverStaleTask(): Promise<void> {
   });
   if (!stale) return;
 
-  const recovered = await prisma.systemGuardianTask.updateMany({
-    where: { id: stale.id, status: "RUNNING", updatedAt: { lt: staleBefore } },
-    data: {
-      status: "FAILED",
-      currentStep: "งานหมดเวลารอและถูกปิดสถานะ",
-      failureCode: "WORKER_TIMEOUT",
-      resultSummary: "ไม่พบการอัปเดตจาก worker ภายใน 10 นาที งานถูกปิดเพื่อไม่ให้ค้างในสถานะกำลังทำ",
-      completedAt: new Date(),
-    },
+  const recovered = await prisma.$transaction(async (tx) => {
+    const updated = await tx.systemGuardianTask.updateMany({
+      where: { id: stale.id, status: "RUNNING", updatedAt: { lt: staleBefore } },
+      data: {
+        status: "FAILED",
+        currentStep: "งานหมดเวลารอและถูกปิดสถานะ",
+        failureCode: "WORKER_TIMEOUT",
+        resultSummary: "ไม่พบการอัปเดตจาก worker ภายใน 10 นาที งานถูกปิดเพื่อไม่ให้ค้างในสถานะกำลังทำ",
+        completedAt: new Date(),
+      },
+    });
+    if (updated.count !== 1) return false;
+    await tx.systemGuardianTaskEvent.create({
+      data: {
+        taskId: stale.id,
+        status: "FAILED",
+        step: "WORKER_TIMEOUT",
+        message: "ปิดงานที่ค้างเกิน 10 นาทีแล้ว สามารถ retry ได้หากยังอยู่ในขีดจำกัด",
+      },
+    });
+    return true;
   });
-  if (recovered.count !== 1) return;
+  if (!recovered) return;
 
-  await prisma.systemGuardianTaskEvent.create({
-    data: {
-      taskId: stale.id,
-      status: "FAILED",
-      step: "WORKER_TIMEOUT",
-      message: "ปิดงานที่ค้างเกิน 10 นาทีแล้ว สามารถ retry ได้หากยังอยู่ในขีดจำกัด",
-    },
-  });
   if (stale.notifyLineUserId) {
     await pushLineMessage(stale.notifyLineUserId, "System Guardian\nงานตรวจสอบหมดเวลารอและถูกปิดสถานะแล้ว สามารถสั่ง “ลองงานที่ล้มเหลวใหม่” ได้หากยังไม่เกินจำนวน retry");
   }
@@ -78,19 +83,16 @@ async function processNextTask(): Promise<boolean> {
     });
     const summary = `ตรวจสอบฐานข้อมูลสำเร็จ · Incident ที่ยังเปิดอยู่ ${openIncidents} รายการ`;
 
-    await prisma.systemGuardianTask.update({
-      where: { id: candidate.id },
-      data: {
+    const completed = await finalizeGuardianTask(prisma, {
+      taskId: candidate.id,
+      taskData: {
         status: "SUCCEEDED",
         currentStep: "ตรวจสอบเสร็จแล้ว",
         progressPercent: 100,
         resultSummary: summary,
         completedAt: new Date(),
       },
-    });
-    await prisma.systemGuardianTaskEvent.create({
-      data: {
-        taskId: candidate.id,
+      eventData: {
         status: "SUCCEEDED",
         step: "COMPLETED",
         message: summary,
@@ -98,16 +100,16 @@ async function processNextTask(): Promise<boolean> {
       },
     });
 
-    if (candidate.notifyLineUserId) {
+    if (completed && candidate.notifyLineUserId) {
       await pushLineMessage(candidate.notifyLineUserId, `System Guardian\nงานตรวจสอบเสร็จแล้ว\n${summary}`);
     }
     return true;
   } catch {
     // If the database itself is unavailable, these writes can fail too; the stale-task
     // recovery above closes the task on a later successful cron invocation.
-    await prisma.systemGuardianTask.update({
-      where: { id: candidate.id },
-      data: {
+    const failed = await finalizeGuardianTask(prisma, {
+      taskId: candidate.id,
+      taskData: {
         status: "FAILED",
         currentStep: "การตรวจสอบล้มเหลว",
         progressPercent: 25,
@@ -115,17 +117,14 @@ async function processNextTask(): Promise<boolean> {
         failureCode: "HEALTH_CHECK_FAILED",
         completedAt: new Date(),
       },
-    });
-    await prisma.systemGuardianTaskEvent.create({
-      data: {
-        taskId: candidate.id,
+      eventData: {
         status: "FAILED",
         step: "FAILED",
         message: "ตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้",
         progressPercent: 25,
       },
     });
-    if (candidate.notifyLineUserId) {
+    if (failed && candidate.notifyLineUserId) {
       await pushLineMessage(candidate.notifyLineUserId, "System Guardian\nตรวจสอบไม่สำเร็จ ระบบไม่สามารถยืนยันสถานะฐานข้อมูลได้");
     }
     return true;

@@ -39,8 +39,11 @@ export function SystemGuardianPanel() {
   const [taskActionError, setTaskActionError] = useState("");
   const firstLoad = useRef(true);
   const seenTop = useRef<string | null>(null);
+  const refreshing = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
     try {
       const [healthResponse, incidentResponse, taskResponse] = await Promise.all([
         fetch("/api/guardian/health", { cache: "no-store" }),
@@ -51,6 +54,9 @@ export function SystemGuardianPanel() {
       if ([healthResponse, incidentResponse, taskResponse].some((response) => response.status === 401)) {
         setLoadError(true);
         setHealth("error");
+        setIncidents([]);
+        setTasks([]);
+        setNotice("");
         return;
       }
 
@@ -78,6 +84,8 @@ export function SystemGuardianPanel() {
     } catch {
       setHealth("error");
       setLoadError(true);
+    } finally {
+      refreshing.current = false;
     }
   }, []);
 

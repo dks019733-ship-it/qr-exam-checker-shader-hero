@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { pushLineMessage, replyLineMessage, verifyLineSignature } from "@/lib/line-guardian";
+import { PayloadTooLargeError, readLimitedBody } from "@/lib/line-webhook-body.mjs";
+import { createGuardianRetry } from "@/lib/guardian-task-retry.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,31 +124,13 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
     const failed = await prisma.systemGuardianTask.findFirst({
       where: { type: "SYSTEM_HEALTH_CHECK", status: "FAILED" },
       orderBy: { completedAt: "desc" },
-      select: { requestedBy: true, attempts: true, maxAttempts: true },
+      select: { id: true, requestedBy: true, attempts: true, maxAttempts: true },
     });
     if (!failed) return "ไม่พบงานตรวจระบบที่ล้มเหลวและรอ retry";
-    if (failed.attempts >= failed.maxAttempts) return "งานล่าสุดใช้จำนวน retry ครบตามขีดจำกัดแล้ว จึงไม่เริ่มซ้ำ";
-    const task = await prisma.systemGuardianTask.create({
-      data: {
-        type: "SYSTEM_HEALTH_CHECK",
-        requestedBy: failed.requestedBy,
-        source: "LINE_RETRY",
-        notifyLineUserId: ownerLineId,
-        attempts: failed.attempts,
-        maxAttempts: failed.maxAttempts,
-        currentStep: "รอเริ่ม retry",
-        events: {
-          create: {
-            status: "QUEUED",
-            step: "RETRY_QUEUED",
-            message: "เจ้าของระบบสั่ง retry งานตรวจระบบที่ล้มเหลว",
-            progressPercent: 0,
-          },
-        },
-      },
-      select: { id: true },
-    });
-    return `สร้างงาน retry แล้ว #${task.id.slice(-8)}\nจะส่งผลผ่าน LINE เมื่อเสร็จ`;
+    const retry = await createGuardianRetry(prisma, failed, ownerLineId);
+    if (retry.status === "limit") return "งานล่าสุดใช้จำนวน retry ครบตามขีดจำกัดแล้ว จึงไม่เริ่มซ้ำ";
+    if (retry.status === "already_retried") return "งานนี้มีการสร้าง retry ไปแล้ว จึงไม่สร้างงานซ้ำ";
+    return `สร้างงาน retry แล้ว #${retry.taskId.slice(-8)}\nจะส่งผลผ่าน LINE เมื่อเสร็จ`;
   }
 
   if (command === "หยุดงาน") {
@@ -156,14 +140,18 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
       select: { id: true },
     });
     if (!queued) return "ไม่มีงานที่รอคิวให้ยกเลิก";
-    const cancelled = await prisma.systemGuardianTask.updateMany({
-      where: { id: queued.id, status: "QUEUED" },
-      data: { status: "CANCELLED", currentStep: "ยกเลิกโดยเจ้าของระบบ", completedAt: new Date() },
+    const cancelled = await prisma.$transaction(async (tx) => {
+      const result = await tx.systemGuardianTask.updateMany({
+        where: { id: queued.id, status: "QUEUED" },
+        data: { status: "CANCELLED", currentStep: "ยกเลิกโดยเจ้าของระบบ", completedAt: new Date() },
+      });
+      if (result.count !== 1) return false;
+      await tx.systemGuardianTaskEvent.create({
+        data: { taskId: queued.id, status: "CANCELLED", step: "CANCELLED", message: "ยกเลิกจาก LINE" },
+      });
+      return true;
     });
-    if (cancelled.count !== 1) return "งานเริ่มทำไปแล้วหรือมีการเปลี่ยนสถานะ จึงยกเลิกไม่ได้";
-    await prisma.systemGuardianTaskEvent.create({
-      data: { taskId: queued.id, status: "CANCELLED", step: "CANCELLED", message: "ยกเลิกจาก LINE" },
-    });
+    if (!cancelled) return "งานเริ่มทำไปแล้วหรือมีการเปลี่ยนสถานะ จึงยกเลิกไม่ได้";
     return `ยกเลิกงาน #${queued.id.slice(-8)} แล้ว`;
   }
 
@@ -171,9 +159,14 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
 }
 
 export async function POST(request: Request) {
-  const rawBody = await request.text();
-  if (Buffer.byteLength(rawBody, "utf8") > 64_000) {
-    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  let rawBody: Buffer;
+  try {
+    rawBody = await readLimitedBody(request, 64_000);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   // Verify the exact, unmodified body before JSON parsing.
@@ -183,7 +176,7 @@ export async function POST(request: Request) {
 
   let payload: { events?: unknown };
   try {
-    payload = JSON.parse(rawBody) as { events?: unknown };
+    payload = JSON.parse(rawBody.toString("utf8")) as { events?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }

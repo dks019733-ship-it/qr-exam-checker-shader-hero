@@ -119,11 +119,17 @@ Set these in the hosting provider's server-side environment settings. Never comm
 
 ### Database and scheduled worker activation
 
-The Guardian incident, audit, LINE event, task, and task-event models are additive Prisma schema changes. Review `prisma/migrations/20261103_z_add_system_guardian/migration.sql` against the target database, take/verify a backup, then apply it with `npx prisma migrate deploy` during an approved maintenance window. Do not use `prisma db push` as an unreviewed production shortcut. This branch does not run schema changes automatically at application startup.
+The Guardian incident, audit, LINE event, task, task-event, and retry-link models are additive Prisma schema changes. Review `prisma/migrations/20261103_z_add_system_guardian/migration.sql` and `prisma/migrations/20261104_guardian_retry_idempotency/migration.sql` against the target database, take/verify a backup, then apply them with `npx prisma migrate deploy` during an approved maintenance window. Do not use `prisma db push` as an unreviewed production shortcut. This branch does not run schema changes automatically at application startup.
 
 The worker endpoint is `GET /api/guardian/cron` and requires `Authorization: Bearer <CRON_SECRET>`. Configure a scheduler compatible with the deployed Vercel plan to call this endpoint regularly. Without a scheduler, tasks remain queued; do not describe the queue as active until a scheduled invocation has been verified.
 
 After deployment, configure the LINE webhook URL as `https://YOUR-DOMAIN/api/line/webhook` in LINE Developers and verify it there. A successful Vercel deployment alone does not prove that LINE webhook delivery works.
+
+### Current operational limits
+
+- The worker currently performs only a database health check. Retry is manual and each failed task can create at most one retry; stale tasks are failed after 10 minutes, and a timed-out worker cannot overwrite that terminal state.
+- LINE replies and push notifications are best-effort. A failed delivery does not undo a task or incident already persisted.
+- `npm run test:guardian` covers signature/raw-body validation, guarded task finalization, and retry idempotency. It does not replace authenticated API/database integration tests or a live LINE webhook/reply/push test; those require a configured test deployment and LINE account.
 
 ### Safety boundary
 
