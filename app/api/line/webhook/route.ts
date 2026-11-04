@@ -186,16 +186,27 @@ export async function POST(request: Request) {
   }
 
   const ownerLineId = process.env.LINE_OWNER_USER_ID;
-  if (!ownerLineId) {
-    return NextResponse.json({ ok: true, ignored: "owner_not_configured" });
-  }
-
   for (const candidate of payload.events) {
     if (!isLineEvent(candidate)) continue;
     const event = candidate;
-    if (event.source?.userId !== ownerLineId) continue;
 
     const command = normalizeCommand(event.message?.text ?? "");
+    if (command === "myid") {
+      const userId = event.source?.userId;
+      const delivered = event.replyToken && userId
+        ? await replyLineMessage(event.replyToken, `LINE User ID: ${userId}`)
+        : false;
+      if (!delivered) {
+        return NextResponse.json({ error: "Unable to reply through LINE" }, { status: 503 });
+      }
+      continue;
+    }
+
+    if (!ownerLineId) {
+      return NextResponse.json({ ok: true, ignored: "owner_not_configured" });
+    }
+    if (event.source?.userId !== ownerLineId) continue;
+
     const supported = [
       "ช่วยเหลือ", "help", "เมนู", "ตรวจสอบระบบ", "สถานะระบบ",
       "สถานะการซ่อม", "วิเคราะห์ปัญหาล่าสุด", "ลองงานที่ล้มเหลวใหม่", "หยุดงาน",
