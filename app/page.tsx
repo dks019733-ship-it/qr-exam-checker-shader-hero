@@ -28,6 +28,12 @@ const tools = [
     icon: Users,
   },
   {
+    title: "รายวิชาที่ฉันสอน",
+    description: "เพิ่มหลายรหัสวิชาและกำหนดห้องเรียนที่รับผิดชอบแยกตามรายวิชา",
+    href: "/dashboard/subjects",
+    icon: BookOpen,
+  },
+  {
     title: "สร้างและจัดการข้อสอบ",
     description: "กำหนดข้อสอบและเฉลย เพื่อเตรียมตรวจและสรุปผลคะแนน",
     href: "/dashboard/exams",
