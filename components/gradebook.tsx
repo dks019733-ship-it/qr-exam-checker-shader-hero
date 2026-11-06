@@ -118,6 +118,8 @@ export function Gradebook() {
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || "เปลี่ยนรายวิชาไม่สำเร็จ");
+      setSubjectFilter(nextAssignmentId || "all");
+      setSelectedColumns([]);
       await load(classId);
       setMessage("เชื่อมรายวิชากับช่องคะแนนแล้ว");
     } catch (error) {
