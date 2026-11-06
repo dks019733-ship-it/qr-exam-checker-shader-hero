@@ -15,9 +15,12 @@ model User {
   emailVerified DateTime?
   image         String?
   defaultLearningArea String @default("")
+  schoolKey     String    @default(cuid())
   accounts      Account[]
   sessions      Session[]
   classes       Class[]
+  subjects      Subject[]
+  teachingAssignments TeachingAssignment[]
   exams         Exam[]
   driveFolders  DriveFolder[]
   answerSheetTemplate AnswerSheetTemplate?
@@ -68,6 +71,7 @@ model Class {
   students  Student[]
   exams     Exam[]
   gradeColumns GradeColumn[]
+  teachingAssignments TeachingAssignment[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   @@index([ownerId])
@@ -84,10 +88,14 @@ model Student {
   attempts  ExamAttempt[]
   gradeScores GradeScore[]
   formResponseReviews FormResponseReview[]
+  identityId String?
+  identity StudentIdentity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  courseEnrollments CourseEnrollment[]
   qrToken   String   @unique @default(cuid())
   createdAt DateTime @default(now())
   @@unique([classId, studentNo])
   @@index([classId, rollNo])
+  @@index([identityId])
 }
 
 model Exam {
@@ -102,10 +110,69 @@ model Exam {
   attempts    ExamAttempt[]
   driveFiles  DriveFile[]
   gradeColumn GradeColumn?
+  teachingAssignmentId String?
+  teachingAssignment TeachingAssignment? @relation(fields: [teachingAssignmentId], references: [id], onDelete: SetNull)
   status      ExamStatus   @default(DRAFT)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   @@index([ownerId])
+  @@index([teachingAssignmentId])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  ownerId   String
+  code      String
+  name      String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  assignments TeachingAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([ownerId, code])
+  @@index([ownerId, name])
+}
+
+model TeachingAssignment {
+  id        String   @id @default(cuid())
+  ownerId   String
+  subjectId String
+  classId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classroom Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  enrollments CourseEnrollment[]
+  exams     Exam[]
+  gradeColumns GradeColumn[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([subjectId, classId])
+  @@index([ownerId, classId])
+  @@index([ownerId, subjectId])
+}
+
+model CourseEnrollment {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  assignment   TeachingAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
+}
+
+model StudentIdentity {
+  id        String   @id @default(cuid())
+  schoolKey String
+  className String
+  studentNo String
+  name      String
+  pinHash   String?  @db.Text
+  students  Student[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([schoolKey, className, studentNo])
+  @@index([schoolKey, studentNo])
 }
 
 model Question {
@@ -271,6 +338,8 @@ model GradeColumn {
   classroom    Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
   exam         Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
   googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
+  teachingAssignmentId String?
+  teachingAssignment TeachingAssignment? @relation(fields: [teachingAssignmentId], references: [id], onDelete: SetNull)
   sourceColumn GradeColumn? @relation("GradeColumnDestinations", fields: [sourceColumnId], references: [id], onDelete: Cascade)
   destinationColumns GradeColumn[] @relation("GradeColumnDestinations")
   scores       GradeScore[]
@@ -279,6 +348,7 @@ model GradeColumn {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   @@index([ownerId, classId, period])
+  @@index([teachingAssignmentId])
   @@unique([sourceColumnId, classId])
 }
 

@@ -28,6 +28,12 @@ const tools = [
     icon: Users,
   },
   {
+    title: "รายวิชาที่ฉันสอน",
+    description: "เพิ่มหลายรหัสวิชาและกำหนดห้องเรียนที่รับผิดชอบแยกตามรายวิชา",
+    href: "/dashboard/subjects",
+    icon: BookOpen,
+  },
+  {
     title: "สร้างและจัดการข้อสอบ",
     description: "กำหนดข้อสอบและเฉลย เพื่อเตรียมตรวจและสรุปผลคะแนน",
     href: "/dashboard/exams",
@@ -150,6 +156,7 @@ export default async function HomePage() {
             <Link href="#overview" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#4d5f4a] transition hover:bg-[#f0f3eb]">หน้าแรก</Link>
             <Link href="#workflow" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#5e6d5b] transition hover:bg-[#f0f3eb] hover:text-[#1c241b]">วิธีใช้งาน</Link>
             <Link href="#tools" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#5e6d5b] transition hover:bg-[#f0f3eb] hover:text-[#1c241b]">เครื่องมือ</Link>
+            <Link href="/student" className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-200 transition hover:bg-emerald-100">สำหรับนักเรียน (เช็กงาน)</Link>
             <Link href="#privacy" className="rounded-lg px-3 py-2 text-xs font-semibold text-[#5e6d5b] transition hover:bg-[#f0f3eb] hover:text-[#1c241b]">ความเป็นส่วนตัว</Link>
           </nav>
 

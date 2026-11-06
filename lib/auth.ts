@@ -39,6 +39,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         });
       }
+
+      // Ensure every teacher has a unique schoolKey that isolates their students
+      // from other schools. The key is set to the user's own id on first sign-in
+      // and never changed, so existing StudentIdentity records remain valid.
+      // Using user.id (not the shared "default") prevents cross-school collisions.
+      if (user.id) {
+        const existing = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { schoolKey: true },
+        });
+        // Only overwrite if the key still carries the unsafe legacy default value.
+        if (existing && existing.schoolKey === "default") {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { schoolKey: user.id },
+          });
+        }
+      }
+
       return true;
     },
     async session({ session, user }) {
