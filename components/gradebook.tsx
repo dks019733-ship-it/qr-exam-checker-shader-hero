@@ -70,7 +70,7 @@ export function Gradebook() {
       allColumns.some((column) => column.teachingAssignment?.id === item.id),
     );
     setSubjectFilter(firstLinked?.id || (allColumns.some((column) => !column.teachingAssignment) ? "__unassigned__" : teachingAssignments[0]?.id || "all"));
-  }, [payload?.classroom?.id, classId, subjectFilter, teachingAssignments]);
+  }, [payload?.classroom?.id, classId, subjectFilter, teachingAssignments, allColumns]);
   useEffect(() => {
     if (!teachingAssignments.some((item) => item.id === teachingAssignmentId)) {
       setTeachingAssignmentId(teachingAssignments.length === 1 ? teachingAssignments[0].id : "");
