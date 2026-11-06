@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     ? body.classIds
     : typeof body?.classId === "string" ? [body.classId] : [];
   const classIds = [...new Set(requestedClassIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))];
-  if (!code || code.length > 40 || !name || name.length > 120 || !classIds.length || classIds.length > 50) {
+  if (!code || code.length > 40 || !name || name.length > 120 || !classIds.length || requestedClassIds.length > 50 || classIds.length > 50) {
     return NextResponse.json({ error: "กรุณาระบุรหัสวิชา ชื่อวิชา และเลือกห้องเรียนอย่างน้อย 1 ห้อง (ไม่เกิน 50 ห้อง)" }, { status: 400 });
   }
 
