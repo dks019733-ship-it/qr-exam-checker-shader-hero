@@ -515,3 +515,15 @@ model SystemGuardianTaskEvent {
   task            SystemGuardianTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   @@index([taskId, createdAt])
 }
+
+model SiteAnnouncement {
+  id               String   @id @default("global")
+  message          String   @db.VarChar(240)
+  active           Boolean  @default(true)
+  source           String   @default("DEFAULT")
+  deploymentId     String?
+  deploymentStatus String?
+  deploymentUrl    String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
