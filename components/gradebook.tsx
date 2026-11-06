@@ -13,7 +13,8 @@ type PendingFormScore = { id: string; responseId: string; rollNo: string; studen
 type Column = { id: string; title: string; period: Period; maxScore: number; examId: string | null; googleFormId: string | null; scores: Score[]; pendingFormScores: PendingFormScore[]; exam: { title: string } | null; googleForm: { material: { title: string } } | null; teachingAssignment: { id: string; subject: { id: string; code: string; name: string } } | null };
 type ExamOption = { id: string; title: string; classId: string | null; _count: { questions: number }; gradeColumn: { id: string } | null };
 type FormOption = { id: string; material: { title: string }; gradeColumn: { id: string } | null };
-type TeachingAssignmentOption = { id: string; subject: { id: string; code: string; name: string }; classroom: Classroom };\ntype Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; matchingStudents?: (Student & { className: string })[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[]; teachingAssignments?: TeachingAssignmentOption[] };
+type TeachingAssignmentOption = { id: string; subject: { id: string; code: string; name: string }; classroom: Classroom };
+type Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; matchingStudents?: (Student & { className: string })[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[]; teachingAssignments?: TeachingAssignmentOption[] };
 type SheetScore = { columnId: string; score: number };
 type SheetRow = { room?: string; rollNo?: string; studentNo?: string; name?: string; scores: SheetScore[] };
 
@@ -64,7 +65,7 @@ export function Gradebook() {
   const students = payload?.students || [];
   const sortedStudents = useMemo(() => [...students].sort((a, b) => (a.rollNo || a.studentNo).localeCompare(b.rollNo || b.studentNo, "th", { numeric: true }) || a.studentNo.localeCompare(b.studentNo, "th", { numeric: true })), [students]);
   const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
-  const columns = payload?.columns || [];\n  const teachingAssignments = payload?.teachingAssignments || [];
+  const columns = payload?.columns || [];
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
   const scoreAt = (column: Column, studentId: string) => column.scores.find((score) => score.studentId === studentId)?.score ?? null;
