@@ -313,13 +313,13 @@ export default async function HomePage() {
             </span>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {tools.map(({ title, description, href, icon: Icon, ...tool }) => (
               <WorkspaceLink
                 key={title}
                 signedIn={signedIn}
                 href={href}
-                className={`group flex min-h-56 flex-col rounded-3xl border bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7057] focus-visible:ring-offset-2 sm:p-6 ${
+                className={`group flex h-full min-h-64 flex-col rounded-3xl border bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7057] focus-visible:ring-offset-2 sm:p-6 ${
                   "highlight" in tool && tool.highlight
                     ? "border-[#4d5f4a]/50 ring-1 ring-[#4d5f4a]/15 hover:border-[#4d5f4a]"
                     : "border-[#e0e7d9] hover:border-[#7a9576]/50"
