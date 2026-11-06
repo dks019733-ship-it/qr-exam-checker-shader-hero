@@ -74,7 +74,7 @@ export default function SubjectsPage() {
             <div className="rounded-xl bg-slate-100 p-3"><BookOpen className="h-5 w-5" /></div>
             <div>
               <h1 className="text-2xl font-semibold">รายวิชาที่สอน</h1>
-              <p className="mt-1 text-sm text-slate-600">ครูหนึ่งคนเพิ่มได้หลายรหัสวิชา และเลือกห้องเรียนที่รับผิดชอบแยกกันได้</p>
+              <p className="mt-1 text-sm text-slate-600">หนึ่งรหัสวิชาเลือกผูกกับหลายห้องเรียนได้ พร้อมแยกสมุดคะแนนตามห้อง</p>
             </div>
           </div>
         </header>
