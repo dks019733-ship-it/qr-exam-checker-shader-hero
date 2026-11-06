@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Loader2, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Plus, RefreshCw } from "lucide-react";
 
 type Classroom = { id: string; name: string };
 type Assignment = {
@@ -63,11 +64,16 @@ export default function SubjectsPage() {
   return (
     <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8">
       <div className="mx-auto max-w-5xl">
-        <header className="rounded-2xl border bg-white p-6 shadow-sm">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-950">
+          <ArrowLeft className="h-4 w-4" />
+          กลับหน้าแรก
+        </Link>
+
+        <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-slate-100 p-3"><BookOpen className="h-5 w-5" /></div>
             <div>
-              <h1 className="text-2xl font-semibold">รายวิชาที่ฉันสอน</h1>
+              <h1 className="text-2xl font-semibold">รายวิชาที่สอน</h1>
               <p className="mt-1 text-sm text-slate-600">ครูหนึ่งคนเพิ่มได้หลายรหัสวิชา และเลือกห้องเรียนที่รับผิดชอบแยกกันได้</p>
             </div>
           </div>

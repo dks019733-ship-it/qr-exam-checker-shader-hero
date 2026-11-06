@@ -29,7 +29,7 @@ const tools = [
     icon: Users,
   },
   {
-    title: "รายวิชาที่ฉันสอน",
+    title: "รายวิชาที่สอน",
     description: "เพิ่มหลายรหัสวิชาและกำหนดห้องเรียนที่รับผิดชอบแยกตามรายวิชา",
     href: "/dashboard/subjects",
     icon: BookOpen,

@@ -1,8 +1,10 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, ensureDatabaseSchema } from "@/lib/prisma";
 
 export async function GET() {
+  await ensureDatabaseSchema();
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerId = session.user.id;
@@ -19,6 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  await ensureDatabaseSchema();
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerId = session.user.id;
@@ -40,12 +43,12 @@ export async function POST(request: Request) {
     const assignment = await prisma.$transaction(async (tx) => {
       const subject = await tx.subject.upsert({
         where: { ownerId_code: { ownerId, code } },
-        create: { ownerId, code, name },
+        create: { id: crypto.randomUUID(), ownerId, code, name },
         update: { name },
       });
       const teachingAssignment = await tx.teachingAssignment.upsert({
         where: { subjectId_classId: { subjectId: subject.id, classId } },
-        create: { ownerId, subjectId: subject.id, classId },
+        create: { id: crypto.randomUUID(), ownerId, subjectId: subject.id, classId },
         update: {},
         include: {
           subject: { select: { id: true, code: true, name: true } },
@@ -58,7 +61,11 @@ export async function POST(request: Request) {
       });
       if (students.length) {
         await tx.courseEnrollment.createMany({
-          data: students.map((student) => ({ assignmentId: teachingAssignment.id, studentId: student.id })),
+          data: students.map((student) => ({
+            id: crypto.randomUUID(),
+            assignmentId: teachingAssignment.id,
+            studentId: student.id,
+          })),
           skipDuplicates: true,
         });
       }
@@ -67,6 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json(assignment, { status: 201 });
   } catch (error) {
     console.error("[TeachingAssignments] create failed", error);
-    return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ" }, { status: 500 });
+    const detail = error instanceof Error ? error.message : "สร้างรายวิชาไม่สำเร็จ";
+    return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ: " + detail }, { status: 500 });
   }
 }

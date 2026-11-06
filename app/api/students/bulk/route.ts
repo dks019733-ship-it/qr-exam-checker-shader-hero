@@ -1,10 +1,12 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, ensureDatabaseSchema } from "@/lib/prisma";
 import { bulkStudentSchema } from "@/lib/answer-sheet";
 import { reconcilePendingFormScores } from "@/lib/gradebook-import";
 
 export async function POST(request: Request) {
+  await ensureDatabaseSchema();
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
           },
         },
         create: {
+          id: crypto.randomUUID(),
           schoolKey,
           className: classroomName,
           studentNo: student.studentNo,
@@ -108,7 +111,11 @@ export async function POST(request: Request) {
     if (assignments.length && savedStudents.length) {
       await tx.courseEnrollment.createMany({
         data: assignments.flatMap((assignment) =>
-          savedStudents.map((student) => ({ assignmentId: assignment.id, studentId: student.id }))
+          savedStudents.map((student) => ({
+            id: crypto.randomUUID(),
+            assignmentId: assignment.id,
+            studentId: student.id,
+          }))
         ),
         skipDuplicates: true,
       });
