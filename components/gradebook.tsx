@@ -92,7 +92,8 @@ export function Gradebook() {
       const response = await fetch("/api/gradebook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, title, period, maxScore: Number(maxScore), sourceType, sourceId, teachingAssignmentId: teachingAssignmentId || null }) });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || "เพิ่มช่องคะแนนไม่สำเร็จ");
-      setShowAdd(false); setTitle(""); setSourceId("");\n      setSubjectFilter(teachingAssignmentId || "all");
+      setShowAdd(false); setTitle(""); setSourceId("");
+      setSubjectFilter(teachingAssignmentId || "all");
       let notice = "เพิ่มช่องคะแนนแล้ว";
       if (sourceType === "google_form") {
         const sync = await fetch(`/api/gradebook/columns/${body.id}/sync`, { method: "POST" });
