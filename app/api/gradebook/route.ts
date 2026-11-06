@@ -17,15 +17,30 @@ export async function GET(request: Request) {
   if (!classId) return NextResponse.json({ classes, exams, googleForms });
   const classroom = classes.find((item) => item.id === classId);
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
-  const [students, columns] = await Promise.all([
+  const [students, columns, matchingStudents, teachingAssignments] = await Promise.all([
     prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true }, orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }] }),
-    prisma.gradeColumn.findMany({ where: { ownerId, classId }, include: { scores: true, pendingFormScores: { orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }] }, exam: { select: { title: true } }, googleForm: { include: { material: { select: { title: true } } } } }, orderBy: { createdAt: "asc" } }),
+    prisma.gradeColumn.findMany({
+      where: { ownerId, classId },
+      include: {
+        scores: true,
+        pendingFormScores: { orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }] },
+        exam: { select: { title: true } },
+        googleForm: { include: { material: { select: { title: true } } } },
+        teachingAssignment: { include: { subject: { select: { id: true, code: true, name: true } } } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.student.findMany({
+      where: { class: { ownerId }, isActive: true },
+      include: { class: { select: { name: true } } },
+      orderBy: [{ class: { name: "asc" } }, { rollNo: "asc" }, { studentNo: "asc" }],
+    }),
+    prisma.teachingAssignment.findMany({
+      where: { ownerId, classId },
+      include: { subject: { select: { id: true, code: true, name: true } }, classroom: { select: { id: true, name: true } } },
+      orderBy: { subject: { code: "asc" } },
+    }),
   ]);
-  const matchingStudents = await prisma.student.findMany({
-    where: { class: { ownerId }, isActive: true },
-    include: { class: { select: { name: true } } },
-    orderBy: [{ class: { name: "asc" } }, { rollNo: "asc" }, { studentNo: "asc" }],
-  });
   return NextResponse.json({
     classes,
     classroom,
@@ -34,12 +49,14 @@ export async function GET(request: Request) {
     columns,
     exams,
     googleForms,
+    teachingAssignments,
   });
 }
 
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerId = session.user.id;
   const body = await request.json().catch(() => null);
   const classId = typeof body?.classId === "string" ? body.classId : "";
   const title = typeof body?.title === "string" ? body.title.trim() : "";
@@ -47,33 +64,66 @@ export async function POST(request: Request) {
   const maxScore = Number(body?.maxScore);
   const sourceType = body?.sourceType;
   const sourceId = typeof body?.sourceId === "string" ? body.sourceId : "";
+  const requestedAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
   if (!classId || !title || title.length > 120 || !periods.includes(period) || !Number.isFinite(maxScore) || maxScore <= 0) {
     return NextResponse.json({ error: "กรุณากรอกชื่องาน ช่วงคะแนน และคะแนนเต็มให้ถูกต้อง" }, { status: 400 });
   }
-  const classroom = await prisma.class.findFirst({ where: { id: classId, ownerId: session.user.id }, select: { id: true } });
+  const classroom = await prisma.class.findFirst({ where: { id: classId, ownerId }, select: { id: true } });
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
+
   let examId: string | undefined;
   let googleFormId: string | undefined;
   let importScores: { studentId: string; score: number }[] = [];
+  let inheritedAssignmentId = "";
   if (sourceType === "exam") {
-    const exam = await prisma.exam.findFirst({ where: { id: sourceId, ownerId: session.user.id, classId }, include: { _count: { select: { questions: true } }, attempts: { where: { score: { not: null }, status: "CONFIRMED" }, select: { studentId: true, score: true } }, gradeColumn: { select: { id: true } } } });
+    const exam = await prisma.exam.findFirst({
+      where: { id: sourceId, ownerId, classId },
+      include: {
+        _count: { select: { questions: true } },
+        attempts: { where: { score: { not: null }, status: "CONFIRMED" }, select: { studentId: true, score: true } },
+        gradeColumn: { select: { id: true } },
+        teachingAssignment: { select: { id: true, classId: true, ownerId: true } },
+      },
+    });
     if (!exam) return NextResponse.json({ error: "ไม่พบข้อสอบในห้องนี้" }, { status: 404 });
     if (exam.gradeColumn) return NextResponse.json({ error: "ข้อสอบนี้เชื่อมกับสมุดคะแนนแล้ว" }, { status: 409 });
+    inheritedAssignmentId = exam.teachingAssignment?.id || "";
+    if (requestedAssignmentId && inheritedAssignmentId && requestedAssignmentId !== inheritedAssignmentId) {
+      return NextResponse.json({ error: "รายวิชาที่เลือกไม่ตรงกับรายวิชาที่ผูกไว้กับข้อสอบ" }, { status: 400 });
+    }
     examId = exam.id;
     importScores = exam._count.questions > 0 ? exam.attempts.flatMap((attempt) => attempt.score == null ? [] : [{ studentId: attempt.studentId, score: Math.min(maxScore, (attempt.score / exam._count.questions) * maxScore) }]) : [];
   } else if (sourceType === "google_form") {
-    const form = await prisma.googleForm.findFirst({ where: { id: sourceId, ownerId: session.user.id }, select: { id: true, gradeColumn: { select: { id: true } } } });
+    const form = await prisma.googleForm.findFirst({ where: { id: sourceId, ownerId }, select: { id: true, gradeColumn: { select: { id: true } } } });
     if (!form) return NextResponse.json({ error: "ไม่พบ Google Form" }, { status: 404 });
     if (form.gradeColumn) return NextResponse.json({ error: "Google Form นี้เชื่อมกับสมุดคะแนนแล้ว" }, { status: 409 });
     googleFormId = form.id;
   } else if (sourceType !== "manual") {
     return NextResponse.json({ error: "แหล่งคะแนนไม่ถูกต้อง" }, { status: 400 });
   }
+
+  const teachingAssignmentId = requestedAssignmentId || inheritedAssignmentId || null;
+  const anyAssignmentInClass = await prisma.teachingAssignment.findFirst({
+    where: { ownerId, classId },
+    select: { id: true },
+  });
+  if (anyAssignmentInClass && !teachingAssignmentId) {
+    return NextResponse.json({ error: "กรุณาเลือกรายวิชาที่สอนก่อนบันทึกช่องคะแนน" }, { status: 400 });
+  }
+  if (teachingAssignmentId) {
+    const assignment = await prisma.teachingAssignment.findFirst({
+      where: { id: teachingAssignmentId, ownerId, classId },
+      select: { id: true },
+    });
+    if (!assignment) return NextResponse.json({ error: "รายวิชาไม่ได้อยู่ในห้องเรียนนี้หรือไม่มีสิทธิ์" }, { status: 404 });
+  }
   try {
     const column = await prisma.gradeColumn.create({
       data: {
-        ownerId: session.user.id, classId, title, period, maxScore,
-        ...(examId ? { examId } : {}), ...(googleFormId ? { googleFormId } : {}),
+        ownerId, classId, title, period, maxScore,
+        ...(teachingAssignmentId ? { teachingAssignmentId } : {}),
+        ...(examId ? { examId } : {}),
+        ...(googleFormId ? { googleFormId } : {}),
         ...(importScores.length ? { scores: { create: importScores } } : {}),
       },
     });
