@@ -40,6 +40,42 @@ async function deliver(event: LineEvent, ownerLineId: string, text: string) {
 }
 
 async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {
+  if (command.startsWith("ประกาศ ")) {
+    const message = command.slice("ประกาศ ".length).trim();
+    if (!message) return "กรุณาพิมพ์ข้อความหลังคำว่า ประกาศ";
+    if (message.length > 240) return "ข้อความยาวเกิน 240 ตัวอักษร กรุณาย่อข้อความ";
+    await prisma.siteAnnouncement.upsert({
+      where: { id: "global" },
+      create: { id: "global", message, active: true, source: "LINE" },
+      update: { message, active: true, source: "LINE", deploymentId: null, deploymentStatus: null, deploymentUrl: null },
+    });
+    return `ตั้งประกาศหน้าเว็บแล้ว:\n${message}`;
+  }
+
+  if (command === "ประกาศเสร็จแล้ว") {
+    const message = "อัปเดตระบบแล้ว · ตรวจคำตอบ Google Forms แยกห้อง พร้อมตรวจคะแนนรายข้อแบบเรียลไทม์";
+    await prisma.siteAnnouncement.upsert({
+      where: { id: "global" },
+      create: { id: "global", message, active: true, source: "LINE" },
+      update: { message, active: true, source: "LINE", deploymentId: null, deploymentStatus: null, deploymentUrl: null },
+    });
+    return "เปลี่ยนแถบหน้าเว็บเป็นสถานะอัปเดตสำเร็จแล้ว";
+  }
+
+  if (command === "ซ่อนประกาศ") {
+    await prisma.siteAnnouncement.upsert({
+      where: { id: "global" },
+      create: { id: "global", message: "อัปเดตระบบแล้ว", active: false, source: "LINE" },
+      update: { active: false, source: "LINE" },
+    });
+    return "ซ่อนแถบประกาศหน้าเว็บแล้ว";
+  }
+
+  if (command === "สถานะประกาศ") {
+    const announcement = await prisma.siteAnnouncement.findUnique({ where: { id: "global" } });
+    if (!announcement) return "ยังใช้ข้อความประกาศเริ่มต้นของเว็บไซต์อยู่";
+    return `สถานะประกาศ: ${announcement.active ? "แสดงอยู่" : "ซ่อนอยู่"}\nแหล่งที่มา: ${announcement.source}\n${announcement.message}`;
+  }
   if (["ช่วยเหลือ", "help", "เมนู"].includes(command)) {
     return [
       "LINE Guardian",
@@ -50,6 +86,10 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
       "• วิเคราะห์ปัญหาล่าสุด — สรุป Incident ล่าสุด",
       "• ลองงานที่ล้มเหลวใหม่ — retry เฉพาะงานตรวจระบบที่ retry ได้",
       "• หยุดงาน — ยกเลิกงานที่ยังอยู่ในคิว",
+      "• ประกาศ <ข้อความ> — เปลี่ยนข้อความแถบหน้าเว็บ",
+      "• ประกาศเสร็จแล้ว — แสดงข้อความอัปเดตสำเร็จ",
+      "• ซ่อนประกาศ — ซ่อนแถบข้อความหน้าเว็บ",
+      "• สถานะประกาศ — ดูข้อความปัจจุบัน",
       "",
       "ระบบไม่รับคำสั่ง shell, SQL, โค้ด หรือคำสั่งแก้ข้อมูลนักเรียน/คะแนน",
     ].join("\n");
@@ -210,7 +250,8 @@ export async function POST(request: Request) {
     const supported = [
       "ช่วยเหลือ", "help", "เมนู", "ตรวจสอบระบบ", "สถานะระบบ",
       "สถานะการซ่อม", "วิเคราะห์ปัญหาล่าสุด", "ลองงานที่ล้มเหลวใหม่", "หยุดงาน",
-    ].includes(command);
+      "ประกาศเสร็จแล้ว", "ซ่อนประกาศ", "สถานะประกาศ",
+    ].includes(command) || command.startsWith("ประกาศ ");
     if (!supported) continue;
 
     let storedEventId: string;
