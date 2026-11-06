@@ -66,7 +66,10 @@ export function Gradebook() {
   useEffect(() => { if (classId) void load(classId).catch((error) => setMessage(error.message)); }, [classId]);
   useEffect(() => {
     if (payload?.classroom?.id !== classId || subjectFilter !== "__auto__") return;
-    setSubjectFilter(teachingAssignments[0]?.id || "all");
+    const firstLinked = teachingAssignments.find((item) =>
+      allColumns.some((column) => column.teachingAssignment?.id === item.id),
+    );
+    setSubjectFilter(firstLinked?.id || (allColumns.some((column) => !column.teachingAssignment) ? "__unassigned__" : teachingAssignments[0]?.id || "all"));
   }, [payload?.classroom?.id, classId, subjectFilter, teachingAssignments]);
   useEffect(() => {
     if (!teachingAssignments.some((item) => item.id === teachingAssignmentId)) {
