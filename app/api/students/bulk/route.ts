@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   });
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
 
+  const classroomName = await prisma.class.findUnique({ where: { id: parsed.data.classId }, select: { name: true } }).then((item) => item?.name || "");
   const normalized = parsed.data.rows.map((row) => ({
     ...row,
     rollNo: row.rollNo.trim(),
@@ -60,7 +61,52 @@ export async function POST(request: Request) {
     });
   });
   await prisma.$transaction(operations);
-  const reconciled = await reconcilePendingFormScores(parsed.data.classId);
 
+  // Keep the teacher-owned roster, while linking the local student record to a
+  // shared school identity so the same learner can appear in other subjects.
+  const [savedStudents, assignments, teacher] = await Promise.all([
+    prisma.student.findMany({
+      where: { classId: parsed.data.classId, studentNo: { in: studentCodes }, isActive: true },
+      select: { id: true, studentNo: true, name: true },
+    }),
+    prisma.teachingAssignment.findMany({
+      where: { ownerId: session.user.id, classId: parsed.data.classId },
+      select: { id: true },
+    }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { schoolKey: true } }),
+  ]);
+
+  await prisma.$transaction(async (tx) => {
+    for (const student of savedStudents) {
+      const identity = await tx.studentIdentity.upsert({
+        where: {
+          schoolKey_className_studentNo: {
+            schoolKey: teacher?.schoolKey || "default",
+            className: classroomName,
+            studentNo: student.studentNo,
+          },
+        },
+        create: {
+          schoolKey: teacher?.schoolKey || "default",
+          className: classroomName,
+          studentNo: student.studentNo,
+          name: student.name,
+        },
+        update: { name: student.name },
+        select: { id: true },
+      });
+      await tx.student.update({ where: { id: student.id }, data: { identityId: identity.id } });
+    }
+    if (assignments.length && savedStudents.length) {
+      await tx.courseEnrollment.createMany({
+        data: assignments.flatMap((assignment) =>
+          savedStudents.map((student) => ({ assignmentId: assignment.id, studentId: student.id })),
+        ),
+        skipDuplicates: true,
+      });
+    }
+  });
+
+  const reconciled = await reconcilePendingFormScores(parsed.data.classId);
   return NextResponse.json({ ok: true, count: normalized.length, matchedFormScores: reconciled.matched, pendingFormScores: reconciled.pending });
 }
