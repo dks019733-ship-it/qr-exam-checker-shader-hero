@@ -34,7 +34,8 @@ export async function GET() {
     }
 
     // Fetch all grade columns in this class with related exam, Google Form, and teaching assignments
-    const columns = await prisma.gradeColumn.findMany({
+    const [columns, classTeachingAssignments] = await Promise.all([
+      prisma.gradeColumn.findMany({
       where: { classId: student.classId },
       include: {
         exam: {
@@ -61,7 +62,26 @@ export async function GET() {
         },
       },
       orderBy: [{ period: "asc" }, { createdAt: "desc" }],
-    });
+      }),
+      prisma.teachingAssignment.findMany({
+        where: { classId: student.classId },
+        include: {
+          subject: { select: { id: true, code: true, name: true } },
+          owner: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const resolveTeachingAssignment = (column: (typeof columns)[number]) => {
+      if (column.teachingAssignment) return column.teachingAssignment;
+      const legacySubject = (column.exam?.subject || column.googleForm?.material?.subject || "").trim().toLocaleLowerCase("th-TH");
+      if (!legacySubject) return null;
+      const matches = classTeachingAssignments.filter((assignment) =>
+        [assignment.subject.code, assignment.subject.name]
+          .some((value) => value.trim().toLocaleLowerCase("th-TH") === legacySubject),
+      );
+      return matches.length === 1 ? matches[0] : null;
+    };
 
     const teacherDefault = student.class.owner?.name || "ครูผู้สอน";
 
@@ -70,16 +90,17 @@ export async function GET() {
       const studentScore = col.scores[0]?.score ?? null;
       const isSubmitted = studentScore !== null;
 
+      const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
-        col.teachingAssignment?.subject?.name ||
+        teachingAssignment?.subject?.name ||
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
-      const subjectCode = col.teachingAssignment?.subject?.code || "";
+      const subjectCode = teachingAssignment?.subject?.code || "";
       const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
 
       const teacherName =
-        col.teachingAssignment?.owner?.name ||
+        teachingAssignment?.owner?.name ||
         student.class.owner?.name ||
         "ครูประจำวิชา";
 
@@ -132,17 +153,18 @@ export async function GET() {
     >();
 
     for (const col of columns) {
+      const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
-        col.teachingAssignment?.subject?.name ||
+        teachingAssignment?.subject?.name ||
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
-      const subjectCode = col.teachingAssignment?.subject?.code || "";
+      const subjectCode = teachingAssignment?.subject?.code || "";
       const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
-      const subjectKey = col.teachingAssignment?.id || (subjectCode ? `${subjectCode}:${subjectName}` : subjectName);
+      const subjectKey = teachingAssignment?.id || (subjectCode ? `${subjectCode}:${subjectName}` : subjectName);
 
       const teacherName =
-        col.teachingAssignment?.owner?.name || teacherDefault;
+        teachingAssignment?.owner?.name || teacherDefault;
 
       if (!subjectMap.has(subjectKey)) {
         subjectMap.set(subjectKey, {
