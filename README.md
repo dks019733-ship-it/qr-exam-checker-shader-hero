@@ -147,3 +147,20 @@ After deployment, configure the LINE webhook URL as `https://YOUR-DOMAIN/api/lin
 ### Safety boundary
 
 Guardian does not execute arbitrary shell commands, SQL, JavaScript, generated code, migrations, deployment actions, or student/exam/grade mutations. The only worker operation currently implemented is a database health check. Code changes, data correction, schema changes, and deployments still require a reviewed pull request and explicit human approval.
+
+
+## LINE-controlled homepage announcement and deployment status
+
+The homepage status banner is controlled by the owner through the existing LINE Official Account:
+- `ประกาศ กำลังอัปเดตระบบตรวจข้อสอบ` — publish custom text (maximum 240 characters).
+- `ประกาศเสร็จแล้ว` — publish the standard success message.
+- `ซ่อนประกาศ` — hide the banner.
+- `สถานะประกาศ` — inspect the current banner.
+
+Only the configured `LINE_OWNER_USER_ID` can change the announcement. The public read endpoint is `GET /api/site-announcement`; it exposes only the current banner message and display state.
+
+### Automatic Vercel deployment status
+
+The `.github/workflows/site-announcement-deploy.yml` workflow listens for GitHub deployment events in the Production environment and updates the same banner to show deployment-in-progress, success, or failure. It calls the server-side endpoint with the existing `CRON_SECRET`. Add the same secret to GitHub Actions and Vercel (never commit it). This automation depends on the Vercel GitHub integration emitting Production `deployment` / `deployment_status` events; verify one real deployment in the Actions tab after setup. Preview deployments are ignored.
+
+The additive migration `prisma/migrations/20261106_site_announcement/migration.sql` must be applied to the production PostgreSQL database before the feature can persist announcements. Back up and review the SQL, then apply through the project's approved Prisma migration process. Do not use `prisma db push` as a production shortcut.

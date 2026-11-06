@@ -1,0 +1,49 @@
+name: Homepage deployment announcement
+
+on:
+  deployment:
+  deployment_status:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homepage-deployment-announcement
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.deployment.environment == 'Production' || github.event.deployment.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Publish deployment state to homepage
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          EVENT_TYPE: ${{ github.event_name }}
+          DEPLOYMENT_ID: ${{ github.event.deployment.id }}
+          DEPLOYMENT_ENVIRONMENT: ${{ github.event.deployment.environment }}
+          DEPLOYMENT_STATE: ${{ github.event.deployment_status.state || 'in_progress' }}
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url || '' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Missing CRON_SECRET repository Actions secret."
+            exit 1
+          fi
+          payload="$(jq -n \
+            --arg eventType "$EVENT_TYPE" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg environment "$DEPLOYMENT_ENVIRONMENT" \
+            --arg state "$DEPLOYMENT_STATE" \
+            --arg deploymentUrl "$DEPLOYMENT_URL" \
+            '{eventType:$eventType,deploymentId:$deploymentId,environment:$environment,state:$state,deploymentUrl:$deploymentUrl}')"
+          curl \
+            --request POST \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --max-time 20 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            "https://ngankhongkhru.vercel.app/api/site-announcement"

@@ -18,6 +18,7 @@ import {
 import { auth } from "@/lib/auth";
 import { SignInButton, SignOutButton } from "@/components/auth-buttons";
 import { SystemGuardianPanel } from "@/components/system-guardian-panel";
+import { SiteAnnouncementBanner } from "@/components/site-announcement-banner";
 import { isSystemOwner } from "@/lib/system-guardian";
 
 const tools = [
@@ -132,13 +133,7 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#f8f7f4] text-[#1c241b]">
-      <div className="sticky top-2 z-50 mx-auto mt-2 w-fit max-w-[calc(100%-1rem)] rounded-full border border-white/20 bg-[#2d3a2b]/80 px-4 py-2 text-center text-xs font-medium tracking-wide text-[#e2ecdf] shadow-lg shadow-[#2d3a2b]/15 backdrop-blur-xl sm:top-3 sm:px-5">
-        <span className="inline-flex items-center justify-center gap-2">
-          <span className="relative flex h-2 w-2" aria-hidden="true"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#b7d2af] opacity-70" /><span className="relative inline-flex h-2 w-2 rounded-full bg-[#b7d2af]" /></span>
-          <Sparkles className="h-3.5 w-3.5 text-[#b7d2af]" aria-hidden="true" />
-          อัปเดตระบบแล้ว · ตรวจคำตอบ Google Forms แยกห้อง พร้อมตรวจคะแนนรายข้อแบบเรียลไทม์
-        </span>
-      </div>
+      <SiteAnnouncementBanner />
 
       <div className="sticky top-12 z-40 px-3 pt-3 sm:px-6">
         <header className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 rounded-2xl border border-[#e5ebd0]/80 bg-white/95 px-4 shadow-[0_4px_25px_-4px_rgba(0,0,0,0.06)] backdrop-blur-xl sm:px-6">
