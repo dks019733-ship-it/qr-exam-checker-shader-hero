@@ -103,6 +103,13 @@ export async function POST(request: Request) {
   }
 
   const teachingAssignmentId = requestedAssignmentId || inheritedAssignmentId || null;
+  const anyAssignmentInClass = await prisma.teachingAssignment.findFirst({
+    where: { ownerId, classId },
+    select: { id: true },
+  });
+  if (anyAssignmentInClass && !teachingAssignmentId) {
+    return NextResponse.json({ error: "กรุณาเลือกรายวิชาที่สอนก่อนบันทึกช่องคะแนน" }, { status: 400 });
+  }
   if (teachingAssignmentId) {
     const assignment = await prisma.teachingAssignment.findFirst({
       where: { id: teachingAssignmentId, ownerId, classId },
