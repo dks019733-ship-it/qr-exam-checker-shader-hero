@@ -77,7 +77,6 @@ export function Gradebook() {
   const students = payload?.students || [];
   const sortedStudents = useMemo(() => [...students].sort((a, b) => (a.rollNo || a.studentNo).localeCompare(b.rollNo || b.studentNo, "th", { numeric: true }) || a.studentNo.localeCompare(b.studentNo, "th", { numeric: true })), [students]);
   const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
-  const columns = payload?.columns || [];
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
   const scoreAt = (column: Column, studentId: string) => column.scores.find((score) => score.studentId === studentId)?.score ?? null;
