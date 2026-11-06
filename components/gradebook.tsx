@@ -34,7 +34,8 @@ export function Gradebook() {
   const [title, setTitle] = useState("");
   const [maxScore, setMaxScore] = useState("10");
   const [sourceType, setSourceType] = useState("manual");
-  const [sourceId, setSourceId] = useState("");\n  const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
