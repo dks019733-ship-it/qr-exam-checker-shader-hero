@@ -1,4 +1,9 @@
-ALTER TABLE "User" ADD COLUMN "schoolKey" TEXT NOT NULL DEFAULT 'default';
+-- Add schoolKey as nullable first so we can backfill safely before enforcing NOT NULL.
+-- Each existing user gets their own id as the schoolKey to prevent cross-school
+-- student identity collisions that would occur if everyone shared the 'default' key.
+ALTER TABLE "User" ADD COLUMN "schoolKey" TEXT;
+UPDATE "User" SET "schoolKey" = "id" WHERE "schoolKey" IS NULL;
+ALTER TABLE "User" ALTER COLUMN "schoolKey" SET NOT NULL;
 ALTER TABLE "Student" ADD COLUMN "identityId" TEXT;
 ALTER TABLE "Exam" ADD COLUMN "teachingAssignmentId" TEXT;
 ALTER TABLE "GradeColumn" ADD COLUMN "teachingAssignmentId" TEXT;
@@ -30,7 +35,7 @@ CREATE TABLE "CourseEnrollment" (
 );
 CREATE TABLE "StudentIdentity" (
   "id" TEXT NOT NULL,
-  "schoolKey" TEXT NOT NULL DEFAULT 'default',
+  "schoolKey" TEXT NOT NULL,
   "className" TEXT NOT NULL,
   "studentNo" TEXT NOT NULL,
   "name" TEXT NOT NULL,

@@ -46,29 +46,8 @@ export async function POST(request: Request) {
   const byStudentCode = new Map(existingStudents.map((student) => [student.studentNo, student]));
   // Repair records from earlier imports that stored the roll number as the student code.
   const legacyByRollNo = new Map(existingStudents.filter((student) => !student.rollNo).map((student) => [student.studentNo, student]));
-  const operations = normalized.map((row) => {
-    const existing = byStudentCode.get(row.studentNo) || legacyByRollNo.get(row.rollNo);
-    if (existing) {
-      return prisma.student.update({
-        where: { id: existing.id },
-        data: { rollNo: row.rollNo, studentNo: row.studentNo, name: row.name, isActive: true },
-      });
-    }
-    return prisma.student.upsert({
-      where: { classId_studentNo: { classId: row.classId, studentNo: row.studentNo } },
-      create: row,
-      update: { rollNo: row.rollNo, name: row.name, isActive: true },
-    });
-  });
-  await prisma.$transaction(operations);
 
-  // Keep the teacher-owned roster, while linking the local student record to a
-  // shared school identity so the same learner can appear in other subjects.
-  const [savedStudents, assignments, teacher] = await Promise.all([
-    prisma.student.findMany({
-      where: { classId: parsed.data.classId, studentNo: { in: studentCodes }, isActive: true },
-      select: { id: true, studentNo: true, name: true },
-    }),
+  const [assignments, teacher] = await Promise.all([
     prisma.teachingAssignment.findMany({
       where: { ownerId: session.user.id, classId: parsed.data.classId },
       select: { id: true },
@@ -76,18 +55,40 @@ export async function POST(request: Request) {
     prisma.user.findUnique({ where: { id: session.user.id }, select: { schoolKey: true } }),
   ]);
 
+  const schoolKey = teacher?.schoolKey || session.user.id;
+
+  // Execute student upserts, identity linking, and course enrollment in a single atomic transaction
   await prisma.$transaction(async (tx) => {
-    for (const student of savedStudents) {
+    const savedStudents: { id: string; studentNo: string; name: string }[] = [];
+
+    for (const row of normalized) {
+      const existing = byStudentCode.get(row.studentNo) || legacyByRollNo.get(row.rollNo);
+      let student: { id: string; studentNo: string; name: string };
+      if (existing) {
+        student = await tx.student.update({
+          where: { id: existing.id },
+          data: { rollNo: row.rollNo, studentNo: row.studentNo, name: row.name, isActive: true },
+          select: { id: true, studentNo: true, name: true },
+        });
+      } else {
+        student = await tx.student.upsert({
+          where: { classId_studentNo: { classId: row.classId, studentNo: row.studentNo } },
+          create: row,
+          update: { rollNo: row.rollNo, name: row.name, isActive: true },
+          select: { id: true, studentNo: true, name: true },
+        });
+      }
+
       const identity = await tx.studentIdentity.upsert({
         where: {
           schoolKey_className_studentNo: {
-            schoolKey: teacher?.schoolKey || "default",
+            schoolKey,
             className: classroomName,
             studentNo: student.studentNo,
           },
         },
         create: {
-          schoolKey: teacher?.schoolKey || "default",
+          schoolKey,
           className: classroomName,
           studentNo: student.studentNo,
           name: student.name,
@@ -95,12 +96,19 @@ export async function POST(request: Request) {
         update: { name: student.name },
         select: { id: true },
       });
-      await tx.student.update({ where: { id: student.id }, data: { identityId: identity.id } });
+
+      await tx.student.update({
+        where: { id: student.id },
+        data: { identityId: identity.id },
+      });
+
+      savedStudents.push(student);
     }
+
     if (assignments.length && savedStudents.length) {
       await tx.courseEnrollment.createMany({
         data: assignments.flatMap((assignment) =>
-          savedStudents.map((student) => ({ assignmentId: assignment.id, studentId: student.id })),
+          savedStudents.map((student) => ({ assignmentId: assignment.id, studentId: student.id }))
         ),
         skipDuplicates: true,
       });

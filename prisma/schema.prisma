@@ -15,7 +15,7 @@ model User {
   emailVerified DateTime?
   image         String?
   defaultLearningArea String @default("")
-  schoolKey     String    @default("default")
+  schoolKey     String    @default(cuid())
   accounts      Account[]
   sessions      Session[]
   classes       Class[]
@@ -163,7 +163,7 @@ model CourseEnrollment {
 
 model StudentIdentity {
   id        String   @id @default(cuid())
-  schoolKey String   @default("default")
+  schoolKey String
   className String
   studentNo String
   name      String
