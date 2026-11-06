@@ -10,8 +10,16 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
-  const teachingAssignmentId =
-    typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : null;
+  if (!body || !Object.prototype.hasOwnProperty.call(body, "teachingAssignmentId")) {
+    return NextResponse.json({ error: "กรุณาระบุรายวิชาที่ต้องการเชื่อม" }, { status: 400 });
+  }
+  const rawAssignmentId = body.teachingAssignmentId;
+  if (rawAssignmentId !== null && typeof rawAssignmentId !== "string") {
+    return NextResponse.json({ error: "รหัสรายวิชาไม่ถูกต้อง" }, { status: 400 });
+  }
+  const teachingAssignmentId = typeof rawAssignmentId === "string" && rawAssignmentId.trim()
+    ? rawAssignmentId.trim()
+    : null;
 
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id },
