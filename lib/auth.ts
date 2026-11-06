@@ -1,13 +1,16 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/lib/prisma";
+import { prisma, ensureDatabaseSchema } from "@/lib/prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   trustHost: true,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   providers: [
     Google({
+      clientId: process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET,
       authorization: {
         params: {
           access_type: "offline",
@@ -27,6 +30,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "database" },
   callbacks: {
     async signIn({ user, account }) {
+      try {
+        await ensureDatabaseSchema();
+      } catch (err) {
+        console.warn("[Auth] Schema check warning:", err);
+      }
+
       if (account?.provider === "google" && user.id && account.scope) {
         try {
           await prisma.account.updateMany({
