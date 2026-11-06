@@ -41,6 +41,7 @@ export function Gradebook() {
   const [importRows, setImportRows] = useState<SheetRow[]>([]);
   const [importFile, setImportFile] = useState("");
   const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({});
+  const teachingAssignments = useMemo(() => payload?.teachingAssignments || [], [payload?.teachingAssignments]);
 
   const load = useCallback(async (selectedId = classId) => {
     const response = await fetch(selectedId ? `/api/gradebook?classId=${encodeURIComponent(selectedId)}` : "/api/gradebook");
