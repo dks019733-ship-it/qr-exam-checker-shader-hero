@@ -28,10 +28,12 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const code = typeof body?.code === "string" ? body.code.trim().toUpperCase() : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";
-  const requestedClassIds = Array.isArray(body?.classIds)
+  const requestedClassIds: unknown[] = Array.isArray(body?.classIds)
     ? body.classIds
     : typeof body?.classId === "string" ? [body.classId] : [];
-  const classIds = [...new Set(requestedClassIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))];
+  const classIds: string[] = Array.from(new Set(
+    requestedClassIds.filter((id): id is string => typeof id === "string" && id.length > 0),
+  ));
   if (!code || code.length > 40 || !name || name.length > 120 || !classIds.length || requestedClassIds.length > 50 || classIds.length > 50) {
     return NextResponse.json({ error: "กรุณาระบุรหัสวิชา ชื่อวิชา และเลือกห้องเรียนอย่างน้อย 1 ห้อง (ไม่เกิน 50 ห้อง)" }, { status: 400 });
   }
