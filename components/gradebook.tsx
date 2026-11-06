@@ -36,6 +36,7 @@ export function Gradebook() {
   const [sourceType, setSourceType] = useState("manual");
   const [sourceId, setSourceId] = useState("");
   const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("__auto__");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -44,6 +45,12 @@ export function Gradebook() {
   const [importFile, setImportFile] = useState("");
   const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({});
   const teachingAssignments = useMemo(() => payload?.teachingAssignments || [], [payload?.teachingAssignments]);
+  const allColumns = payload?.columns || [];
+  const columns = useMemo(() => {
+    if (subjectFilter === "all" || subjectFilter === "__auto__") return allColumns;
+    if (subjectFilter === "__unassigned__") return allColumns.filter((column) => !column.teachingAssignment);
+    return allColumns.filter((column) => column.teachingAssignment?.id === subjectFilter);
+  }, [allColumns, subjectFilter]);
 
   const load = useCallback(async (selectedId = classId) => {
     const response = await fetch(selectedId ? `/api/gradebook?classId=${encodeURIComponent(selectedId)}` : "/api/gradebook");
@@ -57,6 +64,10 @@ export function Gradebook() {
 
   useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, []);
   useEffect(() => { if (classId) void load(classId).catch((error) => setMessage(error.message)); }, [classId]);
+  useEffect(() => {
+    if (payload?.classroom?.id !== classId || subjectFilter !== "__auto__") return;
+    setSubjectFilter(teachingAssignments[0]?.id || "all");
+  }, [payload?.classroom?.id, classId, subjectFilter, teachingAssignments]);
   useEffect(() => {
     if (!teachingAssignments.some((item) => item.id === teachingAssignmentId)) {
       setTeachingAssignmentId(teachingAssignments.length === 1 ? teachingAssignments[0].id : "");
@@ -284,7 +295,19 @@ export function Gradebook() {
   return <main className="min-h-screen bg-[#f3f1e9] p-4 text-[#303832] sm:p-8"><div className="mx-auto max-w-7xl">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">สมุดคะแนนออนไลน์</h1><p className="mt-2 text-sm text-slate-600">บันทึกคะแนนงาน/บทในช่วงกลางภาคหรือหลังกลางภาค พร้อมรวมคะแนนตามช่องใน SGS</p></div><div className="flex flex-wrap gap-2"><button onClick={exportCsv} disabled={!students.length} className="inline-flex items-center rounded-lg border px-3 py-2 text-sm disabled:opacity-50"><Download className="mr-2 h-4 w-4" />ส่งออกคะแนน</button><Link href="/dashboard/classes" className="rounded-lg border px-3 py-2 text-sm">จัดการห้องเรียน</Link></div></div>
-      <div className="mt-5 flex flex-wrap items-center gap-3"><label className="text-sm font-medium">ห้องเรียน</label><select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); }}><option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span className="text-sm text-slate-500">{students.length} คน</span></div>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <label className="text-sm font-medium">ห้องเรียน</label>
+        <select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); }}>
+          <option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+        <label className="text-sm font-medium">รายวิชา</label>
+        <select className={inputClass} value={subjectFilter === "__auto__" ? "all" : subjectFilter} onChange={(event) => { setSubjectFilter(event.target.value); setSelectedColumns([]); }} disabled={!classId || payload?.classroom?.id !== classId}>
+          <option value="all">ทุกวิชา</option>
+          <option value="__unassigned__">ยังไม่ผูกรายวิชา</option>
+          {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
+        </select>
+        <span className="text-sm text-slate-500">{students.length} คน · {columns.length} ช่องคะแนน</span>
+      </div>
     </header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
     {!payload ? <div className="mt-6 flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลดสมุดคะแนน</div> : !payload.classes.length ? <section className="mt-5 rounded-2xl border bg-white p-8 text-center"><p className="font-medium">ยังไม่มีห้องเรียน</p><Link href="/dashboard/classes" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">ไปจัดการห้องเรียน</Link></section> : !classId ? null : <>
