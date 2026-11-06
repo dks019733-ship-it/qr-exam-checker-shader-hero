@@ -75,6 +75,8 @@ export async function GET() {
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
+      const subjectCode = col.teachingAssignment?.subject?.code || "";
+      const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
 
       const teacherName =
         col.teachingAssignment?.owner?.name ||
@@ -98,7 +100,7 @@ export async function GET() {
 
       return {
         id: col.id,
-        subject: subjectName,
+        subject: subjectLabel,
         teacher: teacherName,
         title: col.title,
         dueDate: periodLabel,
@@ -135,13 +137,16 @@ export async function GET() {
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
+      const subjectCode = col.teachingAssignment?.subject?.code || "";
+      const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
+      const subjectKey = col.teachingAssignment?.id || (subjectCode ? `${subjectCode}:${subjectName}` : subjectName);
 
       const teacherName =
         col.teachingAssignment?.owner?.name || teacherDefault;
 
-      if (!subjectMap.has(subjectName)) {
-        subjectMap.set(subjectName, {
-          subject: subjectName,
+      if (!subjectMap.has(subjectKey)) {
+        subjectMap.set(subjectKey, {
+          subject: subjectLabel,
           teacher: teacherName,
           midtermScore: 0,
           midtermMax: 0,
@@ -150,7 +155,7 @@ export async function GET() {
         });
       }
 
-      const entry = subjectMap.get(subjectName)!;
+      const entry = subjectMap.get(subjectKey)!;
       const score = col.scores[0]?.score ?? 0;
 
       if (col.period === "MIDTERM") {
