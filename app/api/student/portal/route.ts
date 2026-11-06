@@ -36,7 +36,7 @@ export async function GET() {
     // Fetch all grade columns in this class with related exam, Google Form, and teaching assignments
     const [columns, classTeachingAssignments] = await Promise.all([
       prisma.gradeColumn.findMany({
-      where: { classId: student.classId },
+      where: { classId: student.classId, ownerId: student.class.owner.id },
       include: {
         exam: {
           select: { id: true, title: true, subject: true, _count: { select: { questions: true } } },
@@ -64,7 +64,7 @@ export async function GET() {
       orderBy: [{ period: "asc" }, { createdAt: "desc" }],
       }),
       prisma.teachingAssignment.findMany({
-        where: { classId: student.classId },
+        where: { classId: student.classId, ownerId: student.class.owner.id },
         include: {
           subject: { select: { id: true, code: true, name: true } },
           owner: { select: { name: true } },
