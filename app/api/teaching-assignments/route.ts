@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerId = session.user.id;
   const assignments = await prisma.teachingAssignment.findMany({
-    where: { ownerId: session.user.id },
+    where: { ownerId },
     include: {
       subject: { select: { id: true, code: true, name: true } },
       classroom: { select: { id: true, name: true } },
@@ -20,6 +21,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerId = session.user.id;
   const body = await request.json().catch(() => null);
   const code = typeof body?.code === "string" ? body.code.trim().toUpperCase() : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const classroom = await prisma.class.findFirst({
-    where: { id: classId, ownerId: session.user.id },
+    where: { id: classId, ownerId },
     select: { id: true },
   });
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
@@ -37,13 +39,13 @@ export async function POST(request: Request) {
   try {
     const assignment = await prisma.$transaction(async (tx) => {
       const subject = await tx.subject.upsert({
-        where: { ownerId_code: { ownerId: session.user.id, code } },
-        create: { ownerId: session.user.id, code, name },
+        where: { ownerId_code: { ownerId, code } },
+        create: { ownerId, code, name },
         update: { name },
       });
       const teachingAssignment = await tx.teachingAssignment.upsert({
         where: { subjectId_classId: { subjectId: subject.id, classId } },
-        create: { ownerId: session.user.id, subjectId: subject.id, classId },
+        create: { ownerId, subjectId: subject.id, classId },
         update: {},
         include: {
           subject: { select: { id: true, code: true, name: true } },
