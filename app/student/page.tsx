@@ -677,7 +677,7 @@ export default function StudentPortalPage() {
                     const totalCoursework = scores.reduce((sum, score) => sum + score.courseworkScore, 0);
                     const totalCourseworkMax = scores.reduce((sum, score) => sum + score.courseworkMax, 0);
                     const mascotSet = ["🦊", "🐼", "🐯", "🐸", "🐰", "🐻", "🐧", "🐱"];
-                    const mascotSeed = (student?.id || student?.no || "student")
+                    const mascotSeed = (student?.dbId || student?.id || student?.no || "student")
                       .split("")
                       .reduce((sum, char) => sum + char.charCodeAt(0), 0);
                     const mascot = mascotSet[mascotSeed % mascotSet.length];
