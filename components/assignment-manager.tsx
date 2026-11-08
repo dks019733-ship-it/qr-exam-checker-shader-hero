@@ -83,7 +83,7 @@ export function AssignmentManager() {
       });
       const presign = await presignResponse.json();
       if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไฟล์ครูไม่สำเร็จ");
-      const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type, "If-None-Match": "*" }, body: file });
       if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
       const completeResponse = await fetch("/api/files/complete", {
         method: "POST",
