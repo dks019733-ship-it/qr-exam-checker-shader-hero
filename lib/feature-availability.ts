@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
 export const FEATURE_CATALOG = {
   answer_sheet: "ระบบกระดาษคำตอบ",
@@ -29,4 +30,13 @@ export function formatFeatureUntil(value: Date | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
+}
+
+export async function featureAvailabilityResponse(key: FeatureKey) {
+  const state = await getFeatureAvailability(key);
+  if (state.status === "AVAILABLE") return null;
+  return NextResponse.json({
+    error: state.status === "MAINTENANCE" ? "ระบบกำลังปิดปรับปรุง" : "ฟีเจอร์นี้ยังไม่พร้อมใช้งาน",
+    featureAvailability: { key, name: state.name, status: state.status, reason: state.reason, untilAt: state.untilAt },
+  }, { status: 503 });
 }
