@@ -353,7 +353,7 @@ export default async function HomePage() {
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f0f3eb] text-[#4d5f4a] transition group-hover:bg-[#d8e6d5]">
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <span className="rounded-full border border-[#a3bfa0]/40 bg-[#eaf2e8] px-2.5 py-1 text-[10px] font-bold text-[#374535]">
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${!signedIn || !feature || availability[feature].status === "AVAILABLE" ? "border-[#a3bfa0]/40 bg-[#eaf2e8] text-[#374535]" : availability[feature].status === "MAINTENANCE" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-100 text-slate-700"}`}>
                     {!signedIn ? "เข้าสู่ระบบเพื่อเริ่ม" : feature ? (availability[feature].status === "MAINTENANCE" ? "ปิดปรับปรุง" : availability[feature].status === "UNAVAILABLE" ? "ยังไม่พร้อมใช้งาน" : "พร้อมใช้งาน") : "พร้อมใช้งาน"}
                   </span>
                 </div>
