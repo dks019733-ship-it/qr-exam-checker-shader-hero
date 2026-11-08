@@ -62,9 +62,17 @@ export async function GET(request: Request) {
       const cookieStore = await cookies();
       const token = cookieStore.get("student_token")?.value;
       const payload = token ? verifyStudentToken(token) : null;
-      if (payload?.studentId === file.submission.studentId && payload.classId === file.submission.assignment.classId) {
-        objectKey = file.objectKey;
-      }
+      const student = payload?.studentId === file.submission.studentId && payload.classId === file.submission.assignment.classId
+        ? await prisma.student.findFirst({
+            where: {
+              id: file.submission.studentId,
+              classId: file.submission.assignment.classId,
+              isActive: true,
+            },
+            select: { id: true },
+          })
+        : null;
+      if (student) objectKey = file.objectKey;
     }
   }
 
