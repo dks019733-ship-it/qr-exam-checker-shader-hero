@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -20,6 +21,9 @@ function extensionMatches(fileName: string, contentType: string) {
 }
 
 export async function POST(request: Request) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   if (!isObjectStorageConfigured()) {
     return NextResponse.json({ error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า" }, { status: 503 });
   }
