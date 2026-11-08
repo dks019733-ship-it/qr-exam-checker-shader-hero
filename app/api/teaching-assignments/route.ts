@@ -31,10 +31,18 @@ export async function POST(request: Request) {
   const requestedClassIds: unknown[] = Array.isArray(body?.classIds)
     ? body.classIds
     : typeof body?.classId === "string" ? [body.classId] : [];
+  const hasInvalidClassId = requestedClassIds.some(
+    (id) => typeof id !== "string" || !id.trim(),
+  );
   const classIds: string[] = Array.from(new Set(
-    requestedClassIds.filter((id): id is string => typeof id === "string" && id.length > 0),
+    requestedClassIds.map((id) => typeof id === "string" ? id.trim() : ""),
   ));
-  if (!code || code.length > 40 || !name || name.length > 120 || !classIds.length || requestedClassIds.length > 50 || classIds.length > 50) {
+  if (
+    !code || code.length > 40 ||
+    !name || name.length > 120 ||
+    !classIds.length || hasInvalidClassId ||
+    requestedClassIds.length > 50 || classIds.length > 50
+  ) {
     return NextResponse.json({ error: "กรุณาระบุรหัสวิชา ชื่อวิชา และเลือกห้องเรียนอย่างน้อย 1 ห้อง (ไม่เกิน 50 ห้อง)" }, { status: 400 });
   }
 
@@ -53,32 +61,47 @@ export async function POST(request: Request) {
         create: { id: crypto.randomUUID(), ownerId, code, name },
         update: { name },
       });
-      const results = [];
-      for (const classId of classIds) {
-        const assignment = await tx.teachingAssignment.upsert({
-          where: { subjectId_classId: { subjectId: subject.id, classId } },
-          create: { id: crypto.randomUUID(), ownerId, subjectId: subject.id, classId },
-          update: {},
-        });
-        const students = await tx.student.findMany({
-          where: { classId, isActive: true },
-          select: { id: true },
-        });
-        if (students.length) {
-          await tx.courseEnrollment.createMany({
-            data: students.map((student) => ({
-              id: crypto.randomUUID(),
-              assignmentId: assignment.id,
-              studentId: student.id,
-            })),
-            skipDuplicates: true,
-          });
-        }
-        results.push(assignment);
+
+      // Bulk-create missing class assignments; the compound unique key makes retries idempotent.
+      await tx.teachingAssignment.createMany({
+        data: classIds.map((classId) => ({
+          id: crypto.randomUUID(),
+          ownerId,
+          subjectId: subject.id,
+          classId,
+        })),
+        skipDuplicates: true,
+      });
+
+      const assignments = await tx.teachingAssignment.findMany({
+        where: { ownerId, subjectId: subject.id, classId: { in: classIds } },
+        select: { id: true, classId: true },
+      });
+      if (assignments.length !== classIds.length) {
+        throw new Error("Unable to resolve all teaching assignments after upsert");
       }
-      return { subject, assignments: results };
-    });
-    return NextResponse.json(created, { status: 201 });
+
+      const assignmentByClassId = new Map(assignments.map((assignment) => [assignment.classId, assignment.id]));
+      const activeStudents = await tx.student.findMany({
+        where: { classId: { in: classIds }, isActive: true },
+        select: { id: true, classId: true },
+      });
+      const enrollments = activeStudents.flatMap((student) => {
+        const assignmentId = assignmentByClassId.get(student.classId);
+        return assignmentId
+          ? [{ id: crypto.randomUUID(), assignmentId, studentId: student.id }]
+          : [];
+      });
+
+      if (enrollments.length) {
+        await tx.courseEnrollment.createMany({
+          data: enrollments,
+          skipDuplicates: true,
+        });
+      }
+
+      return { subject, assignments };
+    }, { timeout: 10000 });    return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("[TeachingAssignments] create failed", error);
     return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" }, { status: 500 });
