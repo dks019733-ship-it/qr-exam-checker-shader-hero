@@ -129,7 +129,8 @@ async function handleFeatureCommand(command: string, ownerLineId: string): Promi
   return `${FEATURE_CATALOG[key]}: ${statusText} แล้ว\n${reason ? `เหตุผล: ${reason}\n` : ""}เปิดอีกครั้ง: ${featureTime(untilAt)}`;
 }
 
-async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {\n  const featureResponse = await handleFeatureCommand(command, ownerLineId);\n  if (featureResponse) return featureResponse;
+async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {
+  const featureResponse = await handleFeatureCommand(command, ownerLineId);\n  if (featureResponse) return featureResponse;
   if (command.startsWith("ประกาศ ")) {
     const message = command.slice("ประกาศ ".length).trim();
     if (!message) return "กรุณาพิมพ์ข้อความหลังคำว่า ประกาศ";
@@ -179,7 +180,10 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
       "• ประกาศ <ข้อความ> — เปลี่ยนข้อความแถบหน้าเว็บ",
       "• ประกาศเสร็จแล้ว — แสดงข้อความอัปเดตสำเร็จ",
       "• ซ่อนประกาศ — ซ่อนแถบข้อความหน้าเว็บ",
-      "• สถานะประกาศ — ดูข้อความปัจจุบัน",\n      "• สถานะฟีเจอร์ — ดูสถานะทุกระบบ",\n      "• ปิดปรับปรุง <ฟีเจอร์> <เวลา> <เหตุผล> — ปิดตามระยะเวลา",\n      "• ไม่พร้อมใช้งาน <ฟีเจอร์> <เวลา> <เหตุผล> — ระบุฟีเจอร์ที่ยังไม่เปิด",\n      "• เปิดใช้งาน <ฟีเจอร์> — เปิดฟีเจอร์ทันที",
+      "• สถานะประกาศ — ดูข้อความปัจจุบัน",
+      "• สถานะฟีเจอร์ — ดูสถานะทุกระบบ",\n      "• ปิดปรับปรุง <ฟีเจอร์> <เวลา> <เหตุผล> — ปิดตามระยะเวลา",
+      "• ไม่พร้อมใช้งาน <ฟีเจอร์> <เวลา> <เหตุผล> — ระบุฟีเจอร์ที่ยังไม่เปิด",
+      "• เปิดใช้งาน <ฟีเจอร์> — เปิดฟีเจอร์ทันที",
       "",
       "ระบบไม่รับคำสั่ง shell, SQL, โค้ด หรือคำสั่งแก้ข้อมูลนักเรียน/คะแนน",
     ].join("\n");
