@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,9 @@ function parseDate(value: unknown): Date | null {
 }
 
 export async function GET(request: Request) {
+  const unavailable = await featureAvailabilityResponse("attendance");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
 
@@ -55,6 +59,9 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const unavailable = await featureAvailabilityResponse("attendance");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
 
