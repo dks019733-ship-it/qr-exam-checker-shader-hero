@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stored = await verifyStoredObject(objectKey);
+    const stored = await verifyStoredObject(objectKey, contentType);
     if (stored.sizeBytes !== sizeBytes || stored.contentType.toLowerCase() !== contentType) {
       return NextResponse.json({ error: "ข้อมูลไฟล์ที่อัปโหลดไม่ตรงกับข้อมูลที่แจ้งไว้" }, { status: 400 });
     }
