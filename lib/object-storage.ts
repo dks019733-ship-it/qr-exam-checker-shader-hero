@@ -104,7 +104,7 @@ export function getUploadPolicy() {
 
 export function sanitizeUploadName(value: string) {
   const leaf = value.split(/[\\/]/).pop() || "upload";
-  return leaf.normalize("NFKC").replace(/[^\\p{L}\\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
+  return leaf.normalize("NFKC").replace(/[^\p{L}\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
 }
 
 export function validateUploadInput(contentType: string, sizeBytes: number) {
