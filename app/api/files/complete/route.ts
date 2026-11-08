@@ -105,12 +105,25 @@ export async function POST(request: Request) {
       : null;
 
     const result = await prisma.$transaction(async (tx) => {
-      const submission = await tx.submission.upsert({
-        where: { assignmentId_studentId: { assignmentId, studentId: studentId! } },
-        create: { assignmentId, studentId: studentId! },
-        update: { submittedAt: new Date(), status: "SUBMITTED" },
-        select: { id: true, submittedAt: true },
+      const submissionKey = { assignmentId_studentId: { assignmentId, studentId: studentId! } };
+      const existingSubmission = await tx.submission.findUnique({
+        where: submissionKey,
+        select: { id: true, status: true, submittedAt: true },
       });
+      if (existingSubmission?.status === "REVIEWED") {
+        throw new Error("SUBMISSION_ALREADY_REVIEWED");
+      }
+
+      const submission = existingSubmission?.status === "RETURNED"
+        ? await tx.submission.update({
+            where: { id: existingSubmission.id },
+            data: { status: "SUBMITTED", submittedAt: new Date(), score: null, feedback: "", reviewedAt: null },
+            select: { id: true, submittedAt: true },
+          })
+        : existingSubmission ?? await tx.submission.create({
+            data: { assignmentId, studentId: studentId! },
+            select: { id: true, submittedAt: true },
+          });
       const file = await tx.submissionFile.create({
         data: { submissionId: submission.id, objectKey, fileName, contentType, sizeBytes },
         select: { id: true, fileName: true, contentType: true, sizeBytes: true },
