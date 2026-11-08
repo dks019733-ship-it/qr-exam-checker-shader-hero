@@ -1,7 +1,8 @@
 import { createHash, createHmac } from "crypto";
 
-const MAX_UPLOAD_BYTES = Number(process.env.UPLOAD_MAX_BYTES) > 0
-  ? Number(process.env.UPLOAD_MAX_BYTES)
+const configuredUploadLimit = Number(process.env.UPLOAD_MAX_BYTES);
+const MAX_UPLOAD_BYTES = Number.isSafeInteger(configuredUploadLimit) && configuredUploadLimit > 0
+  ? configuredUploadLimit
   : 20 * 1024 * 1024;
 
 const ALLOWED_TYPES = new Set([
