@@ -15,18 +15,51 @@ type Props = {
 
 type ParsedRow = { rollNo: string; studentNo: string; name: string };
 
+function parseDelimitedRows(source: string): string[][] {
+  const delimiter = source.includes("\\t") ? "\\t" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"' && quoted && source[index + 1] === '"') {
+      cell += '"';
+      index += 1;
+    } else if (character === '"') {
+      quoted = !quoted;
+    } else if (character === delimiter && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((character === "\\n" || character === "\\r") && !quoted) {
+      if (character === "\\r" && source[index + 1] === "\\n") index += 1;
+      row.push(cell.trim());
+      if (row.some((value) => value.length > 0)) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+
+  if (quoted) throw new Error("พบเครื่องหมายอัญประกาศใน CSV ที่ไม่ครบคู่");
+  row.push(cell.trim());
+  if (row.some((value) => value.length > 0)) rows.push(row);
+  return rows;
+}
+
 function parseStudentRows(source: string): ParsedRow[] {
-  const lines = source.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) return [];
-  const delimiter = lines[0].includes("\t") ? "\t" : ",";
-  const cells = lines.map((line) => line.split(delimiter).map((cell) => cell.trim().replace(/^["']|["']$/g, "")));
+  if (!source.trim()) return [];
+  const cells = parseDelimitedRows(source);
+  if (!cells.length) return [];
   const first = cells[0].map((cell) => cell.toLocaleLowerCase());
   const hasHeader = first.some((cell) => /รหัส|ชื่อ|student.?no|roll.?no|name/.test(cell));
   const data = hasHeader ? cells.slice(1) : cells;
 
   return data.map((row, index) => {
-    if (row.length >= 3) return { rollNo: row[0], studentNo: row[1], name: row.slice(2).join(delimiter).trim() };
-    return { rollNo: String(index + 1), studentNo: row[0] ?? "", name: row.slice(1).join(delimiter).trim() };
+    if (row.length >= 3) return { rollNo: row[0], studentNo: row[1], name: row.slice(2).join(",").trim() };
+    return { rollNo: String(index + 1), studentNo: row[0] ?? "", name: row.slice(1).join(",").trim() };
   }).filter((row) => row.studentNo && row.name);
 }
 
