@@ -1,9 +1,13 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyStudentToken } from "@/lib/student-token";
 
 export async function GET() {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const cookieStore = await cookies();
   const token = cookieStore.get("student_token")?.value;
   if (!token) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบก่อน" }, { status: 401 });
