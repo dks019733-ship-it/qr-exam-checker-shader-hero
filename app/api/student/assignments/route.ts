@@ -21,7 +21,6 @@ export async function GET() {
     where: {
       classId: student.classId,
       status: "PUBLISHED",
-      teachingAssignment: { enrollments: { some: { studentId: student.id } } },
     },
     include: {
       teachingAssignment: { include: { subject: { select: { code: true, name: true } }, owner: { select: { name: true } } } },
