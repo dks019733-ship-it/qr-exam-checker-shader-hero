@@ -145,10 +145,10 @@ export async function GET() {
       {
         subject: string;
         teacher: string;
-        midtermScore: number;
-        midtermMax: number;
-        quizScore: number;
-        quizMax: number;
+        courseworkScore: number;
+        courseworkMax: number;
+        midtermExamScore: number;
+        midtermExamMax: number;
       }
     >();
 
@@ -170,10 +170,10 @@ export async function GET() {
         subjectMap.set(subjectKey, {
           subject: subjectLabel,
           teacher: teacherName,
-          midtermScore: 0,
-          midtermMax: 0,
-          quizScore: 0,
-          quizMax: 0,
+          courseworkScore: 0,
+          courseworkMax: 0,
+          midtermExamScore: 0,
+          midtermExamMax: 0,
         });
       }
 
@@ -181,36 +181,35 @@ export async function GET() {
       const score = col.scores[0]?.score ?? 0;
 
       if (col.period === "MIDTERM") {
-        entry.midtermScore += score;
-        entry.midtermMax += col.maxScore;
+        // Preserve legacy MIDTERM columns as a separate exam score.
+        entry.midtermExamScore += score;
+        entry.midtermExamMax += col.maxScore;
       } else {
-        entry.quizScore += score;
-        entry.quizMax += col.maxScore;
+        // BEFORE_MIDTERM and AFTER_MIDTERM are both coursework periods.
+        entry.courseworkScore += score;
+        entry.courseworkMax += col.maxScore;
       }
     }
 
     const scores = Array.from(subjectMap.values()).map((item) => {
-      const totalScore = item.midtermScore + item.quizScore;
-      const totalMax = item.midtermMax + item.quizMax;
+      const totalScore = item.courseworkScore + item.midtermExamScore;
+      const totalMax = item.courseworkMax + item.midtermExamMax;
       const percent = totalMax > 0 ? Number(((totalScore / totalMax) * 100).toFixed(1)) : 0;
-
-      // Grade calculation based on Thai standard grading (80=4.0, 75=3.5, 70=3.0, 65=2.5, 60=2.0, 55=1.5, 50=1.0, <50=0)
-      let grade = "0";
-      if (percent >= 80) grade = "4.0";
-      else if (percent >= 75) grade = "3.5";
-      else if (percent >= 70) grade = "3.0";
-      else if (percent >= 65) grade = "2.5";
-      else if (percent >= 60) grade = "2.0";
-      else if (percent >= 55) grade = "1.5";
-      else if (percent >= 50) grade = "1.0";
 
       return {
         subject: item.subject,
         teacher: item.teacher,
-        midterm: item.midtermMax > 0 ? `${item.midtermScore}/${item.midtermMax}` : "—",
-        quizTotal: item.quizMax > 0 ? `${item.quizScore}/${item.quizMax}` : "—",
-        total: totalMax > 0 ? `${totalScore}/${totalMax}` : "—",
-        grade,
+        coursework: item.courseworkMax > 0
+          ? `${Number(item.courseworkScore.toFixed(2))}/${Number(item.courseworkMax.toFixed(2))}`
+          : "—",
+        midtermExam: item.midtermExamMax > 0
+          ? `${Number(item.midtermExamScore.toFixed(2))}/${Number(item.midtermExamMax.toFixed(2))}`
+          : "—",
+        courseworkScore: Number(item.courseworkScore.toFixed(2)),
+        courseworkMax: Number(item.courseworkMax.toFixed(2)),
+        total: totalMax > 0
+          ? `${Number(totalScore.toFixed(2))}/${Number(totalMax.toFixed(2))}`
+          : "—",
         percent,
       };
     });
