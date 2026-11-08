@@ -1,9 +1,13 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getFormScoreDestination, getOtherFormScoreColumnIds } from "@/lib/gradebook-form-destination";
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string; pendingId: string }> }) {
+  const unavailable = await featureAvailabilityResponse("gradebook");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, pendingId } = await params;
