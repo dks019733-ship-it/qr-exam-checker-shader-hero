@@ -891,13 +891,16 @@ export default function StudentPortalPage() {
                         const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const presign = await presignResponse.json();
                         if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
+                        if (alreadyUploaded.has(String(presign.fileName).toLocaleLowerCase())) {
+                          throw new Error("ไฟล์ " + presign.fileName + " ถูกส่งแล้ว หากต้องการส่งไฟล์เพิ่มเติมให้เลือกไฟล์ชื่ออื่น");
+                        }
                         const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type, "If-None-Match": "*" }, body: file });
                         if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
                         const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const complete = await completeResponse.json();
                         if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
                         const submittedAt = complete.submission.submittedAt as string;
-                        alreadyUploaded.add(file.name.toLocaleLowerCase());
+                        alreadyUploaded.add(String(presign.fileName).toLocaleLowerCase());
                         setSelectedTask((current) => current ? {
                           ...current,
                           submission: {
