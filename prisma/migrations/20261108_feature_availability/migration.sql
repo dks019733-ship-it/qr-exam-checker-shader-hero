@@ -14,3 +14,6 @@ CREATE TABLE "FeatureAvailability" (
 
 CREATE UNIQUE INDEX "FeatureAvailability_key_key" ON "FeatureAvailability"("key");
 CREATE INDEX "FeatureAvailability_status_untilAt_idx" ON "FeatureAvailability"("status", "untilAt");
+
+INSERT INTO "FeatureAvailability" ("id", "key", "status", "reason", "updatedBy", "createdAt", "updatedAt")
+VALUES ('feature-answer-sheet', 'answer_sheet', 'UNAVAILABLE', 'อยู่ระหว่างเตรียมพัฒนา', 'SYSTEM', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
