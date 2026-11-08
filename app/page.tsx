@@ -29,6 +29,12 @@ const tools = [
     icon: Users,
   },
   {
+    title: "เช็กชื่อเข้าเรียน",
+    description: "บันทึก มา สาย ลา ขาด แยกตามรายวิชาและวันที่ พร้อมสรุปสถานะ",
+    href: "/dashboard/attendance",
+    icon: Users,
+  },
+  {
     title: "รายวิชาที่สอน",
     description: "เพิ่มหลายรหัสวิชาและกำหนดห้องเรียนที่รับผิดชอบแยกตามรายวิชา",
     href: "/dashboard/subjects",
