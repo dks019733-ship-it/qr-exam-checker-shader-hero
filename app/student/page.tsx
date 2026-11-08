@@ -57,6 +57,11 @@ interface AssignmentItem {
   actionUrl?: string | null;
   period?: string;
   createdAt?: string;
+  assignmentId?: string;
+  mode?: "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM";
+  dueAt?: string | null;
+  files?: { id: string; fileName: string; contentType: string; sizeBytes: number }[];
+  submission?: { id: string; status: string; submittedAt: string; isLate: boolean; score: number | null; feedback: string; files: { id: string; fileName: string; contentType: string; sizeBytes: number }[] } | null;
 }
 
 interface ScoreSummaryItem {
@@ -106,6 +111,9 @@ export default function StudentPortalPage() {
   // Submission Modal state
   const [selectedTask, setSelectedTask] = useState<AssignmentItem | null>(null);
   const [submitLink, setSubmitLink] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Check existing session on load
   useEffect(() => {
@@ -119,7 +127,38 @@ export default function StudentPortalPage() {
       if (res.ok) {
         const data = await res.json();
         setStudent(data.student);
-        setAssignments(data.assignments || []);
+        const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
+        const taskData = taskResponse.ok ? await taskResponse.json() : { assignments: [] };
+        const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
+          const submitted = Boolean(task.submission);
+          const maxScore = typeof task.maxScore === "number" ? task.maxScore : 0;
+          const score = task.submission?.score;
+          const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
+          const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
+          return {
+            id: "assignment:" + task.id,
+            assignmentId: task.id,
+            mode: task.mode,
+            subject,
+            teacher: task.teacher,
+            title: task.title,
+            dueDate: task.dueAt ? new Date(task.dueAt).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "ไม่กำหนด",
+            dueAt: task.dueAt,
+            status: submitted ? "submitted" : "pending",
+            score: submitted ? (score === null ? "รอตรวจ" : String(score) + "/" + String(maxScore)) : undefined,
+            rawScore: score ?? null,
+            maxScore,
+            points: maxScore ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
+            type,
+            priority: submitted ? "low" : "high",
+            desc: task.description || "ไม่มีรายละเอียดเพิ่มเติม",
+            actionUrl: task.googleFormUrl,
+            createdAt: task.submission?.submittedAt || "",
+            files: task.files || [],
+            submission: task.submission || null,
+          } as AssignmentItem;
+        });
+        setAssignments([...(data.assignments || []), ...managedTasks]);
         setScores(data.scores || []);
         setAnnouncements(data.announcements || []);
         if (data.subjects && Array.isArray(data.subjects)) {
@@ -811,31 +850,21 @@ export default function StudentPortalPage() {
                   {selectedTask.desc}
                 </p>
 
-                {selectedTask.actionUrl ? (
+                {selectedTask.mode === "GOOGLE_FORM" && selectedTask.actionUrl ? (
                   <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 space-y-2">
-                    <p className="text-xs font-bold text-blue-900">งานนี้เป็นแบบฟอร์มออนไลน์ Google Forms</p>
-                    <a
-                      href={selectedTask.actionUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
-                    >
-                      เปิดทำแบบฟอร์ม Google Forms <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+                    <p className="text-xs font-bold text-blue-900">งานนี้ทำผ่าน Google Forms</p>
+                    <a href={selectedTask.actionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition">เปิด Google Forms <ExternalLink className="h-3.5 w-3.5" /></a>
+                  </div>
+                ) : selectedTask.mode === "TEACHER_CHECK" ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-6 text-emerald-900">งานนี้ให้ทำลงสมุดหรือกระดาษ แล้วนำไปส่งให้ครูตรวจในชั้นเรียน ไม่ต้องอัปโหลดไฟล์ในระบบ</div>
+                ) : selectedTask.mode === "SYSTEM_UPLOAD" ? (
+                  <div className="space-y-3">
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                    {selectedTask.submission ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"><p className="font-bold">ส่งงานแล้ว{selectedTask.submission.isLate ? " · ส่งล่าช้า" : ""}</p><p className="mt-1">เวลาส่ง: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>{selectedTask.submission.feedback && <p className="mt-2">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}</div> : <div className="space-y-2"><label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-[#99A799]" /> เลือกไฟล์งาน (PDF, รูปภาพ, DOC/DOCX)</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} className="block w-full rounded-2xl border border-[#ADC2A9]/40 bg-[#FEF5ED]/90 p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#D3E4CD] file:px-3 file:py-2 file:text-xs file:font-bold" />{selectedFiles.length > 0 && <p className="text-xs text-[#5e6e5e]">เลือกแล้ว {selectedFiles.length} ไฟล์</p>}</div>}
+                    {uploadError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700">{uploadError}</p>}
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5">
-                      <Upload className="h-3.5 w-3.5 text-[#99A799]" /> แนบลิงก์งาน (Google Drive / Canva / ไฟล์)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="วางลิงก์งานของคุณที่นี่..."
-                      value={submitLink}
-                      onChange={(e) => setSubmitLink(e.target.value)}
-                      className="w-full bg-[#FEF5ED]/90 border border-[#ADC2A9]/40 rounded-2xl px-4 py-3 text-xs text-[#242e24] focus:outline-none focus:border-[#99A799]"
-                    />
-                  </div>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">งานนี้มาจากสมุดคะแนนเดิม โปรดดำเนินการตามวิธีที่ครูกำหนด งานจะไม่ถูกบันทึกว่าส่งแล้วจากการกดปุ่มในหน้าจอนี้</div>
                 )}
               </div>
 
@@ -846,15 +875,34 @@ export default function StudentPortalPage() {
                 >
                   ปิด
                 </button>
-                <button
-                  onClick={() => {
-                    alert(`บันทึกข้อมูลงาน "${selectedTask.title}" เรียบร้อยแล้ว!`);
-                    setSelectedTask(null);
-                  }}
-                  className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md cursor-pointer"
-                >
-                  ยืนยันการส่งงาน
-                </button>
+                {selectedTask.mode === "SYSTEM_UPLOAD" && !selectedTask.submission ? (
+                  <button disabled={uploading || selectedFiles.length === 0} onClick={async () => {
+                    if (!selectedTask.assignmentId || !selectedFiles.length) return;
+                    setUploading(true);
+                    setUploadError("");
+                    try {
+                      for (const file of selectedFiles) {
+                        const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
+                        const presign = await presignResponse.json();
+                        if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
+                        const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+                        if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
+                        const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
+                        const complete = await completeResponse.json();
+                        if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
+                      }
+                      setSelectedTask(null);
+                      setSelectedFiles([]);
+                      await checkCurrentSession();
+                    } catch (error) {
+                      setUploadError(error instanceof Error ? error.message : "ส่งงานไม่สำเร็จ");
+                    } finally {
+                      setUploading(false);
+                    }
+                  }} className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{uploading ? "กำลังส่งไฟล์..." : "ยืนยันการส่งงาน"}</button>
+                ) : (
+                  <button onClick={() => { setSelectedTask(null); setSelectedFiles([]); setUploadError(""); }} className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md">{selectedTask.mode === "TEACHER_CHECK" ? "รับทราบ" : "ปิด"}</button>
+                )}
               </div>
             </motion.div>
           </div>
