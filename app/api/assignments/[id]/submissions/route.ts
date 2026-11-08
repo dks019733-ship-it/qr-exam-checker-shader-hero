@@ -72,30 +72,41 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   });
   if (!student) return NextResponse.json({ error: "นักเรียนไม่อยู่ในห้องเรียนนี้" }, { status: 404 });
 
-  const score = body?.score === "" || body?.score === null || body?.score === undefined ? null : Number(body.score);
-  const feedback = typeof body?.feedback === "string" ? body.feedback.trim() : "";
-  if (score !== null && (!Number.isFinite(score) || score < 0 || (assignment.maxScore !== null && score > assignment.maxScore))) {
+  const hasScore = Object.prototype.hasOwnProperty.call(body, "score");
+  const hasFeedback = Object.prototype.hasOwnProperty.call(body, "feedback");
+  const hasReviewInput = hasScore || hasFeedback;
+  const score = !hasScore || body.score === "" || body.score === null ? null : Number(body.score);
+  const feedback = hasFeedback && typeof body.feedback === "string" ? body.feedback.trim() : "";
+  if (hasScore && score !== null && (!Number.isFinite(score) || score < 0 || (assignment.maxScore !== null && score > assignment.maxScore))) {
     return NextResponse.json({ error: "คะแนนไม่ถูกต้อง" }, { status: 400 });
   }
+  if (hasFeedback && (typeof body.feedback !== "string" || body.feedback.length > 5000)) {
+    return NextResponse.json({ error: "ความคิดเห็นต้องเป็นข้อความไม่เกิน 5,000 ตัวอักษร" }, { status: 400 });
+  }
+
+  const now = new Date();
   const saved = await prisma.submission.upsert({
     where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
     create: {
       assignmentId: assignment.id,
       studentId: student.id,
-      status: "REVIEWED",
-      submittedAt: new Date(),
-      reviewedAt: new Date(),
-      score,
-      feedback,
+      status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
+      submittedAt: now,
+      ...(hasReviewInput ? {
+        reviewedAt: now,
+        score,
+        feedback,
+      } : {}),
     },
-    update: {
+    // A receipt-only retry is deliberately a no-op. In particular, it must not
+    // replace a previous score, feedback, review state, or original submit time.
+    update: hasReviewInput ? {
       status: "REVIEWED",
-      submittedAt: new Date(),
-      reviewedAt: new Date(),
-      score,
-      feedback,
-    },
-    select: { id: true, status: true, submittedAt: true, score: true, feedback: true },
+      reviewedAt: now,
+      ...(hasScore ? { score } : {}),
+      ...(hasFeedback ? { feedback } : {}),
+    } : {},
+    select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
   });
-  return NextResponse.json(saved, { status: 201 });
+  return NextResponse.json(saved);
 }
