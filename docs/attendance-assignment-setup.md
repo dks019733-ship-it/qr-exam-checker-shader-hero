@@ -29,7 +29,7 @@ Configure these server-side environment variables in Vercel for the Production a
 
 Never add these credentials to client-side variables or commit real values to Git.
 
-Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
+Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Configure bucket CORS to allow `PUT` from the production app origin (`https://ngankhongkhru.vercel.app`) and any explicitly approved Preview origin, with the `Content-Type` request header. Do not enable public bucket access. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
 
 ## Accepted files and optimization
 
