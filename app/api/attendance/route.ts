@@ -1,4 +1,6 @@
 import { featureAvailabilityResponse } from "@/lib/feature-availability";
+import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -121,21 +123,27 @@ export async function PUT(request: Request) {
         select: { id: true, date: true, topic: true },
       });
 
-      for (const record of normalized.values()) {
-        await tx.attendanceRecord.upsert({
-          where: { sessionId_studentId: { sessionId: attendance.id, studentId: record.studentId } },
-          create: {
-            sessionId: attendance.id,
-            studentId: record.studentId,
-            status: record.status as "PRESENT" | "ABSENT" | "LEAVE" | "LATE",
-            note: record.note,
-          },
-          update: {
-            status: record.status as "PRESENT" | "ABSENT" | "LEAVE" | "LATE",
-            note: record.note,
-            markedAt: new Date(),
-          },
-        });
+      const values = [...normalized.values()].map((record) => Prisma.sql`(
+        ${randomUUID()},
+        ${attendance.id},
+        ${record.studentId},
+        ${record.status}::"AttendanceStatus",
+        ${record.note},
+        NOW(),
+        NOW()
+      )`);
+      if (values.length) {
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "AttendanceRecord"
+            ("id", "sessionId", "studentId", "status", "note", "markedAt", "updatedAt")
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT ("sessionId", "studentId")
+          DO UPDATE SET
+            "status" = EXCLUDED."status",
+            "note" = EXCLUDED."note",
+            "markedAt" = EXCLUDED."markedAt",
+            "updatedAt" = EXCLUDED."updatedAt"
+        `);
       }
       return attendance;
     });
