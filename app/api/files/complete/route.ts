@@ -1,4 +1,4 @@
-import { featureAvailabilityResponse } from "@/lib/feature-availability";
+import { featureAvailabilityResponse, getFeatureAvailability } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -91,6 +91,10 @@ export async function POST(request: Request) {
     });
     if (!assignment || !studentId) return NextResponse.json({ error: "ไม่พบงานที่เปิดรับส่ง" }, { status: 404 });
 
+    const attendanceAvailability = assignment.autoMarkAttendance
+      ? await getFeatureAvailability("attendance")
+      : null;
+
     const result = await prisma.$transaction(async (tx) => {
       const submission = await tx.submission.upsert({
         where: { assignmentId_studentId: { assignmentId, studentId: studentId! } },
@@ -103,19 +107,23 @@ export async function POST(request: Request) {
         select: { id: true, fileName: true, contentType: true, sizeBytes: true },
       });
 
-      if (assignment.autoMarkAttendance && assignment.attendanceSessionId) {
-        const existing = await tx.attendanceRecord.findUnique({
-          where: { sessionId_studentId: { sessionId: assignment.attendanceSessionId, studentId: studentId! } },
-          select: { status: true },
+      if (
+        assignment.autoMarkAttendance &&
+        assignment.attendanceSessionId &&
+        attendanceAvailability?.status === "AVAILABLE"
+      ) {
+        // Only create a default PRESENT record when no teacher decision exists.
+        // skipDuplicates makes the unique (sessionId, studentId) key the atomic
+        // concurrency guard: ABSENT, LATE and LEAVE are all preserved.
+        await tx.attendanceRecord.createMany({
+          data: [{
+            sessionId: assignment.attendanceSessionId,
+            studentId: studentId!,
+            status: "PRESENT",
+            note: "เช็กชื่ออัตโนมัติจากการส่งงาน",
+          }],
+          skipDuplicates: true,
         });
-        // A leave record is an explicit teacher decision and must never be overwritten.
-        if (existing?.status !== "LEAVE") {
-          await tx.attendanceRecord.upsert({
-            where: { sessionId_studentId: { sessionId: assignment.attendanceSessionId, studentId: studentId! } },
-            create: { sessionId: assignment.attendanceSessionId, studentId: studentId!, status: "PRESENT", note: "เช็กชื่ออัตโนมัติจากการส่งงาน" },
-            update: { status: "PRESENT", note: "เช็กชื่ออัตโนมัติจากการส่งงาน", markedAt: new Date() },
-          });
-        }
       }
       return { submission, file };
     });
