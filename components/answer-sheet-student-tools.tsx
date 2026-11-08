@@ -43,7 +43,7 @@ function parseDelimitedRows(source: string): string[][] {
     }
   }
 
-  if (quoted) throw new Error("พบเครื่องหมายอัญประกาศใน CSV ที่ไม่ครบคู่");
+  if (quoted) return [];
   row.push(cell.trim());
   if (row.some((value) => value.length > 0)) rows.push(row);
   return rows;
