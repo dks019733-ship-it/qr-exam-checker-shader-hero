@@ -29,6 +29,8 @@ model User {
   generatedMaterials GeneratedMaterial[]
   googleForms   GoogleForm[]
   gradeColumns  GradeColumn[]
+  assignments   Assignment[]
+  attendanceSessions AttendanceSession[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -72,6 +74,8 @@ model Class {
   exams     Exam[]
   gradeColumns GradeColumn[]
   teachingAssignments TeachingAssignment[]
+  assignments Assignment[]
+  attendanceSessions AttendanceSession[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   @@index([ownerId])
@@ -91,6 +95,8 @@ model Student {
   identityId String?
   identity StudentIdentity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
   courseEnrollments CourseEnrollment[]
+  attendanceRecords AttendanceRecord[]
+  submissions Submission[]
   qrToken   String   @unique @default(cuid())
   createdAt DateTime @default(now())
   @@unique([classId, studentNo])
@@ -143,6 +149,8 @@ model TeachingAssignment {
   enrollments CourseEnrollment[]
   exams     Exam[]
   gradeColumns GradeColumn[]
+  assignments Assignment[]
+  attendanceSessions AttendanceSession[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([subjectId, classId])
@@ -526,4 +534,130 @@ model SiteAnnouncement {
   deploymentUrl    String?  @db.Text
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  LATE
+}
+
+enum AssignmentMode {
+  TEACHER_CHECK
+  SYSTEM_UPLOAD
+  GOOGLE_FORM
+}
+
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  REVIEWED
+  RETURNED
+}
+
+model AttendanceSession {
+  id                   String   @id @default(cuid())
+  ownerId              String
+  classId              String
+  teachingAssignmentId String
+  date                 DateTime @db.Date
+  topic                String   @default("")
+  owner                User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  classroom            Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teachingAssignment   TeachingAssignment @relation(fields: [teachingAssignmentId], references: [id], onDelete: Cascade)
+  records              AttendanceRecord[]
+  assignments          Assignment[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  @@unique([teachingAssignmentId, date])
+  @@index([ownerId, classId, date])
+}
+
+model AttendanceRecord {
+  id        String           @id @default(cuid())
+  sessionId String
+  studentId String
+  status    AttendanceStatus
+  note      String           @default("")
+  markedAt  DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@unique([sessionId, studentId])
+  @@index([studentId, updatedAt])
+}
+
+model Assignment {
+  id                   String           @id @default(cuid())
+  ownerId              String
+  classId              String
+  teachingAssignmentId String
+  attendanceSessionId  String?
+  title                String
+  description          String           @default("") @db.Text
+  mode                 AssignmentMode
+  status               AssignmentStatus @default(DRAFT)
+  googleFormUrl        String?          @db.Text
+  dueAt                DateTime?
+  maxScore             Float?
+  autoMarkAttendance   Boolean          @default(false)
+  owner                User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  classroom            Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teachingAssignment   TeachingAssignment @relation(fields: [teachingAssignmentId], references: [id], onDelete: Cascade)
+  attendanceSession    AttendanceSession? @relation(fields: [attendanceSessionId], references: [id], onDelete: SetNull)
+  files                AssignmentFile[]
+  submissions          Submission[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  @@index([ownerId, classId, status, dueAt])
+  @@index([teachingAssignmentId, createdAt])
+}
+
+model AssignmentFile {
+  id           String     @id @default(cuid())
+  assignmentId String
+  objectKey    String     @unique
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  @@index([assignmentId])
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  studentId    String
+  status       SubmissionStatus @default(SUBMITTED)
+  submittedAt  DateTime         @default(now())
+  score        Float?
+  feedback     String           @default("") @db.Text
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  files        SubmissionFile[]
+  reviewedAt   DateTime?
+  updatedAt    DateTime         @updatedAt
+  @@unique([assignmentId, studentId])
+  @@index([studentId, submittedAt])
+  @@index([assignmentId, status])
+}
+
+model SubmissionFile {
+  id           String     @id @default(cuid())
+  submissionId String
+  objectKey    String     @unique
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  @@index([submissionId])
 }
