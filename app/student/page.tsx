@@ -37,7 +37,7 @@ interface StudentProfile {
   class: string;
   school: string;
   rank?: string;
-  gpa: string;
+  courseworkScore: string;
 }
 
 interface AssignmentItem {
@@ -63,11 +63,8 @@ interface ScoreSummaryItem {
   subject: string;
   teacher: string;
   coursework: string;
-  midtermExam: string;
   courseworkScore: number;
   courseworkMax: number;
-  total: string;
-  percent: number;
 }
 
 interface AnnouncementItem {
@@ -479,9 +476,9 @@ export default function StudentPortalPage() {
                     className="cursor-pointer bg-[#FEF5ED]/90 backdrop-blur-md px-4 py-3 rounded-2xl border border-[#ADC2A9]/30 text-center min-w-[100px] shadow-sm hover:border-[#99A799] transition"
                   >
                     <div className="text-[10px] text-[#5e6e5e] font-bold flex items-center justify-center gap-1">
-                      <Trophy className="h-3 w-3 text-emerald-600" /> GPA
+                      <Trophy className="h-3 w-3 text-emerald-600" /> คะแนนเก็บรวม
                     </div>
-                    <div className="text-xl font-black text-emerald-800 mt-0.5">{student.gpa}</div>
+                    <div className="text-xl font-black text-emerald-800 mt-0.5">{student.courseworkScore}</div>
                   </div>
                 </div>
               </div>
@@ -673,41 +670,7 @@ export default function StudentPortalPage() {
                     <span className="text-xs text-[#5e6e5e]">อัปเดตจากสมุดคะแนน</span>
                   </div>
 
-                  {(() => {
-                    const totalCoursework = scores.reduce((sum, score) => sum + score.courseworkScore, 0);
-                    const totalCourseworkMax = scores.reduce((sum, score) => sum + score.courseworkMax, 0);
-                    const mascotSet = ["🦊", "🐼", "🐯", "🐸", "🐰", "🐻", "🐧", "🐱"];
-                    const mascotSeed = (student?.dbId || student?.id || student?.no || "student")
-                      .split("")
-                      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-                    const mascot = mascotSet[mascotSeed % mascotSet.length];
 
-                    return (
-                      <div className="relative overflow-hidden rounded-3xl border border-[#ADC2A9]/40 bg-gradient-to-br from-white via-[#F7FAF5] to-[#D3E4CD]/70 p-5 shadow-sm sm:p-6">
-                        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[#D3E4CD]/60 blur-2xl" />
-                        <div className="relative flex items-center gap-4">
-                          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.6rem] border border-[#ADC2A9]/40 bg-white text-5xl shadow-sm" aria-label="ตัวละครประจำตัวนักเรียน">
-                            {mascot}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-[#5e6e5e]">ตัวละครประจำตัวของ</p>
-                            <p className="mt-0.5 truncate text-base font-black text-[#242e24]">{student?.name}</p>
-                            <p className="mt-2 text-xs font-bold text-[#5e6e5e]">คะแนนเก็บสะสมทั้งหมด</p>
-                            <p className="mt-0.5 text-2xl font-black tracking-tight text-[#242e24]">
-                              {Number(totalCoursework.toFixed(2))} <span className="text-sm font-bold text-[#5e6e5e]">/ {Number(totalCourseworkMax.toFixed(2))} คะแนน</span>
-                            </p>
-                          </div>
-                          <div className="hidden rounded-2xl bg-white/80 px-4 py-3 text-center sm:block">
-                            <p className="text-[10px] font-bold text-[#5e6e5e]">วิชาที่มีคะแนน</p>
-                            <p className="text-xl font-black text-[#242e24]">{scores.filter((score) => score.courseworkMax > 0).length}</p>
-                          </div>
-                        </div>
-                        <p className="relative mt-4 text-[11px] font-medium text-[#5e6e5e]">
-                          รวมคะแนนก่อนกลางภาคและหลังกลางภาคของทุกวิชา · ไม่ใช่คะแนนเกรดสุดท้าย
-                        </p>
-                      </div>
-                    );
-                  })()}
 
                   <div className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
@@ -716,14 +679,12 @@ export default function StudentPortalPage() {
                           <tr>
                             <th className="p-4">รายวิชา / ครูผู้สอน</th>
                             <th className="p-4 text-center">คะแนนเก็บ (ก่อน + หลังกลางภาค)</th>
-                            <th className="p-4 text-center">คะแนนสอบกลางภาค</th>
-                            <th className="p-4 text-center">คะแนนรวม</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e5ece2]">
                           {scores.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="p-8 text-center text-[#5e6e5e] text-xs">
+                              <td colSpan={2} className="p-8 text-center text-[#5e6e5e] text-xs">
                                 ยังไม่มีข้อมูลคะแนนที่บันทึกในระบบ
                               </td>
                             </tr>
@@ -735,16 +696,6 @@ export default function StudentPortalPage() {
                                   <div className="text-[11px] text-[#5e6e5e] font-medium">{score.teacher}</div>
                                 </td>
                                 <td className="p-4 text-center font-bold text-[#242e24]">{score.coursework}</td>
-                                <td className="p-4 text-center font-bold text-[#242e24]">{score.midtermExam}</td>
-                                <td className="p-4 text-center">
-                                  <div className="font-black text-[#5e6e5e] text-sm">{score.total}</div>
-                                  <div className="w-16 bg-[#e5ece2] h-1.5 rounded-full mx-auto mt-1 overflow-hidden">
-                                    <div
-                                      className="bg-[#99A799] h-full rounded-full transition-all duration-500"
-                                      style={{ width: `${score.percent}%` }}
-                                    />
-                                  </div>
-                                </td>
                               </tr>
                             ))
                           )}
