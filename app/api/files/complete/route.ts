@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { verifyStudentToken } from "@/lib/student-token";
-import { isObjectStorageConfigured, sanitizeUploadName, validateUploadInput, verifyStoredObject } from "@/lib/object-storage";
+import { deleteStoredObject, isObjectStorageConfigured, sanitizeUploadName, validateUploadInput, verifyStoredObject } from "@/lib/object-storage";
 
 const EXTENSIONS: Record<string, string[]> = {
   "application/pdf": [".pdf"],
@@ -72,9 +72,18 @@ export async function POST(request: Request) {
   }
 
   try {
+    const [existingAssignmentFile, existingSubmissionFile] = await Promise.all([
+      prisma.assignmentFile.findUnique({ where: { objectKey }, select: { id: true } }),
+      prisma.submissionFile.findUnique({ where: { objectKey }, select: { id: true } }),
+    ]);
+    if (existingAssignmentFile || existingSubmissionFile) {
+      return NextResponse.json({ error: "ไฟล์นี้ถูกบันทึกแล้ว" }, { status: 409 });
+    }
+
     const stored = await verifyStoredObject(objectKey, contentType);
-    if (stored.sizeBytes !== sizeBytes || stored.contentType.toLowerCase() !== contentType) {
-      return NextResponse.json({ error: "ข้อมูลไฟล์ที่อัปโหลดไม่ตรงกับข้อมูลที่แจ้งไว้" }, { status: 400 });
+    if (stored.sizeBytes !== sizeBytes || stored.sizeBytes > Number(process.env.UPLOAD_MAX_BYTES || 20 * 1024 * 1024) || stored.contentType.toLowerCase() !== contentType) {
+      await deleteStoredObject(objectKey).catch((error) => console.error("[FileUpload] rejected object cleanup failed:", error));
+      return NextResponse.json({ error: "ข้อมูลไฟล์ที่อัปโหลดไม่ตรงกับนโยบายไฟล์" }, { status: 400 });
     }
 
     if (scope === "assignment") {
@@ -133,6 +142,13 @@ export async function POST(request: Request) {
       file: result.file,
     }, { status: 201 });
   } catch (error) {
+    const [assignmentFile, submissionFile] = await Promise.all([
+      prisma.assignmentFile.findUnique({ where: { objectKey }, select: { id: true } }).catch(() => null),
+      prisma.submissionFile.findUnique({ where: { objectKey }, select: { id: true } }).catch(() => null),
+    ]);
+    if (!assignmentFile && !submissionFile) {
+      await deleteStoredObject(objectKey).catch((cleanupError) => console.error("[FileUpload] orphan cleanup failed:", cleanupError));
+    }
     console.error("[FileUpload] completion failed:", error);
     return NextResponse.json({ error: "ตรวจสอบหรือบันทึกไฟล์ไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }
