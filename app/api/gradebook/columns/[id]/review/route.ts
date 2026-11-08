@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,9 @@ const normalized = (value: string) => value.normalize("NFC").trim().replace(/\s+
 const answerText = (answer?: FormAnswer) => answer?.textAnswers?.answers?.map((entry) => entry.value || "").join(" · ") || "";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unavailable = await featureAvailabilityResponse("gradebook");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
@@ -147,6 +151,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unavailable = await featureAvailabilityResponse("gradebook");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
