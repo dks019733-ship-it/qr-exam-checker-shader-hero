@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -22,6 +23,9 @@ const EXTENSIONS: Record<string, string[]> = {
 };
 
 export async function POST(request: Request) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   if (!isObjectStorageConfigured()) {
     return NextResponse.json({ error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า กรุณาติดต่อครูผู้ดูแล" }, { status: 503 });
   }
