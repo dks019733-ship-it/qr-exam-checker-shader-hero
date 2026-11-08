@@ -61,10 +61,18 @@ export async function POST(request: Request) {
   const classId = typeof body?.classId === "string" ? body.classId : "";
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const period = body?.period;
-  const maxScore = Number(body?.maxScore);
+  const rawMaxScore = body?.maxScore;
+  const maxScore = typeof rawMaxScore === "number" ||
+    (typeof rawMaxScore === "string" && rawMaxScore.trim() !== "")
+    ? Number(rawMaxScore)
+    : Number.NaN;
   const sourceType = body?.sourceType;
-  const sourceId = typeof body?.sourceId === "string" ? body.sourceId : "";
-  const requestedAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
+  const sourceId = typeof body?.sourceId === "string" ? body.sourceId.trim() : "";
+  const rawAssignmentId = body?.teachingAssignmentId;
+  if (rawAssignmentId !== undefined && rawAssignmentId !== null && typeof rawAssignmentId !== "string") {
+    return NextResponse.json({ error: "รหัสรายวิชาไม่ถูกต้อง" }, { status: 400 });
+  }
+  const requestedAssignmentId = typeof rawAssignmentId === "string" ? rawAssignmentId.trim() : "";
   if (!classId || !title || title.length > 120 || !periods.includes(period) || !Number.isFinite(maxScore) || maxScore <= 0) {
     return NextResponse.json({ error: "กรุณากรอกชื่องาน ช่วงคะแนน และคะแนนเต็มให้ถูกต้อง" }, { status: 400 });
   }
@@ -87,6 +95,10 @@ export async function POST(request: Request) {
     });
     if (!exam) return NextResponse.json({ error: "ไม่พบข้อสอบในห้องนี้" }, { status: 404 });
     if (exam.gradeColumn) return NextResponse.json({ error: "ข้อสอบนี้เชื่อมกับสมุดคะแนนแล้ว" }, { status: 409 });
+    if (exam.teachingAssignment &&
+      (exam.teachingAssignment.ownerId !== ownerId || exam.teachingAssignment.classId !== classId)) {
+      return NextResponse.json({ error: "รายวิชาที่ผูกกับข้อสอบไม่ตรงกับห้องเรียนหรือผู้สอน" }, { status: 409 });
+    }
     inheritedAssignmentId = exam.teachingAssignment?.id || "";
     if (requestedAssignmentId && inheritedAssignmentId && requestedAssignmentId !== inheritedAssignmentId) {
       return NextResponse.json({ error: "รายวิชาที่เลือกไม่ตรงกับรายวิชาที่ผูกไว้กับข้อสอบ" }, { status: 400 });
