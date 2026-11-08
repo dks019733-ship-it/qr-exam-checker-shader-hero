@@ -89,7 +89,8 @@ export async function GET() {
     const teacherDefault = student.class.owner?.name || "ครูผู้สอน";
 
     // Map each column to an assignment task
-    const assignments = columns.map((col) => {
+    // Exam-linked grade columns are exam results, not coursework or homework tasks in the student portal.
+    const assignments = columns.filter((col) => !col.examId).map((col) => {
       const studentScore = col.scores[0]?.score ?? null;
       const isSubmitted = studentScore !== null;
 
@@ -120,7 +121,7 @@ export async function GET() {
         desc = `แบบทดสอบวัดผลในชั้นเรียน ${col.exam?._count?.questions ? `(${col.exam._count.questions} ข้อ)` : ""}`;
       }
 
-      const periodLabel = col.period === "BEFORE_MIDTERM" ? "ก่อนกลางภาค" : col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
+      const periodLabel = col.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค";
 
       return {
         id: col.id,
@@ -142,7 +143,9 @@ export async function GET() {
       };
     });
 
-    // Group columns by subject to produce the scores summary table
+    // Non-exam gradebook columns are coursework. The teacher's MIDTERM (legacy enum)
+    // period is labelled "ก่อนกลางภาค" in the gradebook; AFTER_MIDTERM is "หลังกลางภาค".
+    // Exam-linked columns (examId) are kept separate and are not shown in this coursework summary.
     const subjectMap = new Map<
       string,
       {
@@ -150,12 +153,16 @@ export async function GET() {
         teacher: string;
         courseworkScore: number;
         courseworkMax: number;
-        midtermExamScore: number;
-        midtermExamMax: number;
       }
     >();
 
     for (const col of columns) {
+      // A column linked to an Exam is an exam score, not coursework.
+      if (col.examId) continue;
+      const studentScore = col.scores[0]?.score;
+      // An ungraded column must remain absent ("—"), not become 0/max.
+      if (studentScore === null || studentScore === undefined) continue;
+
       const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
         teachingAssignment?.subject?.name ||
@@ -171,12 +178,10 @@ export async function GET() {
               .some((value) => value.trim().toLocaleLowerCase("th-TH") === legacySubject),
           )
         : [];
-      // Never merge unlinked columns when their subject cannot be identified unambiguously.
       const subjectKey = teachingAssignment?.id
         || (legacySubject && legacyMatches.length === 0 ? `legacy:${legacySubject}` : `unlinked:${col.id}`);
 
-      const teacherName =
-        teachingAssignment?.owner?.name || teacherDefault;
+      const teacherName = teachingAssignment?.owner?.name || teacherDefault;
 
       if (!subjectMap.has(subjectKey)) {
         subjectMap.set(subjectKey, {
@@ -184,47 +189,23 @@ export async function GET() {
           teacher: teacherName,
           courseworkScore: 0,
           courseworkMax: 0,
-          midtermExamScore: 0,
-          midtermExamMax: 0,
         });
       }
 
       const entry = subjectMap.get(subjectKey)!;
-      const score = col.scores[0]?.score ?? 0;
-
-      if (col.period === "MIDTERM") {
-        // Preserve legacy MIDTERM columns as a separate exam score.
-        entry.midtermExamScore += score;
-        entry.midtermExamMax += col.maxScore;
-      } else {
-        // BEFORE_MIDTERM and AFTER_MIDTERM are both coursework periods.
-        entry.courseworkScore += score;
-        entry.courseworkMax += col.maxScore;
-      }
+      entry.courseworkScore += studentScore;
+      entry.courseworkMax += col.maxScore;
     }
 
-    const scores = Array.from(subjectMap.values()).map((item) => {
-      const totalScore = item.courseworkScore + item.midtermExamScore;
-      const totalMax = item.courseworkMax + item.midtermExamMax;
-      const percent = totalMax > 0 ? Number(((totalScore / totalMax) * 100).toFixed(1)) : 0;
-
-      return {
-        subject: item.subject,
-        teacher: item.teacher,
-        coursework: item.courseworkMax > 0
-          ? `${Number(item.courseworkScore.toFixed(2))}/${Number(item.courseworkMax.toFixed(2))}`
-          : "—",
-        midtermExam: item.midtermExamMax > 0
-          ? `${Number(item.midtermExamScore.toFixed(2))}/${Number(item.midtermExamMax.toFixed(2))}`
-          : "—",
-        courseworkScore: Number(item.courseworkScore.toFixed(2)),
-        courseworkMax: Number(item.courseworkMax.toFixed(2)),
-        total: totalMax > 0
-          ? `${Number(totalScore.toFixed(2))}/${Number(totalMax.toFixed(2))}`
-          : "—",
-        percent,
-      };
-    });
+    const scores = Array.from(subjectMap.values()).map((item) => ({
+      subject: item.subject,
+      teacher: item.teacher,
+      coursework: item.courseworkMax > 0
+        ? `${Number(item.courseworkScore.toFixed(2))}/${Number(item.courseworkMax.toFixed(2))}`
+        : "—",
+      courseworkScore: Number(item.courseworkScore.toFixed(2)),
+      courseworkMax: Number(item.courseworkMax.toFixed(2)),
+    }));
 
     // Calculate overall stats
     const totalTasks = assignments.length;
@@ -232,22 +213,6 @@ export async function GET() {
     const submittedTasks = assignments.filter((a) => a.status === "submitted").length;
     const totalEarned = assignments.reduce((sum, a) => sum + (a.rawScore ?? 0), 0);
     const totalMax = assignments.reduce((sum, a) => sum + a.maxScore, 0);
-    const overallPercent = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
-
-    // Preserve the existing Thai grade-point scale without exposing a grade column in the score table.
-    const gradePoints: number[] = scores.map(({ percent }) => {
-      if (percent >= 80) return 4;
-      if (percent >= 75) return 3.5;
-      if (percent >= 70) return 3;
-      if (percent >= 65) return 2.5;
-      if (percent >= 60) return 2;
-      if (percent >= 55) return 1.5;
-      if (percent >= 50) return 1;
-      return 0;
-    });
-    const overallGpa = gradePoints.length
-      ? (gradePoints.reduce((sum, grade) => sum + grade, 0) / gradePoints.length).toFixed(2)
-      : "—";
 
     // Dynamic announcements
     const announcements = [
@@ -290,7 +255,13 @@ export async function GET() {
         class: student.class.name,
         school: student.class.owner?.defaultLearningArea || "งานของครู",
         rank: `ห้อง ${student.class.name}`,
-        gpa: overallGpa !== "—" ? overallGpa : overallPercent > 0 ? (overallPercent / 25).toFixed(2) : "—",
+        courseworkScore: (() => {
+          const earned = scores.reduce((sum, item) => sum + item.courseworkScore, 0);
+          const maximum = scores.reduce((sum, item) => sum + item.courseworkMax, 0);
+          return maximum > 0
+            ? `${Number(earned.toFixed(2))}/${Number(maximum.toFixed(2))}`
+            : "—";
+        })(),
       },
       summary: {
         totalTasks,

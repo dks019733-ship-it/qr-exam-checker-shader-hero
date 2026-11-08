@@ -19,7 +19,7 @@ type SheetScore = { columnId: string; score: number };
 type SheetRow = { room?: string; rollNo?: string; studentNo?: string; name?: string; scores: SheetScore[] };
 
 const periods: { id: Period; label: string }[] = [
-  { id: "MIDTERM", label: "กลางภาค" },
+  { id: "MIDTERM", label: "ก่อนกลางภาค" },
   { id: "AFTER_MIDTERM", label: "หลังกลางภาค" },
 ];
 const inputClass = "rounded-xl border border-[#ddd7c9] bg-[#fffefa] px-3 py-2 text-sm outline-none focus:border-[#81927e] focus:ring-2 focus:ring-[#e0e8e0]";
