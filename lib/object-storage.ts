@@ -123,11 +123,42 @@ export async function createDownloadUrl(objectKey: string) {
   return signedUrl("GET", objectKey, 180);
 }
 
-export async function verifyStoredObject(objectKey: string) {
+export async function verifyStoredObject(objectKey: string, expectedContentType: string) {
   const response = await fetch(signedUrl("HEAD", objectKey, 60), { method: "HEAD", cache: "no-store" });
   if (!response.ok) throw new Error("OBJECT_STORAGE_HEAD_FAILED_" + response.status);
-  return {
-    sizeBytes: Number(response.headers.get("content-length") || 0),
-    contentType: response.headers.get("content-type") || "",
-  };
+  const sizeBytes = Number(response.headers.get("content-length") || 0);
+  const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (contentType !== expectedContentType) throw new Error("OBJECT_STORAGE_CONTENT_TYPE_MISMATCH");
+
+  const sampleResponse = await fetch(signedUrl("GET", objectKey, 60), {
+    headers: { Range: "bytes=0-15" },
+    cache: "no-store",
+  });
+  if (!sampleResponse.ok && sampleResponse.status !== 206) throw new Error("OBJECT_STORAGE_SAMPLE_FAILED");
+  const bytes = new Uint8Array(await sampleResponse.arrayBuffer());
+  const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
+  let signatureValid = false;
+  switch (expectedContentType) {
+    case "application/pdf":
+      signatureValid = new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-";
+      break;
+    case "image/jpeg":
+      signatureValid = starts(0xff, 0xd8, 0xff);
+      break;
+    case "image/png":
+      signatureValid = starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+      break;
+    case "image/webp":
+      signatureValid = new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" &&
+        new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP";
+      break;
+    case "application/msword":
+      signatureValid = starts(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+      break;
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+      signatureValid = starts(0x50, 0x4b, 0x03, 0x04);
+      break;
+  }
+  if (!signatureValid) throw new Error("OBJECT_STORAGE_FILE_SIGNATURE_INVALID");
+  return { sizeBytes, contentType };
 }
