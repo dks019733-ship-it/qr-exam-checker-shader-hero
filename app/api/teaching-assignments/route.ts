@@ -101,7 +101,8 @@ export async function POST(request: Request) {
       }
 
       return { subject, assignments };
-    }, { timeout: 10000 });    return NextResponse.json(created, { status: 201 });
+    }, { timeout: 10000 });
+    return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("[TeachingAssignments] create failed", error);
     return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" }, { status: 500 });
