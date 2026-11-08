@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +7,9 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string; submissionId: string }> },
 ) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบครู" }, { status: 401 });
 
