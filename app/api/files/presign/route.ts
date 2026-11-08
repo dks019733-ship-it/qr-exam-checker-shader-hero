@@ -12,6 +12,15 @@ import {
   validateUploadInput,
 } from "@/lib/object-storage";
 
+const EXTENSIONS: Record<string, string[]> = {
+  "application/pdf": [".pdf"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+  "application/msword": [".doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+};
+
 export async function POST(request: Request) {
   if (!isObjectStorageConfigured()) {
     return NextResponse.json({ error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า กรุณาติดต่อครูผู้ดูแล" }, { status: 503 });
@@ -24,7 +33,8 @@ export async function POST(request: Request) {
   const contentType = typeof body?.contentType === "string" ? body.contentType.toLowerCase() : "";
   const sizeBytes = Number(body?.sizeBytes);
   const validationError = validateUploadInput(contentType, sizeBytes);
-  if (!scope || !parentId || !fileName || validationError) {
+  const extensionMatches = (EXTENSIONS[contentType] ?? []).some((extension) => fileName.toLowerCase().endsWith(extension));
+  if (!scope || !parentId || !fileName || validationError || !extensionMatches) {
     return NextResponse.json({ error: validationError || "ข้อมูลไฟล์ไม่ถูกต้อง" }, { status: 400 });
   }
 
