@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +17,9 @@ function isAllowedGoogleFormUrl(value: string) {
 }
 
 export async function GET(request: Request) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
 
@@ -34,6 +38,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
 
