@@ -1,3 +1,4 @@
+import { FeatureAvailabilityGate } from "@/components/feature-availability-gate";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { AnswerEntry } from "@/components/answer-entry";
