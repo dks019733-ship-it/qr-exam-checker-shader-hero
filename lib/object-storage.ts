@@ -51,7 +51,12 @@ function getConfig() {
   return cachedConfig;
 }
 
-function signedUrl(method: "PUT" | "GET" | "HEAD", objectKey: string, expiresIn: number) {
+function signedUrl(
+  method: "PUT" | "GET" | "HEAD" | "DELETE",
+  objectKey: string,
+  expiresIn: number,
+  extraHeaders: Record<string, string> = {},
+) {
   const config = getConfig();
   const url = new URL(config.endpoint);
   const canonicalUri = "/" + rfc3986(config.bucket) + "/" + objectKey.split("/").map(rfc3986).join("/");
@@ -62,33 +67,26 @@ function signedUrl(method: "PUT" | "GET" | "HEAD", objectKey: string, expiresIn:
   const service = "s3";
   const credentialScope = dateStamp + "/" + region + "/" + service + "/aws4_request";
 
+  const normalizedHeaders: Record<string, string> = { host: url.host };
+  for (const [name, value] of Object.entries(extraHeaders)) normalizedHeaders[name.toLowerCase()] = value.trim();
+  const signedHeaderNames = Object.keys(normalizedHeaders).sort();
+  const signedHeaders = signedHeaderNames.join(";");
+  const canonicalHeaders = signedHeaderNames.map((name) => name + ":" + normalizedHeaders[name] + "\n").join("");
+
   const parameters: [string, string][] = [
     ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
     ["X-Amz-Credential", config.accessKey + "/" + credentialScope],
     ["X-Amz-Date", amzDate],
     ["X-Amz-Expires", String(expiresIn)],
-    ["X-Amz-SignedHeaders", "host"],
+    ["X-Amz-SignedHeaders", signedHeaders],
   ];
   const canonicalQuery = parameters
     .map(([key, value]) => [rfc3986(key), rfc3986(value)] as const)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => key + "=" + value)
     .join("&");
-  const canonicalHeaders = "host:" + url.host + "\n";
-  const canonicalRequest = [
-    method,
-    canonicalUri,
-    canonicalQuery,
-    canonicalHeaders,
-    "host",
-    "UNSIGNED-PAYLOAD",
-  ].join("\n");
-  const stringToSign = [
-    "AWS4-HMAC-SHA256",
-    amzDate,
-    credentialScope,
-    sha256(canonicalRequest),
-  ].join("\n");
+  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256(canonicalRequest)].join("\n");
 
   const dateKey = hmac("AWS4" + config.secretKey, dateStamp);
   const regionKey = hmac(dateKey, region);
