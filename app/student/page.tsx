@@ -920,8 +920,8 @@ export default function StudentPortalPage() {
                             status: "SUBMITTED",
                             submittedAt,
                             isLate: Boolean(current.dueAt && new Date(submittedAt) > new Date(current.dueAt)),
-                            score: current.submission?.score ?? null,
-                            feedback: current.submission?.feedback ?? "",
+                            score: current.submission?.status === "RETURNED" ? null : current.submission?.score ?? null,
+                            feedback: current.submission?.status === "RETURNED" ? "" : current.submission?.feedback ?? "",
                             files: [...(current.submission?.files || []), complete.file],
                           },
                         } : current);
