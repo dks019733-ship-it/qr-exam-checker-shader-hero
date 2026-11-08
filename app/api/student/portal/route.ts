@@ -89,7 +89,8 @@ export async function GET() {
     const teacherDefault = student.class.owner?.name || "ครูผู้สอน";
 
     // Map each column to an assignment task
-    const assignments = columns.map((col) => {
+    // Exam-linked grade columns are exam results, not coursework or homework tasks in the student portal.
+    const assignments = columns.filter((col) => !col.examId).map((col) => {
       const studentScore = col.scores[0]?.score ?? null;
       const isSubmitted = studentScore !== null;
 
@@ -120,7 +121,7 @@ export async function GET() {
         desc = `แบบทดสอบวัดผลในชั้นเรียน ${col.exam?._count?.questions ? `(${col.exam._count.questions} ข้อ)` : ""}`;
       }
 
-      const periodLabel = col.period === "BEFORE_MIDTERM" ? "ก่อนกลางภาค" : col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
+      const periodLabel = col.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค";
 
       return {
         id: col.id,
@@ -142,10 +143,9 @@ export async function GET() {
       };
     });
 
-    // Gradebook columns are coursework scores for the student portal.
-    // BEFORE_MIDTERM and AFTER_MIDTERM are the teacher's two coursework periods.
-    // Do not infer that a GradeColumn with the legacy MIDTERM enum is an exam result:
-    // actual exam results must be represented and displayed through a separate exam-score field.
+    // Non-exam gradebook columns are coursework. The teacher's MIDTERM (legacy enum)
+    // period is labelled "ก่อนกลางภาค" in the gradebook; AFTER_MIDTERM is "หลังกลางภาค".
+    // Exam-linked columns (examId) are kept separate and are not shown in this coursework summary.
     const subjectMap = new Map<
       string,
       {
@@ -157,6 +157,12 @@ export async function GET() {
     >();
 
     for (const col of columns) {
+      // A column linked to an Exam is an exam score, not coursework.
+      if (col.examId) continue;
+      const studentScore = col.scores[0]?.score;
+      // An ungraded column must remain absent ("—"), not become 0/max.
+      if (studentScore === null || studentScore === undefined) continue;
+
       const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
         teachingAssignment?.subject?.name ||
@@ -187,7 +193,7 @@ export async function GET() {
       }
 
       const entry = subjectMap.get(subjectKey)!;
-      entry.courseworkScore += col.scores[0]?.score ?? 0;
+      entry.courseworkScore += studentScore;
       entry.courseworkMax += col.maxScore;
     }
 
