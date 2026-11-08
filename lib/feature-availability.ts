@@ -17,7 +17,7 @@ export type FeatureState = "AVAILABLE" | "UNAVAILABLE" | "MAINTENANCE";
 
 export async function getFeatureAvailability(key: FeatureKey) {
   const row = await prisma.featureAvailability.findUnique({ where: { key } });
-  if (!row || row.status === "AVAILABLE" || (row.untilAt && row.untilAt.getTime() <= Date.now())) {
+  if (!row && key === "answer_sheet") {\n    return { key, name: FEATURE_CATALOG[key], status: "UNAVAILABLE" as const, reason: "อยู่ระหว่างเตรียมพัฒนา", untilAt: null };\n  }\n  if (!row || row.status === "AVAILABLE" || (row.untilAt && row.untilAt.getTime() <= Date.now())) {
     return { key, name: FEATURE_CATALOG[key], status: "AVAILABLE" as const, reason: "", untilAt: null };
   }
   return { key, name: FEATURE_CATALOG[key], status: row.status, reason: row.reason, untilAt: row.untilAt };
