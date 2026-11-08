@@ -1,8 +1,12 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบครู" }, { status: 401 });
   const { id } = await context.params;
@@ -47,6 +51,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบครู" }, { status: 401 });
   const { id } = await context.params;
