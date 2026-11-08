@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { compressImageBalanced } from "@/lib/client-file-compression";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   GraduationCap,
@@ -881,7 +882,8 @@ export default function StudentPortalPage() {
                     setUploading(true);
                     setUploadError("");
                     try {
-                      for (const file of selectedFiles) {
+                      for (const originalFile of selectedFiles) {
+                        const file = await compressImageBalanced(originalFile);
                         const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const presign = await presignResponse.json();
                         if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
