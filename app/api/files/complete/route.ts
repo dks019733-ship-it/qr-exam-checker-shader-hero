@@ -162,6 +162,9 @@ export async function POST(request: Request) {
     if (!assignmentFile && !submissionFile) {
       await deleteStoredObject(objectKey).catch((cleanupError) => console.error("[FileUpload] orphan cleanup failed:", cleanupError));
     }
+    if (error instanceof Error && error.message === "SUBMISSION_ALREADY_REVIEWED") {
+      return NextResponse.json({ error: "งานนี้ตรวจแล้ว ไม่สามารถเพิ่มหรือเปลี่ยนไฟล์ส่งงานได้" }, { status: 409 });
+    }
     console.error("[FileUpload] completion failed:", error);
     return NextResponse.json({ error: "ตรวจสอบหรือบันทึกไฟล์ไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
   }
