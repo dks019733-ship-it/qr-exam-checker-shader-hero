@@ -53,7 +53,6 @@ export async function GET() {
         teachingAssignment: {
           include: {
             subject: { select: { code: true, name: true } },
-            owner: { select: { name: true } },
           },
         },
         scores: {
@@ -73,7 +72,11 @@ export async function GET() {
     ]);
 
     const resolveTeachingAssignment = (column: (typeof columns)[number]) => {
-      if (column.teachingAssignment) return column.teachingAssignment;
+      // Only trust links that resolve to an assignment owned by this teacher in this student's classroom.
+      const ownedClassAssignment = column.teachingAssignment
+        ? classTeachingAssignments.find((assignment) => assignment.id === column.teachingAssignment?.id)
+        : null;
+      if (ownedClassAssignment) return ownedClassAssignment;
       const legacySubject = (column.exam?.subject || column.googleForm?.material?.subject || "").trim().toLocaleLowerCase("th-TH");
       if (!legacySubject) return null;
       const matches = classTeachingAssignments.filter((assignment) =>
