@@ -48,6 +48,19 @@ export async function POST(request: Request) {
   const byStudentCode = new Map(existingStudents.map((student) => [student.studentNo, student]));
   // Repair records from earlier imports that stored the roll number as the student code.
   const legacyByRollNo = new Map(existingStudents.filter((student) => !student.rollNo).map((student) => [student.studentNo, student]));
+  const existingRollNoRows = await prisma.student.findMany({
+    where: { classId: parsed.data.classId, rollNo: { in: oldRollNos } },
+    select: { id: true, rollNo: true },
+  });
+  const targetStudentIds = new Set(normalized.map((row) =>
+    (byStudentCode.get(row.studentNo) || legacyByRollNo.get(row.rollNo))?.id
+  ).filter((id): id is string => Boolean(id)));
+  const conflictingRollNo = existingRollNoRows.find((existing) =>
+    !targetStudentIds.has(existing.id) && normalized.some((row) => row.rollNo === existing.rollNo)
+  );
+  if (conflictingRollNo) {
+    return NextResponse.json({ error: "เลขที่ในข้อมูลนำเข้าซ้ำกับนักเรียนที่มีอยู่แล้วในห้องเรียน" }, { status: 409 });
+  }
 
   const [assignments, teacher] = await Promise.all([
     prisma.teachingAssignment.findMany({
