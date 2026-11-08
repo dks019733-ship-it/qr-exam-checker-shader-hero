@@ -62,10 +62,11 @@ interface AssignmentItem {
 interface ScoreSummaryItem {
   subject: string;
   teacher: string;
-  midterm: string;
-  quizTotal: string;
+  coursework: string;
+  midtermExam: string;
+  courseworkScore: number;
+  courseworkMax: number;
   total: string;
-  grade: string;
   percent: number;
 }
 
@@ -667,10 +668,46 @@ export default function StudentPortalPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-2">
                     <h3 className="text-sm font-extrabold text-[#242e24]">
-                      สรุปคะแนนสอบและเกรดประเมินผล
+                      สรุปคะแนนเก็บและผลการเรียน
                     </h3>
                     <span className="text-xs text-[#5e6e5e]">อัปเดตจากสมุดคะแนน</span>
                   </div>
+
+                  {(() => {
+                    const totalCoursework = scores.reduce((sum, score) => sum + score.courseworkScore, 0);
+                    const totalCourseworkMax = scores.reduce((sum, score) => sum + score.courseworkMax, 0);
+                    const mascotSet = ["🦊", "🐼", "🐯", "🐸", "🐰", "🐻", "🐧", "🐱"];
+                    const mascotSeed = (student?.dbId || student?.id || student?.no || "student")
+                      .split("")
+                      .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                    const mascot = mascotSet[mascotSeed % mascotSet.length];
+
+                    return (
+                      <div className="relative overflow-hidden rounded-3xl border border-[#ADC2A9]/40 bg-gradient-to-br from-white via-[#F7FAF5] to-[#D3E4CD]/70 p-5 shadow-sm sm:p-6">
+                        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[#D3E4CD]/60 blur-2xl" />
+                        <div className="relative flex items-center gap-4">
+                          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[1.6rem] border border-[#ADC2A9]/40 bg-white text-5xl shadow-sm" aria-label="ตัวละครประจำตัวนักเรียน">
+                            {mascot}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-[#5e6e5e]">ตัวละครประจำตัวของ</p>
+                            <p className="mt-0.5 truncate text-base font-black text-[#242e24]">{student?.name}</p>
+                            <p className="mt-2 text-xs font-bold text-[#5e6e5e]">คะแนนเก็บสะสมทั้งหมด</p>
+                            <p className="mt-0.5 text-2xl font-black tracking-tight text-[#242e24]">
+                              {Number(totalCoursework.toFixed(2))} <span className="text-sm font-bold text-[#5e6e5e]">/ {Number(totalCourseworkMax.toFixed(2))} คะแนน</span>
+                            </p>
+                          </div>
+                          <div className="hidden rounded-2xl bg-white/80 px-4 py-3 text-center sm:block">
+                            <p className="text-[10px] font-bold text-[#5e6e5e]">วิชาที่มีคะแนน</p>
+                            <p className="text-xl font-black text-[#242e24]">{scores.filter((score) => score.courseworkMax > 0).length}</p>
+                          </div>
+                        </div>
+                        <p className="relative mt-4 text-[11px] font-medium text-[#5e6e5e]">
+                          รวมคะแนนก่อนกลางภาคและหลังกลางภาคของทุกวิชา · ไม่ใช่คะแนนเกรดสุดท้าย
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   <div className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-white shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
@@ -678,17 +715,16 @@ export default function StudentPortalPage() {
                         <thead className="bg-[#FEF5ED] text-[#242e24] font-black border-b border-[#ADC2A9]/30">
                           <tr>
                             <th className="p-4">รายวิชา / ครูผู้สอน</th>
-                            <th className="p-4 text-center">คะแนนกลางภาค</th>
-                            <th className="p-4 text-center">คะแนนเก็บย่อย</th>
+                            <th className="p-4 text-center">คะแนนเก็บ (ก่อน + หลังกลางภาค)</th>
+                            <th className="p-4 text-center">คะแนนสอบกลางภาค</th>
                             <th className="p-4 text-center">คะแนนรวม</th>
-                            <th className="p-4 text-center">ระดับเกรด</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e5ece2]">
                           {scores.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="p-8 text-center text-[#5e6e5e] text-xs">
-                                ยังไม่มีข้อมูลคะแนนสอบที่บันทึกในระบบ
+                              <td colSpan={4} className="p-8 text-center text-[#5e6e5e] text-xs">
+                                ยังไม่มีข้อมูลคะแนนที่บันทึกในระบบ
                               </td>
                             </tr>
                           ) : (
@@ -698,8 +734,8 @@ export default function StudentPortalPage() {
                                   <div className="font-black text-[#242e24] text-sm">{score.subject}</div>
                                   <div className="text-[11px] text-[#5e6e5e] font-medium">{score.teacher}</div>
                                 </td>
-                                <td className="p-4 text-center font-bold text-[#242e24]">{score.midterm}</td>
-                                <td className="p-4 text-center font-bold text-[#242e24]">{score.quizTotal}</td>
+                                <td className="p-4 text-center font-bold text-[#242e24]">{score.coursework}</td>
+                                <td className="p-4 text-center font-bold text-[#242e24]">{score.midtermExam}</td>
                                 <td className="p-4 text-center">
                                   <div className="font-black text-[#5e6e5e] text-sm">{score.total}</div>
                                   <div className="w-16 bg-[#e5ece2] h-1.5 rounded-full mx-auto mt-1 overflow-hidden">
@@ -708,11 +744,6 @@ export default function StudentPortalPage() {
                                       style={{ width: `${score.percent}%` }}
                                     />
                                   </div>
-                                </td>
-                                <td className="p-4 text-center">
-                                  <span className="inline-block font-black bg-[#D3E4CD] text-[#242e24] px-3 py-1 rounded-xl text-xs border border-[#ADC2A9]/40 shadow-sm">
-                                    {score.grade}
-                                  </span>
                                 </td>
                               </tr>
                             ))

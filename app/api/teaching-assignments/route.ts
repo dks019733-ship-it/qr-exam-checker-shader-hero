@@ -28,53 +28,83 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const code = typeof body?.code === "string" ? body.code.trim().toUpperCase() : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";
-  const classId = typeof body?.classId === "string" ? body.classId : "";
-  if (!code || code.length > 40 || !name || name.length > 120 || !classId) {
-    return NextResponse.json({ error: "กรุณาระบุรหัสวิชา ชื่อวิชา และห้องเรียนให้ถูกต้อง" }, { status: 400 });
+  const requestedClassIds: unknown[] = Array.isArray(body?.classIds)
+    ? body.classIds
+    : typeof body?.classId === "string" ? [body.classId] : [];
+  const hasInvalidClassId = requestedClassIds.some(
+    (id) => typeof id !== "string" || !id.trim(),
+  );
+  const classIds: string[] = Array.from(new Set(
+    requestedClassIds.map((id) => typeof id === "string" ? id.trim() : ""),
+  ));
+  if (
+    !code || code.length > 40 ||
+    !name || name.length > 120 ||
+    !classIds.length || hasInvalidClassId ||
+    requestedClassIds.length > 50 || classIds.length > 50
+  ) {
+    return NextResponse.json({ error: "กรุณาระบุรหัสวิชา ชื่อวิชา และเลือกห้องเรียนอย่างน้อย 1 ห้อง (ไม่เกิน 50 ห้อง)" }, { status: 400 });
   }
 
-  const classroom = await prisma.class.findFirst({
-    where: { id: classId, ownerId },
+  const classrooms = await prisma.class.findMany({
+    where: { id: { in: classIds }, ownerId },
     select: { id: true },
   });
-  if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
+  if (classrooms.length !== classIds.length) {
+    return NextResponse.json({ error: "มีห้องเรียนที่ไม่พบหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
+  }
 
   try {
-    const assignment = await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const subject = await tx.subject.upsert({
         where: { ownerId_code: { ownerId, code } },
         create: { id: crypto.randomUUID(), ownerId, code, name },
         update: { name },
       });
-      const teachingAssignment = await tx.teachingAssignment.upsert({
-        where: { subjectId_classId: { subjectId: subject.id, classId } },
-        create: { id: crypto.randomUUID(), ownerId, subjectId: subject.id, classId },
-        update: {},
-        include: {
-          subject: { select: { id: true, code: true, name: true } },
-          classroom: { select: { id: true, name: true } },
-        },
+
+      // Bulk-create missing class assignments; the compound unique key makes retries idempotent.
+      await tx.teachingAssignment.createMany({
+        data: classIds.map((classId) => ({
+          id: crypto.randomUUID(),
+          ownerId,
+          subjectId: subject.id,
+          classId,
+        })),
+        skipDuplicates: true,
       });
-      const students = await tx.student.findMany({
-        where: { classId, isActive: true },
-        select: { id: true },
+
+      const assignments = await tx.teachingAssignment.findMany({
+        where: { ownerId, subjectId: subject.id, classId: { in: classIds } },
+        select: { id: true, classId: true },
       });
-      if (students.length) {
+      if (assignments.length !== classIds.length) {
+        throw new Error("Unable to resolve all teaching assignments after upsert");
+      }
+
+      const assignmentByClassId = new Map(assignments.map((assignment) => [assignment.classId, assignment.id]));
+      const activeStudents = await tx.student.findMany({
+        where: { classId: { in: classIds }, isActive: true },
+        select: { id: true, classId: true },
+      });
+      const enrollments = activeStudents.flatMap((student) => {
+        const assignmentId = assignmentByClassId.get(student.classId);
+        return assignmentId
+          ? [{ id: crypto.randomUUID(), assignmentId, studentId: student.id }]
+          : [];
+      });
+
+      if (enrollments.length) {
         await tx.courseEnrollment.createMany({
-          data: students.map((student) => ({
-            id: crypto.randomUUID(),
-            assignmentId: teachingAssignment.id,
-            studentId: student.id,
-          })),
+          data: enrollments,
           skipDuplicates: true,
         });
       }
-      return teachingAssignment;
-    });
-    return NextResponse.json(assignment, { status: 201 });
+
+      return { subject, assignments };
+    }, { timeout: 10000 });
+    return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("[TeachingAssignments] create failed", error);
-    const detail = error instanceof Error ? error.message : "สร้างรายวิชาไม่สำเร็จ";
-    return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ: " + detail }, { status: 500 });
+    return NextResponse.json({ error: "สร้างรายวิชาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" }, { status: 500 });
   }
 }

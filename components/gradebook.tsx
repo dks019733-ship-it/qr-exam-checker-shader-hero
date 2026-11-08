@@ -10,10 +10,11 @@ type Classroom = { id: string; name: string };
 type Student = { id: string; rollNo: string; studentNo: string; name: string };
 type Score = { studentId: string; score: number | null };
 type PendingFormScore = { id: string; responseId: string; rollNo: string; studentName: string; room: string; manualReviewRequired: boolean; score: number; submittedAt: string | null };
-type Column = { id: string; title: string; period: Period; maxScore: number; examId: string | null; googleFormId: string | null; scores: Score[]; pendingFormScores: PendingFormScore[]; exam: { title: string } | null; googleForm: { material: { title: string } } | null };
+type Column = { id: string; title: string; period: Period; maxScore: number; examId: string | null; googleFormId: string | null; scores: Score[]; pendingFormScores: PendingFormScore[]; exam: { title: string } | null; googleForm: { material: { title: string } } | null; teachingAssignment: { id: string; subject: { id: string; code: string; name: string } } | null };
 type ExamOption = { id: string; title: string; classId: string | null; _count: { questions: number }; gradeColumn: { id: string } | null };
 type FormOption = { id: string; material: { title: string }; gradeColumn: { id: string } | null };
-type Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; matchingStudents?: (Student & { className: string })[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[] };
+type TeachingAssignmentOption = { id: string; subject: { id: string; code: string; name: string }; classroom: Classroom };
+type Payload = { classes: Classroom[]; classroom?: Classroom; students?: Student[]; matchingStudents?: (Student & { className: string })[]; columns?: Column[]; exams: ExamOption[]; googleForms: FormOption[]; teachingAssignments?: TeachingAssignmentOption[] };
 type SheetScore = { columnId: string; score: number };
 type SheetRow = { room?: string; rollNo?: string; studentNo?: string; name?: string; scores: SheetScore[] };
 
@@ -34,6 +35,8 @@ export function Gradebook() {
   const [maxScore, setMaxScore] = useState("10");
   const [sourceType, setSourceType] = useState("manual");
   const [sourceId, setSourceId] = useState("");
+  const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("__auto__");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -41,6 +44,13 @@ export function Gradebook() {
   const [importRows, setImportRows] = useState<SheetRow[]>([]);
   const [importFile, setImportFile] = useState("");
   const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({});
+  const teachingAssignments = useMemo(() => payload?.teachingAssignments || [], [payload?.teachingAssignments]);
+  const allColumns = payload?.columns || [];
+  const columns = useMemo(() => {
+    if (subjectFilter === "all" || subjectFilter === "__auto__") return allColumns;
+    if (subjectFilter === "__unassigned__") return allColumns.filter((column) => !column.teachingAssignment);
+    return allColumns.filter((column) => column.teachingAssignment?.id === subjectFilter);
+  }, [allColumns, subjectFilter]);
 
   const load = useCallback(async (selectedId = classId) => {
     const response = await fetch(selectedId ? `/api/gradebook?classId=${encodeURIComponent(selectedId)}` : "/api/gradebook");
@@ -54,11 +64,22 @@ export function Gradebook() {
 
   useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, []);
   useEffect(() => { if (classId) void load(classId).catch((error) => setMessage(error.message)); }, [classId]);
+  useEffect(() => {
+    if (payload?.classroom?.id !== classId || subjectFilter !== "__auto__") return;
+    const firstLinked = teachingAssignments.find((item) =>
+      allColumns.some((column) => column.teachingAssignment?.id === item.id),
+    );
+    setSubjectFilter(firstLinked?.id || (allColumns.some((column) => !column.teachingAssignment) ? "__unassigned__" : teachingAssignments[0]?.id || "all"));
+  }, [payload?.classroom?.id, classId, subjectFilter, teachingAssignments, allColumns]);
+  useEffect(() => {
+    if (!teachingAssignments.some((item) => item.id === teachingAssignmentId)) {
+      setTeachingAssignmentId(teachingAssignments.length === 1 ? teachingAssignments[0].id : "");
+    }
+  }, [teachingAssignments, teachingAssignmentId]);
 
   const students = payload?.students || [];
   const sortedStudents = useMemo(() => [...students].sort((a, b) => (a.rollNo || a.studentNo).localeCompare(b.rollNo || b.studentNo, "th", { numeric: true }) || a.studentNo.localeCompare(b.studentNo, "th", { numeric: true })), [students]);
   const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
-  const columns = payload?.columns || [];
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
   const scoreAt = (column: Column, studentId: string) => column.scores.find((score) => score.studentId === studentId)?.score ?? null;
@@ -71,10 +92,11 @@ export function Gradebook() {
     if (!classId) return;
     setBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/gradebook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, title, period, maxScore: Number(maxScore), sourceType, sourceId }) });
+      const response = await fetch("/api/gradebook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, title, period, maxScore: Number(maxScore), sourceType, sourceId, teachingAssignmentId: teachingAssignmentId || null }) });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || "เพิ่มช่องคะแนนไม่สำเร็จ");
       setShowAdd(false); setTitle(""); setSourceId("");
+      setSubjectFilter(teachingAssignmentId || "all");
       let notice = "เพิ่มช่องคะแนนแล้ว";
       if (sourceType === "google_form") {
         const sync = await fetch(`/api/gradebook/columns/${body.id}/sync`, { method: "POST" });
@@ -84,6 +106,25 @@ export function Gradebook() {
       await load(classId); setMessage(notice);
     } catch (error) { setMessage(error instanceof Error ? error.message : "เพิ่มช่องคะแนนไม่สำเร็จ"); }
     finally { setBusy(false); }
+  }
+
+  async function updateColumnSubject(column: Column, nextAssignmentId: string) {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/gradebook/columns/${column.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ teachingAssignmentId: nextAssignmentId || null }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "เปลี่ยนรายวิชาไม่สำเร็จ");
+      setSubjectFilter(nextAssignmentId || "all");
+      setSelectedColumns([]);
+      await load(classId);
+      setMessage("เชื่อมรายวิชากับช่องคะแนนแล้ว");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "เปลี่ยนรายวิชาไม่สำเร็จ");
+    } finally { setBusy(false); }
   }
 
   async function saveScore(column: Column, student: Student) {
@@ -259,7 +300,19 @@ export function Gradebook() {
   return <main className="min-h-screen bg-[#f3f1e9] p-4 text-[#303832] sm:p-8"><div className="mx-auto max-w-7xl">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">สมุดคะแนนออนไลน์</h1><p className="mt-2 text-sm text-slate-600">บันทึกคะแนนงาน/บทในช่วงกลางภาคหรือหลังกลางภาค พร้อมรวมคะแนนตามช่องใน SGS</p></div><div className="flex flex-wrap gap-2"><button onClick={exportCsv} disabled={!students.length} className="inline-flex items-center rounded-lg border px-3 py-2 text-sm disabled:opacity-50"><Download className="mr-2 h-4 w-4" />ส่งออกคะแนน</button><Link href="/dashboard/classes" className="rounded-lg border px-3 py-2 text-sm">จัดการห้องเรียน</Link></div></div>
-      <div className="mt-5 flex flex-wrap items-center gap-3"><label className="text-sm font-medium">ห้องเรียน</label><select className={inputClass} value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span className="text-sm text-slate-500">{students.length} คน</span></div>
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <label className="text-sm font-medium">ห้องเรียน</label>
+        <select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); }}>
+          <option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        </select>
+        <label className="text-sm font-medium">รายวิชา</label>
+        <select className={inputClass} value={subjectFilter === "__auto__" ? "all" : subjectFilter} onChange={(event) => { setSubjectFilter(event.target.value); setSelectedColumns([]); }} disabled={!classId || payload?.classroom?.id !== classId}>
+          <option value="all">ทุกวิชา</option>
+          <option value="__unassigned__">ยังไม่ผูกรายวิชา</option>
+          {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
+        </select>
+        <span className="text-sm text-slate-500">{students.length} คน · {columns.length} ช่องคะแนน</span>
+      </div>
     </header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
     {!payload ? <div className="mt-6 flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลดสมุดคะแนน</div> : !payload.classes.length ? <section className="mt-5 rounded-2xl border bg-white p-8 text-center"><p className="font-medium">ยังไม่มีห้องเรียน</p><Link href="/dashboard/classes" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">ไปจัดการห้องเรียน</Link></section> : !classId ? null : <>
@@ -277,9 +330,28 @@ export function Gradebook() {
       </section>}
       <section className="mt-5 overflow-hidden rounded-2xl border border-[#e2ddcf] bg-[#fffefa] shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e9e3d7] p-4 sm:p-5"><div><h2 className="font-semibold">{periods.find((item) => item.id === period)?.label}</h2><p className="mt-1 text-xs text-slate-500">คะแนนจาก Google Forms นำเข้าตามคะแนนจริงในฟอร์ม ครูแก้คะแนนได้โดยไม่จำกัดคะแนนเต็ม</p></div><div className="flex flex-wrap gap-2">{selectedColumns.length > 0 && <button onClick={() => void deleteSelectedColumns()} disabled={busy} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700">ลบที่เลือก ({selectedColumns.length})</button>}<button onClick={() => { setShowImport((value) => !value); setMessage(""); }} className="inline-flex items-center rounded-xl border border-[#d9dfd5] px-3 py-2 text-sm"><FileSpreadsheet className="mr-1.5 h-4 w-4" />นำเข้าคะแนน Excel</button><button onClick={() => { setSourceType("manual"); setSourceId(""); setTitle(""); setMaxScore("10"); setShowAdd((value) => !value); }} className="inline-flex items-center rounded-xl bg-[#425a49] px-3 py-2 text-sm text-white"><Plus className="mr-1.5 h-4 w-4" />เพิ่มงาน / บท</button></div></div>
         {showImport && <div className="border-b border-[#e9e3d7] bg-[#f7f6f0] p-4"><div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"><div><p className="text-sm font-medium">นำคะแนนจาก Excel เข้า {payload?.classroom?.name}</p><p className="mt-1 text-xs text-slate-600">จับคู่นักเรียนด้วยเลขที่หรือรหัส แล้วใช้ชื่อช่วยยืนยัน · ถ้าไฟล์มีคอลัมน์ห้อง ระบบจะกันข้อมูลต่างห้อง · ช่องว่างไม่เปลี่ยนคะแนนเดิม · คะแนนเดิมของงานเดียวกันจะถูกแทนด้วยคะแนนในไฟล์</p><div className="mt-3 flex flex-wrap gap-2"><label className="inline-flex cursor-pointer items-center rounded-lg bg-white px-3 py-2 text-sm ring-1 ring-[#d9dfd5]"><Upload className="mr-2 h-4 w-4" />{importFile || "เลือกไฟล์ Excel"}<input type="file" accept=".xlsx,.xls,.csv" className="sr-only" onChange={(event) => void readScoreFile(event.target.files?.[0])} /></label><button onClick={downloadScoreTemplate} disabled={!students.length || !columns.length} className="inline-flex items-center rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-50"><Download className="mr-2 h-4 w-4" />ดาวน์โหลดแม่แบบคะแนน</button></div></div><button onClick={() => void importScores()} disabled={busy || !importRows.length} className="inline-flex items-center justify-center rounded-lg bg-[#425a49] px-4 py-2 text-sm text-white disabled:opacity-50"><FileSpreadsheet className="mr-2 h-4 w-4" />นำเข้า {importRows.reduce((sum, row) => sum + row.scores.length, 0)} คะแนน</button></div>{importRows.length > 0 && <div className="mt-3 overflow-x-auto rounded-xl border border-[#e2e6de] bg-white"><table className="min-w-full text-left text-xs"><thead className="bg-[#eef1eb] text-slate-600"><tr><th className="p-2">ห้อง</th><th className="p-2">เลขที่</th><th className="p-2">ชื่อ</th><th className="p-2">จำนวนคะแนน</th></tr></thead><tbody>{importRows.slice(0, 4).map((row, index) => <tr key={`${row.studentNo}-${row.rollNo}-${index}`} className="border-t"><td className="p-2">{row.room || "—"}</td><td className="p-2">{row.rollNo || "—"}</td><td className="p-2">{row.name || "—"}</td><td className="p-2">{row.scores.length}</td></tr>)}</tbody></table>{importRows.length > 4 && <p className="border-t p-2 text-slate-500">ตัวอย่าง 4 จาก {importRows.length} แถว</p>}</div>}</div>}
-        {showAdd && <form onSubmit={addColumn} className="grid gap-3 border-b bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-5"><label className="grid gap-1 text-xs font-medium">หัวข้องาน / บท<input required maxLength={120} className={inputClass} placeholder="เช่น บทที่ 1 หรือ ใบงานที่ 1" value={title} onChange={(event) => setTitle(event.target.value)} /></label><label className="grid gap-1 text-xs font-medium">ช่วงคะแนน<select className={inputClass} value={period} onChange={(event) => setPeriod(event.target.value as Period)}>{periods.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label className="grid gap-1 text-xs font-medium">คะแนนเต็ม<input required type="number" min="0.01" step="0.01" className={inputClass} value={maxScore} onChange={(event) => setMaxScore(event.target.value)} /></label><label className="grid gap-1 text-xs font-medium">นำคะแนนจาก<select className={inputClass} value={sourceType} onChange={(event) => { setSourceType(event.target.value); setSourceId(""); }}><option value="manual">กรอกเอง</option><option value="exam">ข้อสอบที่ตรวจแล้ว</option><option value="google_form">Google Forms</option></select></label>{sourceType !== "manual" && <label className="grid gap-1 text-xs font-medium">เลือกรายการ<select required className={inputClass} value={sourceId} onChange={(event) => { setSourceId(event.target.value); if (!title) { const selected = sourceType === "exam" ? payload.exams.find((item) => item.id === event.target.value)?.title : payload.googleForms.find((item) => item.id === event.target.value)?.material.title; if (selected) setTitle(selected); } }}><option value="">เลือกรายการ</option>{sourceType === "exam" ? payload.exams.filter((item) => item.classId === classId && !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.title} ({item._count.questions} ข้อ)</option>) : payload.googleForms.filter((item) => !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.material.title}</option>)}</select></label>}<div className="flex items-end gap-2"><button disabled={busy} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Save className="mr-1.5 h-4 w-4" />บันทึกช่อง</button><button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border bg-white px-3 py-2 text-sm">ยกเลิก</button></div></form>}
-        {!students.length ? <div className="p-8 text-center text-sm text-slate-500">ห้องนี้ยังไม่มีรายชื่อนักเรียน <Link className="underline" href="/dashboard/classes">เพิ่มรายชื่อนักเรียน</Link></div> : <div className="overflow-x-auto"><table className="min-w-full border-collapse text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-10 min-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-10 min-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} className="min-w-32 border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div><div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}</th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="sticky right-0 z-10 min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="sticky right-0 border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td></tr>)}</tbody></table></div>}
-        <div className="border-t bg-slate-50 px-4 py-3 text-xs text-slate-500">คลิกช่องคะแนนแล้วพิมพ์ได้เลย ระบบบันทึกเมื่อออกจากช่อง · ลบคะแนนโดยลบตัวเลขแล้วออกจากช่อง · คะแนนรวมอัปเดตทันที</div>
+        {showAdd && <form onSubmit={addColumn} className="grid gap-3 border-b bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="grid gap-1 text-xs font-medium">รายวิชา / รหัสวิชา
+            <select required={teachingAssignments.length > 0} className={inputClass} value={teachingAssignmentId} onChange={(event) => setTeachingAssignmentId(event.target.value)} disabled={!teachingAssignments.length}>
+              <option value="">{teachingAssignments.length ? "เลือกรายวิชาที่สอน" : "ยังไม่ได้เพิ่มรายวิชาในห้องนี้"}</option>
+              {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
+            </select>
+            {!teachingAssignments.length && <span className="text-[11px] font-normal text-amber-700">เพิ่มรายวิชาที่สอนและเลือกห้องนี้ก่อน จึงจะเชื่อมคะแนนกับรายวิชาได้</span>}
+          </label>
+          <label className="grid gap-1 text-xs font-medium">หัวข้องาน / บท<input required maxLength={120} className={inputClass} placeholder="เช่น บทที่ 1 หรือ ใบงานที่ 1" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <label className="grid gap-1 text-xs font-medium">ช่วงคะแนน<select className={inputClass} value={period} onChange={(event) => setPeriod(event.target.value as Period)}>{periods.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label className="grid gap-1 text-xs font-medium">คะแนนเต็ม<input required type="number" min="0.01" step="0.01" className={inputClass} value={maxScore} onChange={(event) => setMaxScore(event.target.value)} /></label>
+          <label className="grid gap-1 text-xs font-medium">นำคะแนนจาก<select className={inputClass} value={sourceType} onChange={(event) => { setSourceType(event.target.value); setSourceId(""); }}><option value="manual">กรอกเอง</option><option value="exam">ข้อสอบที่ตรวจแล้ว</option><option value="google_form">Google Forms</option></select></label>
+          {sourceType !== "manual" && <label className="grid gap-1 text-xs font-medium">เลือกรายการ<select required className={inputClass} value={sourceId} onChange={(event) => { setSourceId(event.target.value); if (!title) { const selected = sourceType === "exam" ? payload.exams.find((item) => item.id === event.target.value)?.title : payload.googleForms.find((item) => item.id === event.target.value)?.material.title; if (selected) setTitle(selected); } }}><option value="">เลือกรายการ</option>{sourceType === "exam" ? payload.exams.filter((item) => item.classId === classId && !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.title} ({item._count.questions} ข้อ)</option>) : payload.googleForms.filter((item) => !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.material.title}</option>)}</select></label>}
+          <div className="flex items-end gap-2"><button disabled={busy || (teachingAssignments.length > 0 && !teachingAssignmentId)} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Save className="mr-1.5 h-4 w-4" />บันทึกช่อง</button><button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border bg-white px-3 py-2 text-sm">ยกเลิก</button></div>
+        </form>}
+        {!students.length ? <div className="p-8 text-center text-sm text-slate-500">ห้องนี้ยังไม่มีรายชื่อนักเรียน <Link className="underline" href="/dashboard/classes">เพิ่มรายชื่อนักเรียน</Link></div> : <div className="overflow-x-auto"><table className="min-w-full border-collapse text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-10 min-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-10 min-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} className="min-w-32 border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
+                  <select aria-label={`รายวิชาของ ${column.title}`} className={`mt-2 w-full rounded-lg border border-[#ddd7c9] bg-white px-2 py-1.5 text-[11px] font-normal ${column.teachingAssignment ? "text-[#303832]" : "text-slate-500"}`} value={column.teachingAssignment?.id || ""} onChange={(event) => void updateColumnSubject(column, event.target.value)} disabled={busy || !teachingAssignments.length}>
+                    <option value="">ยังไม่ผูกกับรายวิชา</option>
+                    {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
+                  </select>
+                  <div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}</th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="sticky right-0 z-10 min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="sticky right-0 border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td></tr>)}</tbody></table></div>}
+        <div className="border-t bg-slate-50 px-4 py-3 text-xs text-slate-500">ช่องคะแนนเดิมเลือกผูกรายวิชาได้จากเมนูใต้หัวช่อง · คลิกคะแนนเพื่อแก้ไข ระบบบันทึกเมื่อออกจากช่อง · คะแนนรวมอัปเดตทันที</div>
       </section>
       <p className="mt-3 text-xs text-slate-500">เลือกช่วงให้ตรงกับ SGS แล้วเพิ่มช่องงาน/บทพร้อมคะแนนเต็มแต่ละช่อง ยอดรวมแสดงตรง ๆ เช่น 3 งาน งานละ 10 คะแนน รวม 30 · คะแนนข้อสอบเข้าหลังครูยืนยัน · Google Forms จับคู่ด้วยเลขที่ ห้อง และชื่อ</p>
     </>}

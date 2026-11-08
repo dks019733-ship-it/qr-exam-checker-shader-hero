@@ -23,7 +23,7 @@ export async function GET() {
           select: {
             id: true,
             name: true,
-            owner: { select: { name: true, defaultLearningArea: true } },
+            owner: { select: { id: true, name: true, defaultLearningArea: true } },
           },
         },
       },
@@ -34,8 +34,9 @@ export async function GET() {
     }
 
     // Fetch all grade columns in this class with related exam, Google Form, and teaching assignments
-    const columns = await prisma.gradeColumn.findMany({
-      where: { classId: student.classId },
+    const [columns, classTeachingAssignments] = await Promise.all([
+      prisma.gradeColumn.findMany({
+      where: { classId: student.classId, ownerId: student.class.owner.id },
       include: {
         exam: {
           select: { id: true, title: true, subject: true, _count: { select: { questions: true } } },
@@ -52,7 +53,6 @@ export async function GET() {
         teachingAssignment: {
           include: {
             subject: { select: { code: true, name: true } },
-            owner: { select: { name: true } },
           },
         },
         scores: {
@@ -61,7 +61,30 @@ export async function GET() {
         },
       },
       orderBy: [{ period: "asc" }, { createdAt: "desc" }],
-    });
+      }),
+      prisma.teachingAssignment.findMany({
+        where: { classId: student.classId, ownerId: student.class.owner.id },
+        include: {
+          subject: { select: { id: true, code: true, name: true } },
+          owner: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const resolveTeachingAssignment = (column: (typeof columns)[number]) => {
+      // Only trust links that resolve to an assignment owned by this teacher in this student's classroom.
+      const ownedClassAssignment = column.teachingAssignment
+        ? classTeachingAssignments.find((assignment) => assignment.id === column.teachingAssignment?.id)
+        : null;
+      if (ownedClassAssignment) return ownedClassAssignment;
+      const legacySubject = (column.exam?.subject || column.googleForm?.material?.subject || "").trim().toLocaleLowerCase("th-TH");
+      if (!legacySubject) return null;
+      const matches = classTeachingAssignments.filter((assignment) =>
+        [assignment.subject.code, assignment.subject.name]
+          .some((value) => value.trim().toLocaleLowerCase("th-TH") === legacySubject),
+      );
+      return matches.length === 1 ? matches[0] : null;
+    };
 
     const teacherDefault = student.class.owner?.name || "ครูผู้สอน";
 
@@ -70,14 +93,17 @@ export async function GET() {
       const studentScore = col.scores[0]?.score ?? null;
       const isSubmitted = studentScore !== null;
 
+      const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
-        col.teachingAssignment?.subject?.name ||
+        teachingAssignment?.subject?.name ||
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
+      const subjectCode = teachingAssignment?.subject?.code || "";
+      const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
 
       const teacherName =
-        col.teachingAssignment?.owner?.name ||
+        teachingAssignment?.owner?.name ||
         student.class.owner?.name ||
         "ครูประจำวิชา";
 
@@ -94,11 +120,11 @@ export async function GET() {
         desc = `แบบทดสอบวัดผลในชั้นเรียน ${col.exam?._count?.questions ? `(${col.exam._count.questions} ข้อ)` : ""}`;
       }
 
-      const periodLabel = col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
+      const periodLabel = col.period === "BEFORE_MIDTERM" ? "ก่อนกลางภาค" : col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
 
       return {
         id: col.id,
-        subject: subjectName,
+        subject: subjectLabel,
         teacher: teacherName,
         title: col.title,
         dueDate: periodLabel,
@@ -122,68 +148,80 @@ export async function GET() {
       {
         subject: string;
         teacher: string;
-        midtermScore: number;
-        midtermMax: number;
-        quizScore: number;
-        quizMax: number;
+        courseworkScore: number;
+        courseworkMax: number;
+        midtermExamScore: number;
+        midtermExamMax: number;
       }
     >();
 
     for (const col of columns) {
+      const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
-        col.teachingAssignment?.subject?.name ||
+        teachingAssignment?.subject?.name ||
         col.exam?.subject ||
         col.googleForm?.material?.subject ||
         "วิชาทั่วไป";
+      const subjectCode = teachingAssignment?.subject?.code || "";
+      const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
+      const legacySubject = (col.exam?.subject || col.googleForm?.material?.subject || "").trim().toLocaleLowerCase("th-TH");
+      const legacyMatches = legacySubject
+        ? classTeachingAssignments.filter((assignment) =>
+            [assignment.subject.code, assignment.subject.name]
+              .some((value) => value.trim().toLocaleLowerCase("th-TH") === legacySubject),
+          )
+        : [];
+      // Never merge unlinked columns when their subject cannot be identified unambiguously.
+      const subjectKey = teachingAssignment?.id
+        || (legacySubject && legacyMatches.length === 0 ? `legacy:${legacySubject}` : `unlinked:${col.id}`);
 
       const teacherName =
-        col.teachingAssignment?.owner?.name || teacherDefault;
+        teachingAssignment?.owner?.name || teacherDefault;
 
-      if (!subjectMap.has(subjectName)) {
-        subjectMap.set(subjectName, {
-          subject: subjectName,
+      if (!subjectMap.has(subjectKey)) {
+        subjectMap.set(subjectKey, {
+          subject: subjectLabel,
           teacher: teacherName,
-          midtermScore: 0,
-          midtermMax: 0,
-          quizScore: 0,
-          quizMax: 0,
+          courseworkScore: 0,
+          courseworkMax: 0,
+          midtermExamScore: 0,
+          midtermExamMax: 0,
         });
       }
 
-      const entry = subjectMap.get(subjectName)!;
+      const entry = subjectMap.get(subjectKey)!;
       const score = col.scores[0]?.score ?? 0;
 
       if (col.period === "MIDTERM") {
-        entry.midtermScore += score;
-        entry.midtermMax += col.maxScore;
+        // Preserve legacy MIDTERM columns as a separate exam score.
+        entry.midtermExamScore += score;
+        entry.midtermExamMax += col.maxScore;
       } else {
-        entry.quizScore += score;
-        entry.quizMax += col.maxScore;
+        // BEFORE_MIDTERM and AFTER_MIDTERM are both coursework periods.
+        entry.courseworkScore += score;
+        entry.courseworkMax += col.maxScore;
       }
     }
 
     const scores = Array.from(subjectMap.values()).map((item) => {
-      const totalScore = item.midtermScore + item.quizScore;
-      const totalMax = item.midtermMax + item.quizMax;
+      const totalScore = item.courseworkScore + item.midtermExamScore;
+      const totalMax = item.courseworkMax + item.midtermExamMax;
       const percent = totalMax > 0 ? Number(((totalScore / totalMax) * 100).toFixed(1)) : 0;
-
-      // Grade calculation based on Thai standard grading (80=4.0, 75=3.5, 70=3.0, 65=2.5, 60=2.0, 55=1.5, 50=1.0, <50=0)
-      let grade = "0";
-      if (percent >= 80) grade = "4.0";
-      else if (percent >= 75) grade = "3.5";
-      else if (percent >= 70) grade = "3.0";
-      else if (percent >= 65) grade = "2.5";
-      else if (percent >= 60) grade = "2.0";
-      else if (percent >= 55) grade = "1.5";
-      else if (percent >= 50) grade = "1.0";
 
       return {
         subject: item.subject,
         teacher: item.teacher,
-        midterm: item.midtermMax > 0 ? `${item.midtermScore}/${item.midtermMax}` : "—",
-        quizTotal: item.quizMax > 0 ? `${item.quizScore}/${item.quizMax}` : "—",
-        total: totalMax > 0 ? `${totalScore}/${totalMax}` : "—",
-        grade,
+        coursework: item.courseworkMax > 0
+          ? `${Number(item.courseworkScore.toFixed(2))}/${Number(item.courseworkMax.toFixed(2))}`
+          : "—",
+        midtermExam: item.midtermExamMax > 0
+          ? `${Number(item.midtermExamScore.toFixed(2))}/${Number(item.midtermExamMax.toFixed(2))}`
+          : "—",
+        courseworkScore: Number(item.courseworkScore.toFixed(2)),
+        courseworkMax: Number(item.courseworkMax.toFixed(2)),
+        total: totalMax > 0
+          ? `${Number(totalScore.toFixed(2))}/${Number(totalMax.toFixed(2))}`
+          : "—",
         percent,
       };
     });
@@ -196,13 +234,20 @@ export async function GET() {
     const totalMax = assignments.reduce((sum, a) => sum + a.maxScore, 0);
     const overallPercent = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
 
-    let overallGpa = "—";
-    if (scores.length > 0) {
-      const validGrades = scores.map((s) => parseFloat(s.grade)).filter((g) => !isNaN(g));
-      if (validGrades.length > 0) {
-        overallGpa = (validGrades.reduce((a, b) => a + b, 0) / validGrades.length).toFixed(2);
-      }
-    }
+    // Preserve the existing Thai grade-point scale without exposing a grade column in the score table.
+    const gradePoints: number[] = scores.map(({ percent }) => {
+      if (percent >= 80) return 4;
+      if (percent >= 75) return 3.5;
+      if (percent >= 70) return 3;
+      if (percent >= 65) return 2.5;
+      if (percent >= 60) return 2;
+      if (percent >= 55) return 1.5;
+      if (percent >= 50) return 1;
+      return 0;
+    });
+    const overallGpa = gradePoints.length
+      ? (gradePoints.reduce((sum, grade) => sum + grade, 0) / gradePoints.length).toFixed(2)
+      : "—";
 
     // Dynamic announcements
     const announcements = [

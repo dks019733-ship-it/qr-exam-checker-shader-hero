@@ -17,7 +17,7 @@ export default function SubjectsPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [classId, setClassId] = useState("");
+  const [classIds, setClassIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
@@ -33,7 +33,7 @@ export default function SubjectsPage() {
     if (!classResponse.ok || !assignmentResponse.ok) throw new Error("โหลดข้อมูลรายวิชาไม่สำเร็จ");
     setClasses(classData);
     setAssignments(assignmentData);
-    setClassId((current) => current || classData[0]?.id || "");
+    setClassIds((current) => current.length ? current : (classData[0]?.id ? [classData[0].id] : []));
   }, []);
 
   useEffect(() => { void load().catch((error) => setNotice(error.message)); }, [load]);
@@ -46,14 +46,14 @@ export default function SubjectsPage() {
       const response = await fetch("/api/teaching-assignments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code, name, classId }),
+        body: JSON.stringify({ code, name, classIds }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "เพิ่มรายวิชาไม่สำเร็จ");
       setCode("");
       setName("");
       await load();
-      setNotice("เพิ่มรายวิชาและห้องเรียนแล้ว");
+      setNotice(`เพิ่มรายวิชาและเชื่อม ${classIds.length} ห้องเรียนแล้ว`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "เพิ่มรายวิชาไม่สำเร็จ");
     } finally {
@@ -74,7 +74,7 @@ export default function SubjectsPage() {
             <div className="rounded-xl bg-slate-100 p-3"><BookOpen className="h-5 w-5" /></div>
             <div>
               <h1 className="text-2xl font-semibold">รายวิชาที่สอน</h1>
-              <p className="mt-1 text-sm text-slate-600">ครูหนึ่งคนเพิ่มได้หลายรหัสวิชา และเลือกห้องเรียนที่รับผิดชอบแยกกันได้</p>
+              <p className="mt-1 text-sm text-slate-600">หนึ่งรหัสวิชาเลือกผูกกับหลายห้องเรียนได้ พร้อมแยกสมุดคะแนนตามห้อง</p>
             </div>
           </div>
         </header>
@@ -90,17 +90,24 @@ export default function SubjectsPage() {
             <label className="text-sm">ชื่อวิชา
               <input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="เช่น สังคมศึกษาพื้นฐาน" className="mt-1 w-full rounded-lg border px-3 py-2" />
             </label>
-            <label className="text-sm sm:col-span-2">ห้องเรียนที่สอน
-              <select required value={classId} onChange={(event) => setClassId(event.target.value)} className="mt-1 w-full rounded-lg border bg-white px-3 py-2">
-                <option value="">เลือกห้องเรียน</option>
-                {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              {!classes.length && <span className="mt-1 block text-xs text-amber-700">ยังไม่มีห้องเรียน กรุณาสร้างห้องเรียนก่อน</span>}
-            </label>
+            <fieldset className="sm:col-span-2">
+              <legend className="text-sm font-medium">ห้องเรียนที่สอน <span className="font-normal text-slate-500">(เลือกได้หลายห้อง)</span></legend>
+              {!classes.length ? <p className="mt-2 text-xs text-amber-700">ยังไม่มีห้องเรียน กรุณาสร้างห้องเรียนก่อน</p> : (
+                <div className="mt-2 grid gap-2 rounded-xl border bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {classes.map((item) => (
+                    <label key={item.id} className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm">
+                      <input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />
+                      {item.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-slate-500">รหัสวิชาเดียวกันจะถูกเพิ่มให้ทุกห้องที่เลือก</p>
+            </fieldset>
             <div className="sm:col-span-2">
-              <button disabled={busy || !classes.length} className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
+              <button disabled={busy || !classes.length || !classIds.length} className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50">
                 {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                เพิ่มวิชาในห้องนี้
+                เพิ่มวิชาในห้องที่เลือก
               </button>
             </div>
           </form>
