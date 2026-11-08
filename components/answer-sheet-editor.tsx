@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, FileImage, ImagePlus, Loader2, Printer, Save, Search, X } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { AnswerSheetStudentTools } from "@/components/answer-sheet-student-tools";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Student = { id: string; rollNo: string; studentNo: string; name: string; qrToken: string };
@@ -106,6 +107,7 @@ export function AnswerSheetEditor() {
 
           <Panel title="เลือกห้องสำหรับตัวอย่าง" subtitle="ตั้งค่าห้องและรายชื่อนักเรียนแยกที่หน้าจัดการห้องเรียน"><select className="w-full" value={classId} onChange={(e) => { setClassId(e.target.value); const c = classrooms.find((x) => x.id === e.target.value); if (c) updateTemplate("classLabel", c.name); }}><option value="">เลือกห้องเรียน</option>{classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}{c._count ? ` (${c._count.students} คน)` : ""}</option>)}</select><Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">ไปจัดการห้องเรียนและนักเรียน →</Link></Panel>
 
+          <Panel title="จัดการรายชื่อนักเรียน" subtitle="นำเข้ารายชื่อหลายคนพร้อมกัน หรือแก้ไขข้อมูลนักเรียนที่เลือก"><AnswerSheetStudentTools classId={classId} students={students} selectedStudentId={selectedStudentId} onSelect={selectStudent} onStudentsChange={setStudents} /></Panel>
           <Panel title="เลือกนักเรียนสำหรับตัวอย่าง" subtitle="เลือกรายชื่อเพื่อดูตัวอย่าง QR บนกระดาษคำตอบ"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input className="pl-9" placeholder="ค้นหาชื่อ เลขที่ หรือรหัส..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} /></div><select value={selectedStudentId} onChange={(e) => { const s = students.find((x) => x.id === e.target.value); if (s) selectStudent(s); }} className="mt-2"><option value="">เลือกนักเรียน ({filteredStudents.length})</option>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.rollNo} · {s.studentNo} — {s.name}</option>)}</select><Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">เพิ่มหรือแก้ไขรายชื่อนักเรียน →</Link></Panel>
         </section>
 
