@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { verifyStudentToken } from "@/lib/student-token";
-import { deleteStoredObject, isObjectStorageConfigured, sanitizeUploadName, validateUploadInput, verifyStoredObject } from "@/lib/object-storage";
+import { deleteStoredObject, getUploadPolicy, isObjectStorageConfigured, sanitizeUploadName, validateUploadInput, verifyStoredObject } from "@/lib/object-storage";
 
 const EXTENSIONS: Record<string, string[]> = {
   "application/pdf": [".pdf"],
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     }
 
     const stored = await verifyStoredObject(objectKey, contentType);
-    if (stored.sizeBytes !== sizeBytes || stored.sizeBytes > Number(process.env.UPLOAD_MAX_BYTES || 20 * 1024 * 1024) || stored.contentType.toLowerCase() !== contentType) {
+    if (stored.sizeBytes !== sizeBytes || stored.sizeBytes > getUploadPolicy().maxBytes || stored.contentType.toLowerCase() !== contentType) {
       await deleteStoredObject(objectKey).catch((error) => console.error("[FileUpload] rejected object cleanup failed:", error));
       return NextResponse.json({ error: "ข้อมูลไฟล์ที่อัปโหลดไม่ตรงกับนโยบายไฟล์" }, { status: 400 });
     }
