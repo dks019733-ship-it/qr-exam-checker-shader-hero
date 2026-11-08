@@ -131,7 +131,8 @@ async function handleFeatureCommand(command: string, ownerLineId: string): Promi
 }
 
 async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {
-  const featureResponse = await handleFeatureCommand(command, ownerLineId);\n  if (featureResponse) return featureResponse;
+  const featureResponse = await handleFeatureCommand(command, ownerLineId);
+  if (featureResponse) return featureResponse;
   if (command.startsWith("ประกาศ ")) {
     const message = command.slice("ประกาศ ".length).trim();
     if (!message) return "กรุณาพิมพ์ข้อความหลังคำว่า ประกาศ";
@@ -182,7 +183,8 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
       "• ประกาศเสร็จแล้ว — แสดงข้อความอัปเดตสำเร็จ",
       "• ซ่อนประกาศ — ซ่อนแถบข้อความหน้าเว็บ",
       "• สถานะประกาศ — ดูข้อความปัจจุบัน",
-      "• สถานะฟีเจอร์ — ดูสถานะทุกระบบ",\n      "• ปิดปรับปรุง <ฟีเจอร์> <เวลา> <เหตุผล> — ปิดตามระยะเวลา",
+      "• สถานะฟีเจอร์ — ดูสถานะทุกระบบ",
+      "• ปิดปรับปรุง <ฟีเจอร์> <เวลา> <เหตุผล> — ปิดตามระยะเวลา",
       "• ไม่พร้อมใช้งาน <ฟีเจอร์> <เวลา> <เหตุผล> — ระบุฟีเจอร์ที่ยังไม่เปิด",
       "• เปิดใช้งาน <ฟีเจอร์> — เปิดฟีเจอร์ทันที",
       "",
