@@ -35,6 +35,12 @@ const tools = [
     icon: Users,
   },
   {
+    title: "มอบหมายและติดตามงาน",
+    description: "สร้างใบงาน เลือกวิธีส่ง ติดตามไฟล์ และตรวจงานนักเรียน",
+    href: "/dashboard/assignments",
+    icon: ClipboardList,
+  },
+  {
     title: "รายวิชาที่สอน",
     description: "เพิ่มหลายรหัสวิชาและกำหนดห้องเรียนที่รับผิดชอบแยกตามรายวิชา",
     href: "/dashboard/subjects",
