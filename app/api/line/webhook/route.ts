@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { FEATURE_CATALOG, type FeatureKey } from "@/lib/feature-availability";
 import { pushLineMessage, replyLineMessage, verifyLineSignature } from "@/lib/line-guardian";
 import { PayloadTooLargeError, readLimitedBody } from "@/lib/line-webhook-body.mjs";
 import { createGuardianRetry } from "@/lib/guardian-task-retry.mjs";
@@ -39,7 +40,96 @@ async function deliver(event: LineEvent, ownerLineId: string, text: string) {
   return pushLineMessage(ownerLineId, text);
 }
 
-async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {
+const featureAliases: Record<string, FeatureKey> = {
+  "กระดาษคำตอบ": "answer_sheet", "ระบบกระดาษคำตอบ": "answer_sheet", "answer_sheet": "answer_sheet",
+  "เช็กชื่อ": "attendance", "เช็คชื่อ": "attendance", "ระบบเช็กชื่อ": "attendance", "attendance": "attendance",
+  "มอบหมายงาน": "assignments", "ระบบมอบหมายงาน": "assignments", "assignments": "assignments",
+  "ข้อสอบ": "exams", "ระบบข้อสอบ": "exams", "exams": "exams",
+  "คะแนน": "gradebook", "สมุดคะแนน": "gradebook", "ระบบคะแนน": "gradebook", "gradebook": "gradebook",
+  "ai": "ai", "ผู้ช่วย ai": "ai", "ผู้ช่วยเอไอ": "ai",
+};
+
+function parseFeatureDuration(value: string): { milliseconds: number; rest: string } | null {
+  const match = value.match(/^(\d{1,4})\s*(นาที|น\.|ชม\.?|ชั่วโมง|วัน|สัปดาห์)\s*(.*)$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isSafeInteger(amount) || amount < 1) return null;
+  const unit = match[2];
+  const multiplier = unit.startsWith("น") ? 60_000
+    : unit.startsWith("ชม") || unit === "ชั่วโมง" ? 3_600_000
+    : unit === "วัน" ? 86_400_000 : 604_800_000;
+  const milliseconds = amount * multiplier;
+  if (milliseconds > 30 * 86_400_000) return null;
+  return { milliseconds, rest: match[3].trim() };
+}
+
+function resolveFeature(value: string): FeatureKey | null {
+  const normalized = value.trim().toLocaleLowerCase("th-TH");
+  return featureAliases[normalized] ?? null;
+}
+
+function featureTime(value: Date | null) {
+  if (!value) return "ไม่กำหนดเวลาเปิด";
+  return new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(value);
+}
+
+async function handleFeatureCommand(command: string, ownerLineId: string): Promise<string | null> {
+  if (command === "สถานะฟีเจอร์" || command === "รายการฟีเจอร์") {
+    const rows = await prisma.featureAvailability.findMany();
+    const byKey = new Map(rows.map((row) => [row.key, row]));
+    const now = Date.now();
+    return ["สถานะฟีเจอร์ในเว็บไซต์:", ...Object.entries(FEATURE_CATALOG).map(([key, label]) => {
+      const row = byKey.get(key);
+      const expired = row?.untilAt && row.untilAt.getTime() <= now;
+      const status = !row || row.status === "AVAILABLE" || expired ? "พร้อมใช้งาน"
+        : row.status === "MAINTENANCE" ? "ปิดปรับปรุง" : "ไม่พร้อมใช้งาน";
+      return `• ${label}: ${status}${row?.reason ? ` — ${row.reason}` : ""}${status !== "พร้อมใช้งาน" ? `\n  เปิดอีกครั้ง: ${featureTime(row?.untilAt ?? null)}` : ""}`;
+    })].join("\n");
+  }
+
+  const action = command.startsWith("ปิดปรับปรุง ") ? "MAINTENANCE"
+    : command.startsWith("ไม่พร้อมใช้งาน ") ? "UNAVAILABLE"
+    : command.startsWith("เปิดใช้งาน ") || command.startsWith("เปิดฟีเจอร์ ") ? "AVAILABLE"
+    : null;
+  if (!action) return null;
+
+  const prefix = action === "MAINTENANCE" ? "ปิดปรับปรุง "
+    : action === "UNAVAILABLE" ? "ไม่พร้อมใช้งาน "
+    : command.startsWith("เปิดใช้งาน ") ? "เปิดใช้งาน " : "เปิดฟีเจอร์ ";
+  const rest = command.slice(prefix.length).trim();
+  const featureName = Object.keys(featureAliases).sort((a, b) => b.length - a.length).find((name) => rest.toLocaleLowerCase("th-TH").startsWith(name));
+  if (!featureName) return "ไม่รู้จักชื่อฟีเจอร์ พิมพ์ “สถานะฟีเจอร์” เพื่อดูรายการ";
+  const key = featureAliases[featureName];
+  let tail = rest.slice(featureName.length).trim();
+
+  if (action === "AVAILABLE") {
+    await prisma.featureAvailability.upsert({
+      where: { key },
+      create: { key, status: "AVAILABLE", reason: "", untilAt: null, updatedBy: ownerLineId },
+      update: { status: "AVAILABLE", reason: "", untilAt: null, updatedBy: ownerLineId },
+    });
+    return `เปิดใช้งาน ${FEATURE_CATALOG[key]} แล้ว`;
+  }
+
+  let untilAt: Date | null = null;
+  const duration = parseFeatureDuration(tail);
+  if (duration) {
+    untilAt = new Date(Date.now() + duration.milliseconds);
+    tail = duration.rest;
+  } else if (/^\d/.test(tail)) {
+    return "รูปแบบเวลาไม่ถูกต้อง ใช้ 30 นาที, 2 ชม., 1 วัน หรือ 1 สัปดาห์ (สูงสุด 30 วัน)";
+  }
+  const reason = tail.replace(/^(เหตุผล|เพราะ)\s*/, "").slice(0, 240);
+  await prisma.featureAvailability.upsert({
+    where: { key },
+    create: { key, status: action, reason, untilAt, updatedBy: ownerLineId },
+    update: { status: action, reason, untilAt, updatedBy: ownerLineId },
+  });
+  const statusText = action === "MAINTENANCE" ? "ปิดปรับปรุง" : "ตั้งเป็นไม่พร้อมใช้งาน";
+  return `${FEATURE_CATALOG[key]}: ${statusText} แล้ว\n${reason ? `เหตุผล: ${reason}\n` : ""}เปิดอีกครั้ง: ${featureTime(untilAt)}`;
+}
+
+async function executeCommand(command: string, ownerLineId: string): Promise<string | null> {\n  const featureResponse = await handleFeatureCommand(command, ownerLineId);\n  if (featureResponse) return featureResponse;
   if (command.startsWith("ประกาศ ")) {
     const message = command.slice("ประกาศ ".length).trim();
     if (!message) return "กรุณาพิมพ์ข้อความหลังคำว่า ประกาศ";
@@ -89,7 +179,7 @@ async function executeCommand(command: string, ownerLineId: string): Promise<str
       "• ประกาศ <ข้อความ> — เปลี่ยนข้อความแถบหน้าเว็บ",
       "• ประกาศเสร็จแล้ว — แสดงข้อความอัปเดตสำเร็จ",
       "• ซ่อนประกาศ — ซ่อนแถบข้อความหน้าเว็บ",
-      "• สถานะประกาศ — ดูข้อความปัจจุบัน",
+      "• สถานะประกาศ — ดูข้อความปัจจุบัน",\n      "• สถานะฟีเจอร์ — ดูสถานะทุกระบบ",\n      "• ปิดปรับปรุง <ฟีเจอร์> <เวลา> <เหตุผล> — ปิดตามระยะเวลา",\n      "• ไม่พร้อมใช้งาน <ฟีเจอร์> <เวลา> <เหตุผล> — ระบุฟีเจอร์ที่ยังไม่เปิด",\n      "• เปิดใช้งาน <ฟีเจอร์> — เปิดฟีเจอร์ทันที",
       "",
       "ระบบไม่รับคำสั่ง shell, SQL, โค้ด หรือคำสั่งแก้ข้อมูลนักเรียน/คะแนน",
     ].join("\n");
@@ -250,8 +340,8 @@ export async function POST(request: Request) {
     const supported = [
       "ช่วยเหลือ", "help", "เมนู", "ตรวจสอบระบบ", "สถานะระบบ",
       "สถานะการซ่อม", "วิเคราะห์ปัญหาล่าสุด", "ลองงานที่ล้มเหลวใหม่", "หยุดงาน",
-      "ประกาศเสร็จแล้ว", "ซ่อนประกาศ", "สถานะประกาศ",
-    ].includes(command) || command.startsWith("ประกาศ ");
+      "ประกาศเสร็จแล้ว", "ซ่อนประกาศ", "สถานะประกาศ", "สถานะฟีเจอร์", "รายการฟีเจอร์",
+    ].includes(command) || command.startsWith("ประกาศ ") || command.startsWith("ปิดปรับปรุง ") || command.startsWith("ไม่พร้อมใช้งาน ") || command.startsWith("เปิดใช้งาน ") || command.startsWith("เปิดฟีเจอร์ ");
     if (!supported) continue;
 
     let storedEventId: string;
