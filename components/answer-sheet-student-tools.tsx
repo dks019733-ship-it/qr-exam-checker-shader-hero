@@ -16,7 +16,7 @@ type Props = {
 type ParsedRow = { rollNo: string; studentNo: string; name: string };
 
 function parseDelimitedRows(source: string): string[][] {
-  const delimiter = source.includes("\\t") ? "\\t" : ",";
+  const delimiter = source.includes("\t") ? "\t" : ",";
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -24,7 +24,7 @@ function parseDelimitedRows(source: string): string[][] {
 
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index];
-    if (character === '"' && quoted && source[index + 1] === '"') {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
       cell += '"';
       index += 1;
     } else if (character === '"') {
@@ -32,8 +32,8 @@ function parseDelimitedRows(source: string): string[][] {
     } else if (character === delimiter && !quoted) {
       row.push(cell.trim());
       cell = "";
-    } else if ((character === "\\n" || character === "\\r") && !quoted) {
-      if (character === "\\r" && source[index + 1] === "\\n") index += 1;
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
       row.push(cell.trim());
       if (row.some((value) => value.length > 0)) rows.push(row);
       row = [];
