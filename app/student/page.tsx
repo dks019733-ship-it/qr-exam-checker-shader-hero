@@ -50,7 +50,7 @@ interface AssignmentItem {
   status: "pending" | "submitted";
   score?: string;
   rawScore?: number | null;
-  maxScore: number;
+  maxScore: number | null;
   points: string;
   type: string;
   priority: "high" | "medium" | "low";
@@ -95,6 +95,7 @@ export default function StudentPortalPage() {
 
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [assignmentLoadError, setAssignmentLoadError] = useState("");
   const [scores, setScores] = useState<ScoreSummaryItem[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>(["ทั้งหมด"]);
@@ -129,10 +130,16 @@ export default function StudentPortalPage() {
         const data = await res.json();
         setStudent(data.student);
         const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
-        const taskData = taskResponse.ok ? await taskResponse.json() : { assignments: [] };
-        const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
+        const taskData = taskResponse.ok ? await taskResponse.json() : null;
+        if (taskResponse.ok) {
+          setAssignmentLoadError("");
+        } else {
+          const failure = await taskResponse.json().catch(() => null);
+          setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
+        }
+        const managedTasks: AssignmentItem[] = (taskData?.assignments || []).map((task: any) => {
           const submitted = Boolean(task.submission);
-          const maxScore = typeof task.maxScore === "number" ? task.maxScore : 0;
+          const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
           const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
           const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
@@ -146,10 +153,10 @@ export default function StudentPortalPage() {
             dueDate: task.dueAt ? new Date(task.dueAt).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "ไม่กำหนด",
             dueAt: task.dueAt,
             status: submitted ? "submitted" : "pending",
-            score: submitted ? (score === null ? "รอตรวจ" : String(score) + "/" + String(maxScore)) : undefined,
+            score: submitted ? (score === null ? "รอตรวจ" : maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : undefined,
             rawScore: score ?? null,
             maxScore,
-            points: maxScore ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
+            points: maxScore !== null ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
             type,
             priority: submitted ? "low" : "high",
             desc: task.description || "ไม่มีรายละเอียดเพิ่มเติม",
@@ -598,6 +605,11 @@ export default function StudentPortalPage() {
                     ))}
                   </div>
 
+                  {assignmentLoadError && (
+                    <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-6 text-amber-900">
+                      {assignmentLoadError}
+                    </div>
+                  )}
                   <div className="space-y-3">
                     {filteredAssignments.map((item) => (
                       <motion.div
