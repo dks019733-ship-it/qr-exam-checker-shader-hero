@@ -232,7 +232,7 @@ export async function GET() {
     const overallPercent = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
 
     // Preserve the existing Thai grade-point scale without exposing a grade column in the score table.
-    const gradePoints = scores.map(({ percent }) => {
+    const gradePoints: number[] = scores.map(({ percent }) => {
       if (percent >= 80) return 4;
       if (percent >= 75) return 3.5;
       if (percent >= 70) return 3;
