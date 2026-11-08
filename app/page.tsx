@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { SignInButton, SignOutButton } from "@/components/auth-buttons";
@@ -22,7 +23,9 @@ import { SiteAnnouncementBanner } from "@/components/site-announcement-banner";
 import { isSystemOwner } from "@/lib/system-guardian";
 import { FEATURE_CATALOG, getFeatureAvailability, type FeatureKey } from "@/lib/feature-availability";
 
-const tools = [
+type ToolCard = { title: string; description: string; href: string; icon: LucideIcon; feature?: FeatureKey; highlight?: boolean };
+
+const tools: ToolCard[] = [
   {
     title: "จัดการห้องเรียนและนักเรียน",
     description: "สร้างห้องเรียน นำเข้ารายชื่อ และจัดการข้อมูลนักเรียนในที่เดียว",
@@ -99,7 +102,7 @@ const tools = [
     icon: ClipboardList,
     highlight: true,
   },
-] as const;
+];
 
 const workflow = [
   {
