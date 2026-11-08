@@ -117,7 +117,7 @@ export async function GET() {
         desc = `แบบทดสอบวัดผลในชั้นเรียน ${col.exam?._count?.questions ? `(${col.exam._count.questions} ข้อ)` : ""}`;
       }
 
-      const periodLabel = col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
+      const periodLabel = col.period === "BEFORE_MIDTERM" ? "ก่อนกลางภาค" : col.period === "MIDTERM" ? "กลางภาค" : "หลังกลางภาค";
 
       return {
         id: col.id,
@@ -161,7 +161,16 @@ export async function GET() {
         "วิชาทั่วไป";
       const subjectCode = teachingAssignment?.subject?.code || "";
       const subjectLabel = subjectCode ? `${subjectCode} · ${subjectName}` : subjectName;
-      const subjectKey = teachingAssignment?.id || (subjectCode ? `${subjectCode}:${subjectName}` : subjectName);
+      const legacySubject = (col.exam?.subject || col.googleForm?.material?.subject || "").trim().toLocaleLowerCase("th-TH");
+      const legacyMatches = legacySubject
+        ? classTeachingAssignments.filter((assignment) =>
+            [assignment.subject.code, assignment.subject.name]
+              .some((value) => value.trim().toLocaleLowerCase("th-TH") === legacySubject),
+          )
+        : [];
+      // Never merge unlinked columns when their subject cannot be identified unambiguously.
+      const subjectKey = teachingAssignment?.id
+        || (legacySubject && legacyMatches.length === 0 ? `legacy:${legacySubject}` : `unlinked:${col.id}`);
 
       const teacherName =
         teachingAssignment?.owner?.name || teacherDefault;
@@ -222,13 +231,20 @@ export async function GET() {
     const totalMax = assignments.reduce((sum, a) => sum + a.maxScore, 0);
     const overallPercent = totalMax > 0 ? (totalEarned / totalMax) * 100 : 0;
 
-    let overallGpa = "—";
-    if (scores.length > 0) {
-      const validGrades = scores.map((s) => parseFloat(s.grade)).filter((g) => !isNaN(g));
-      if (validGrades.length > 0) {
-        overallGpa = (validGrades.reduce((a, b) => a + b, 0) / validGrades.length).toFixed(2);
-      }
-    }
+    // Preserve the existing Thai grade-point scale without exposing a grade column in the score table.
+    const gradePoints = scores.map(({ percent }) => {
+      if (percent >= 80) return 4;
+      if (percent >= 75) return 3.5;
+      if (percent >= 70) return 3;
+      if (percent >= 65) return 2.5;
+      if (percent >= 60) return 2;
+      if (percent >= 55) return 1.5;
+      if (percent >= 50) return 1;
+      return 0;
+    });
+    const overallGpa = gradePoints.length
+      ? (gradePoints.reduce((sum, grade) => sum + grade, 0) / gradePoints.length).toFixed(2)
+      : "—";
 
     // Dynamic announcements
     const announcements = [
