@@ -113,8 +113,16 @@ export function validateUploadInput(contentType: string, sizeBytes: number) {
   return null;
 }
 
-export async function createUploadUrl(objectKey: string, _contentType: string) {
-  return signedUrl("PUT", objectKey, 300);
+export async function createUploadUrl(objectKey: string, contentType: string) {
+  return signedUrl("PUT", objectKey, 300, {
+    "content-type": contentType,
+    "if-none-match": "*",
+  });
+}
+
+export async function deleteStoredObject(objectKey: string) {
+  const response = await fetch(signedUrl("DELETE", objectKey, 60), { method: "DELETE", cache: "no-store" });
+  if (!response.ok && response.status !== 404) throw new Error("OBJECT_STORAGE_DELETE_FAILED_" + response.status);
 }
 
 export async function createDownloadUrl(objectKey: string) {
@@ -132,7 +140,7 @@ export async function verifyStoredObject(objectKey: string, expectedContentType:
     headers: { Range: "bytes=0-15" },
     cache: "no-store",
   });
-  if (!sampleResponse.ok && sampleResponse.status !== 206) throw new Error("OBJECT_STORAGE_SAMPLE_FAILED");
+  if (sampleResponse.status !== 206) { await sampleResponse.body?.cancel(); throw new Error("OBJECT_STORAGE_RANGE_NOT_SUPPORTED"); }
   const bytes = new Uint8Array(await sampleResponse.arrayBuffer());
   const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
   let signatureValid = false;
