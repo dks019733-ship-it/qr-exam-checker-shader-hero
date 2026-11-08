@@ -1,3 +1,4 @@
+import { FeatureAvailabilityGate } from "@/components/feature-availability-gate";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
