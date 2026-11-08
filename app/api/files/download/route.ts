@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
@@ -6,6 +7,9 @@ import { verifyStudentToken } from "@/lib/student-token";
 import { createDownloadUrl, isObjectStorageConfigured } from "@/lib/object-storage";
 
 export async function GET(request: Request) {
+  const unavailable = await featureAvailabilityResponse("assignments");
+  if (unavailable) return unavailable;
+
   if (!isObjectStorageConfigured()) return NextResponse.json({ error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า" }, { status: 503 });
 
   const params = new URL(request.url).searchParams;
