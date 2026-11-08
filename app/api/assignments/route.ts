@@ -66,6 +66,12 @@ export async function POST(request: Request) {
   if (maxScore !== null && (!Number.isFinite(maxScore) || maxScore < 0 || maxScore > 10000)) {
     return NextResponse.json({ error: "คะแนนเต็มไม่ถูกต้อง" }, { status: 400 });
   }
+  if (status === "PUBLISHED" && mode === "SYSTEM_UPLOAD") {
+    return NextResponse.json(
+      { error: "งานแบบส่งไฟล์ต้องสร้างเป็นฉบับร่าง แนบไฟล์คำสั่งงาน แล้วจึงเผยแพร่" },
+      { status: 400 },
+    );
+  }
   if (mode === "GOOGLE_FORM" && !isAllowedGoogleFormUrl(googleFormUrl)) {
     return NextResponse.json({ error: "ลิงก์ต้องเป็น Google Forms ที่ปลอดภัย (forms.gle หรือ docs.google.com/forms)" }, { status: 400 });
   }
