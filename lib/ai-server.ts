@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getFeatureAvailability } from "@/lib/feature-availability";
 import type { TeacherAiProfile } from "@/lib/teacher-ai-profile";
 
 export class AIRequestError extends Error {
@@ -10,6 +11,16 @@ export class AIRequestError extends Error {
 export async function requireAIUser() {
   const session = await auth();
   if (!session?.user?.id) throw new AIRequestError("กรุณาเข้าสู่ระบบก่อนใช้งาน", 401);
+
+  const availability = await getFeatureAvailability("ai");
+  if (availability.status !== "AVAILABLE") {
+    throw new AIRequestError(
+      availability.status === "MAINTENANCE"
+        ? "ระบบผู้ช่วย AI กำลังปิดปรับปรุง"
+        : "ระบบผู้ช่วย AI ยังไม่พร้อมใช้งาน",
+      503,
+    );
+  }
   return session.user.id;
 }
 
