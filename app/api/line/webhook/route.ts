@@ -81,9 +81,10 @@ async function handleFeatureCommand(command: string, ownerLineId: string): Promi
     return ["สถานะฟีเจอร์ในเว็บไซต์:", ...Object.entries(FEATURE_CATALOG).map(([key, label]) => {
       const row = byKey.get(key);
       const expired = row?.untilAt && row.untilAt.getTime() <= now;
-      const status = !row || row.status === "AVAILABLE" || expired ? "พร้อมใช้งาน"
+      const status = !row && key === "answer_sheet" ? "ไม่พร้อมใช้งาน"
+        : !row || row.status === "AVAILABLE" || expired ? "พร้อมใช้งาน"
         : row.status === "MAINTENANCE" ? "ปิดปรับปรุง" : "ไม่พร้อมใช้งาน";
-      return `• ${label}: ${status}${row?.reason ? ` — ${row.reason}` : ""}${status !== "พร้อมใช้งาน" ? `\n  เปิดอีกครั้ง: ${featureTime(row?.untilAt ?? null)}` : ""}`;
+      return `• ${label}: ${status}${status !== "พร้อมใช้งาน" && row?.reason ? ` — ${row.reason}` : status === "ไม่พร้อมใช้งาน" && !row ? " — อยู่ระหว่างเตรียมพัฒนา" : ""}${status !== "พร้อมใช้งาน" ? `\n  เปิดอีกครั้ง: ${featureTime(row?.untilAt ?? null)}` : ""}`;
     })].join("\n");
   }
 
