@@ -142,8 +142,10 @@ export async function GET() {
       };
     });
 
-    // Student score summary includes coursework periods only. MIDTERM exam scores remain
-    // stored in the gradebook but are intentionally excluded from the student portal.
+    // Gradebook columns are coursework scores for the student portal.
+    // BEFORE_MIDTERM and AFTER_MIDTERM are the teacher's two coursework periods.
+    // Do not infer that a GradeColumn with the legacy MIDTERM enum is an exam result:
+    // actual exam results must be represented and displayed through a separate exam-score field.
     const subjectMap = new Map<
       string,
       {
@@ -155,8 +157,6 @@ export async function GET() {
     >();
 
     for (const col of columns) {
-      if (col.period === "MIDTERM") continue;
-
       const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
         teachingAssignment?.subject?.name ||
