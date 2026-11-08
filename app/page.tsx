@@ -353,13 +353,13 @@ export default async function HomePage() {
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f0f3eb] text-[#4d5f4a] transition group-hover:bg-[#d8e6d5]">
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${!signedIn || !feature || availability[feature].status === "AVAILABLE" ? "border-[#a3bfa0]/40 bg-[#eaf2e8] text-[#374535]" : availability[feature].status === "MAINTENANCE" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-100 text-slate-700"}`}>
-                    {!signedIn ? "เข้าสู่ระบบเพื่อเริ่ม" : feature ? (availability[feature].status === "MAINTENANCE" ? "ปิดปรับปรุง" : availability[feature].status === "UNAVAILABLE" ? "ยังไม่พร้อมใช้งาน" : "พร้อมใช้งาน") : "พร้อมใช้งาน"}
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${feature && availability[feature].status === "MAINTENANCE" ? "border-amber-200 bg-amber-50 text-amber-800" : feature && availability[feature].status === "UNAVAILABLE" ? "border-slate-200 bg-slate-100 text-slate-700" : "border-[#a3bfa0]/40 bg-[#eaf2e8] text-[#374535]"}`}>
+                    {feature ? (availability[feature].status === "MAINTENANCE" ? "ปิดปรับปรุง" : availability[feature].status === "UNAVAILABLE" ? "ยังไม่พร้อมใช้งาน" : "พร้อมใช้งาน") : signedIn ? "พร้อมใช้งาน" : "เข้าสู่ระบบเพื่อเริ่ม"}
                   </span>
                 </div>
                 <h3 className="mt-5 text-base font-extrabold text-[#1c241b]">{title}</h3>
                 <p className="mt-2 flex-1 text-sm leading-6 text-[#5e6d5b]">{description}</p>
-                {signedIn && feature && availability[feature].reason && availability[feature].status !== "AVAILABLE" && <p className="mt-2 text-xs text-[#7a5a32]">{availability[feature].reason}{availability[feature].untilAt ? ` · เปิดอีกครั้ง ${new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(availability[feature].untilAt)}` : ""}</p>}
+                {feature && availability[feature].reason && availability[feature].status !== "AVAILABLE" && <p className="mt-2 text-xs text-[#7a5a32]">{availability[feature].reason}{availability[feature].untilAt ? ` · เปิดอีกครั้ง ${new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(availability[feature].untilAt)}` : ""}</p>}
                 <span className="mt-5 inline-flex items-center gap-2 border-t border-[#f0f3eb] pt-4 text-sm font-bold text-[#4d5f4a]">
                   {signedIn ? "เปิดเครื่องมือ" : "เข้าสู่ระบบ"}
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
