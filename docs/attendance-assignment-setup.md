@@ -15,7 +15,7 @@ npx prisma migrate deploy
 
 Do not run `prisma db push` against production as a substitute for the reviewed migration.
 
-## Private file storage
+Feature availability controls are managed by the LINE owner account. See [LINE feature availability commands](./feature-availability-line-commands.md). The answer-sheet feature is seeded as unavailable until it is explicitly enabled.\n\n## Private file storage
 
 Assignment attachments and student submissions use a private Cloudflare R2 bucket through short-lived S3-compatible signed URLs. The bucket must not be public.
 
