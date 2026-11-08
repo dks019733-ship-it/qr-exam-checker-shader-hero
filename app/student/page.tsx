@@ -876,14 +876,18 @@ export default function StudentPortalPage() {
                 >
                   ปิด
                 </button>
-                {selectedTask.mode === "SYSTEM_UPLOAD" && !selectedTask.submission ? (
+                {selectedTask.mode === "SYSTEM_UPLOAD" && selectedTask.submission?.status !== "REVIEWED" ? (
                   <button disabled={uploading || selectedFiles.length === 0} onClick={async () => {
                     if (!selectedTask.assignmentId || !selectedFiles.length) return;
                     setUploading(true);
                     setUploadError("");
                     try {
+                      const alreadyUploaded = new Set((selectedTask.submission?.files || []).map((item) => item.fileName.toLocaleLowerCase()));
                       for (const originalFile of selectedFiles) {
                         const file = await compressImageBalanced(originalFile);
+                        if (alreadyUploaded.has(file.name.toLocaleLowerCase())) {
+                          throw new Error("ไฟล์ " + file.name + " ถูกส่งแล้ว หากต้องการส่งไฟล์เพิ่มเติมให้เลือกไฟล์ชื่ออื่น");
+                        }
                         const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const presign = await presignResponse.json();
                         if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
@@ -892,6 +896,20 @@ export default function StudentPortalPage() {
                         const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const complete = await completeResponse.json();
                         if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
+                        const submittedAt = complete.submission.submittedAt as string;
+                        alreadyUploaded.add(file.name.toLocaleLowerCase());
+                        setSelectedTask((current) => current ? {
+                          ...current,
+                          submission: {
+                            id: complete.submission.id,
+                            status: "SUBMITTED",
+                            submittedAt,
+                            isLate: Boolean(current.dueAt && new Date(submittedAt) > new Date(current.dueAt)),
+                            score: current.submission?.score ?? null,
+                            feedback: current.submission?.feedback ?? "",
+                            files: [...(current.submission?.files || []), complete.file],
+                          },
+                        } : current);
                       }
                       setSelectedTask(null);
                       setSelectedFiles([]);
