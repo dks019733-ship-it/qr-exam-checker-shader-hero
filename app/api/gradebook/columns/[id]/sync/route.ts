@@ -60,13 +60,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const nameIds = fieldIds(["ชื่อ-นามสกุล", "ชื่อสกุล", "ชื่อ-สกุล", "ชื่อนักเรียน", "ชื่อ"]);
     if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ต้องมีคำถามสำหรับเลขที่ ห้อง และชื่อ-นามสกุล (ใช้ชื่อช่องใกล้เคียงได้) กรุณาตรวจคำถามในฟอร์ม" }, { status: 400 });
     const maxFormScore = items.reduce((sum, item) => sum + Number(item.questionItem?.question?.grading?.pointValue || 0), 0);
-    if (!maxFormScore) return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
+    if (!maxFormScore && column.assignment?.mode !== "GOOGLE_FORM") return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
     const gradedQuestionIds = items.flatMap((item) => {
       const question = item.questionItem?.question;
       return question?.questionId && Number(question.grading?.pointValue || 0) > 0 ? [question.questionId] : [];
     });
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
-    await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+    if (maxFormScore > 0) await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
     const [students, classrooms, savedReviews] = await Promise.all([
       prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
       prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true } }),
