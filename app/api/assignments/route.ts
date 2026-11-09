@@ -97,6 +97,9 @@ export async function POST(request: Request) {
     });
     if (!attendance) return NextResponse.json({ error: "ไม่พบคาบเรียนที่เลือก" }, { status: 404 });
   }
+  if (autoMarkAttendance && mode !== "SYSTEM_UPLOAD") {
+    return NextResponse.json({ error: "การเช็กชื่ออัตโนมัติรองรับเฉพาะงานแบบส่งไฟล์ในระบบ" }, { status: 400 });
+  }
   if (autoMarkAttendance && !attendanceSessionId) {
     return NextResponse.json({ error: "ต้องเลือกคาบเช็กชื่อก่อนเปิดใช้การเช็กชื่ออัตโนมัติ" }, { status: 400 });
   }
