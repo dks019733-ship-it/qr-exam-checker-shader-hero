@@ -2,10 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, BookOpen, CalendarClock, FileUp, Plus, RefreshCw } from "lucide-react";
+import { AlertCircle, FileUp, Plus, RefreshCw } from "lucide-react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 
-type GradePeriod = "MIDTERM" | "AFTER_MIDTERM";
+type GradeColumnOption = {
+  id: string;
+  title: string;
+  period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM";
+  maxScore: number;
+  teachingAssignmentId: string | null;
+  assignmentId: string | null;
+};
 type TeachingAssignment = {
   id: string;
   subject: { code: string; name: string };
@@ -19,20 +26,21 @@ type AssignmentRow = {
   classroom: { name: string };
   teachingAssignment: { subject: { code: string; name: string } };
   _count: { submissions: number };
-  gradeColumn?: { id: string; period: "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
+  gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
 };
 
 export function AssignmentManager() {
   const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
-  const [title, setTitle] = useState("");
+  const [gradeColumns, setGradeColumns] = useState<GradeColumnOption[]>([]);
+  const [gradeColumnId, setGradeColumnId] = useState("");
+  const [gradeColumnsLoading, setGradeColumnsLoading] = useState(false);
+  const [gradeColumnsVersion, setGradeColumnsVersion] = useState(0);
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<"TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM">("TEACHER_CHECK");
   const [googleFormUrl, setGoogleFormUrl] = useState("");
   const [dueAt, setDueAt] = useState("");
-  const [maxScore, setMaxScore] = useState("10");
-  const [gradePeriod, setGradePeriod] = useState<GradePeriod>("MIDTERM");
   const [autoMarkAttendance, setAutoMarkAttendance] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState("");
   const [attendanceSessionId, setAttendanceSessionId] = useState("");
@@ -64,6 +72,39 @@ export function AssignmentManager() {
   }, [teachingAssignmentId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const course = teachingAssignments.find((item) => item.id === teachingAssignmentId);
+    if (!course) {
+      setGradeColumns([]);
+      setGradeColumnId("");
+      return;
+    }
+
+    let active = true;
+    setGradeColumnsLoading(true);
+    setGradeColumnId("");
+    fetch("/api/gradebook?classId=" + encodeURIComponent(course.classroom.id), { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "โหลดช่องคะแนนไม่สำเร็จ");
+        if (!active) return;
+        const available = (data.columns || []).filter((column: GradeColumnOption) =>
+          (column.teachingAssignmentId === teachingAssignmentId || column.teachingAssignmentId === null) && !column.assignmentId
+        );
+        setGradeColumns(available);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "โหลดช่องคะแนนไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (active) setGradeColumnsLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [teachingAssignmentId, teachingAssignments, gradeColumnsVersion]);
+
+  const selectedGradeColumn = gradeColumns.find((column) => column.id === gradeColumnId);
 
   async function resolveAttendanceSession() {
     if (!autoMarkAttendance) return null;
@@ -105,6 +146,7 @@ export function AssignmentManager() {
     setNotice("");
     try {
       if (!teachingAssignmentId) throw new Error("ยังไม่มีรายวิชาที่ผูกกับห้องเรียน");
+      if (!gradeColumnId || !selectedGradeColumn) throw new Error("กรุณาเลือกชื่องานจากสมุดออนไลน์ก่อน");
       if (mode === "SYSTEM_UPLOAD" && files.length === 0) throw new Error("งานแบบส่งในระบบต้องแนบไฟล์คำสั่งงานอย่างน้อย 1 ไฟล์");
       const linkedSessionId = await resolveAttendanceSession();
       const response = await fetch("/api/assignments", {
@@ -112,14 +154,12 @@ export function AssignmentManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           teachingAssignmentId,
-          title,
+          gradeColumnId,
           description,
           mode,
           status: "DRAFT",
           googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
-          maxScore: maxScore === "" ? null : Number(maxScore),
-          gradePeriod,
           autoMarkAttendance,
           attendanceSessionId: linkedSessionId,
         }),
@@ -136,7 +176,7 @@ export function AssignmentManager() {
       const published = await publishResponse.json();
       if (!publishResponse.ok) throw new Error(published.error || "สร้างงานแล้ว แต่เผยแพร่ไม่สำเร็จ งานยังเป็นฉบับร่าง");
 
-      setTitle("");
+      setGradeColumnId("");
       setDescription("");
       setGoogleFormUrl("");
       setDueAt("");
@@ -145,6 +185,7 @@ export function AssignmentManager() {
       setAttendanceSessionId("");
       setNotice("เผยแพร่งานให้นักเรียนเรียบร้อยแล้ว");
       await refresh();
+      setGradeColumnsVersion((current) => current + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "สร้างงานไม่สำเร็จ");
     } finally {
@@ -166,7 +207,7 @@ export function AssignmentManager() {
         <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f3eb] text-[#4d5f4a]"><Plus className="h-5 w-5" /></div>
-            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">คะแนนของงานจะสร้างช่องในสมุดคะแนนของรายวิชาและภาคเรียนที่เลือกโดยอัตโนมัติ</p></div>
+            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">เลือกชื่องานจากสมุดออนไลน์ที่มีอยู่แล้ว ระบบจะเชื่อมงานโดยไม่สร้างหรือแก้ไขคะแนน</p></div>
           </div>
 
           {teachingAssignments.length === 0 ? (
@@ -174,20 +215,16 @@ export function AssignmentManager() {
           ) : (
             <form onSubmit={createAssignment} className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายวิชา / ห้องเรียน</span><select value={teachingAssignmentId} onChange={(event) => setTeachingAssignmentId(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm">{teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}</select></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายวิชา / ห้องเรียน</span><select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setGradeColumnId(""); }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm">{teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}</select></label>
                 <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รูปแบบการส่งงาน</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option><option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option><option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option></select></label>
               </div>
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ชื่องาน</span><input required maxLength={160} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="เช่น ใบงานที่ 1 ระบบหมุนเวียนเลือด" className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm outline-none focus:border-[#718b6b]" /></label>
+              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ชื่องานจากสมุดออนไลน์</span><select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm disabled:bg-[#f5f6f2]"><option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>{gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}</select>{selectedGradeColumn && <span className="mt-1 block text-xs text-[#788174]">ชื่องานและคะแนนเต็มจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}</label>
               <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายละเอียด / คำชี้แจง</span><textarea maxLength={5000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="อธิบายสิ่งที่นักเรียนต้องทำ..." className="w-full rounded-xl border border-[#dfe4d8] px-3 py-3 text-sm outline-none focus:border-[#718b6b]" /></label>
 
               {mode === "GOOGLE_FORM" && <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ลิงก์ Google Forms</span><input required type="url" value={googleFormUrl} onChange={(event) => setGoogleFormUrl(event.target.value)} placeholder="https://forms.gle/..." className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm outline-none focus:border-[#718b6b]" /></label>}
               {mode !== "GOOGLE_FORM" && <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ไฟล์คำสั่งงาน / ใบงานจากครู {mode === "SYSTEM_UPLOAD" ? "(จำเป็น)" : "(ไม่บังคับ)"}</span><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setFiles(Array.from(event.target.files || []))} className="block w-full rounded-xl border border-[#dfe4d8] p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#f0f3eb] file:px-3 file:py-2 file:font-bold" />{files.length > 0 && <span className="mt-1 block text-xs text-[#788174]">เลือกแล้ว {files.length} ไฟล์</span>}</label>}
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">กำหนดส่ง (ไม่บังคับ)</span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">คะแนนเต็ม (จำเป็นสำหรับสมุดคะแนน)</span><input required type="number" min="0.01" max="10000" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ภาคเรียนในสมุดคะแนน</span><select value={gradePeriod} onChange={(event) => setGradePeriod(event.target.value as GradePeriod)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="MIDTERM">ก่อนกลางภาค</option><option value="AFTER_MIDTERM">หลังกลางภาค</option></select></label>
-              </div>
+              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">กำหนดส่ง (ไม่บังคับ)</span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
 
               {mode === "SYSTEM_UPLOAD" && <div className="rounded-xl border border-[#e6e8df] bg-[#fafbf8] p-4">
                 <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={autoMarkAttendance} onChange={(event) => setAutoMarkAttendance(event.target.checked)} className="h-4 w-4 accent-[#4d5f4a]" /> เช็กชื่อ “มา” อัตโนมัติเมื่อส่งงานสำเร็จในระบบ</label>
@@ -196,14 +233,14 @@ export function AssignmentManager() {
 
               {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
               {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</p>}
-              <button type="submit" disabled={saving || !selectedCourse} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#4d5f4a] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#374535] disabled:opacity-50"><FileUp className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "บันทึกและเผยแพร่งาน"}</button>
+              <button type="submit" disabled={saving || !selectedCourse || !selectedGradeColumn || gradeColumnsLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#4d5f4a] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#374535] disabled:opacity-50"><FileUp className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "บันทึกและเผยแพร่งาน"}</button>
             </form>
           )}
         </section>
 
         <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold">งานที่สร้างไว้</h2><p className="mt-1 text-xs text-[#788174]">รายการงานในห้องเรียนที่คุณรับผิดชอบ</p></div><button type="button" onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold"><RefreshCw className="h-3.5 w-3.5" />รีเฟรช</button></div>
-          {loading ? <p className="py-8 text-center text-sm text-[#788174]">กำลังโหลด...</p> : assignments.length === 0 ? <p className="py-8 text-center text-sm text-[#788174]">ยังไม่มีงานที่สร้าง</p> : <div className="divide-y divide-[#edf0e9]">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link href={"/dashboard/assignments/" + item.id} className="truncate text-sm font-semibold text-[#4d5f4a] hover:underline">{item.title} · ตรวจงาน</Link><p className="mt-1 text-xs text-[#788174]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</p></div><div className="flex items-center gap-2 text-xs"><span className="rounded-lg bg-[#f0f3eb] px-2.5 py-1 font-semibold text-[#4d5f4a]">{item.mode === "TEACHER_CHECK" ? "ตรวจกับครู" : item.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms"}</span><span className="rounded-lg border border-[#e6e8df] px-2.5 py-1">{item.status === "PUBLISHED" ? "เผยแพร่แล้ว" : item.status === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง"}</span><span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-800">{item.gradeColumn ? "ซิงก์สมุดคะแนนแล้ว" : "ยังไม่เชื่อมคะแนน"}</span><span className="text-[#788174]">ส่งแล้ว {item._count.submissions}</span></div></div>)}</div>}
+          {loading ? <p className="py-8 text-center text-sm text-[#788174]">กำลังโหลด...</p> : assignments.length === 0 ? <p className="py-8 text-center text-sm text-[#788174]">ยังไม่มีงานที่สร้าง</p> : <div className="divide-y divide-[#edf0e9]">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link href={"/dashboard/assignments/" + item.id} className="truncate text-sm font-semibold text-[#4d5f4a] hover:underline">{item.gradeColumn?.title || item.title} · ตรวจงาน</Link><p className="mt-1 text-xs text-[#788174]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</p></div><div className="flex items-center gap-2 text-xs"><span className="rounded-lg bg-[#f0f3eb] px-2.5 py-1 font-semibold text-[#4d5f4a]">{item.mode === "TEACHER_CHECK" ? "ตรวจกับครู" : item.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms"}</span><span className="rounded-lg border border-[#e6e8df] px-2.5 py-1">{item.status === "PUBLISHED" ? "เผยแพร่แล้ว" : item.status === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง"}</span><span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-800">{item.gradeColumn ? "เชื่อมสมุดออนไลน์แล้ว" : "ยังไม่เชื่อมสมุดออนไลน์"}</span><span className="text-[#788174]">ส่งแล้ว {item._count.submissions}</span></div></div>)}</div>}
         </section>
       </div>
     </main>

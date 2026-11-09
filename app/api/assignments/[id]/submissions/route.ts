@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true, gradeColumn: { select: { id: true, period: true, maxScore: true } } },
+    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true, teachingAssignmentId: true, gradeColumn: { select: { id: true, title: true, period: true, maxScore: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
 
@@ -33,7 +33,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       })
     : [];
   return NextResponse.json({
-    assignment,
+    assignment: {
+      ...assignment,
+      title: assignment.gradeColumn?.title ?? assignment.title,
+    },
     unreceivedStudents: students.filter((student) => !receivedStudentIds.has(student.id)),
     submissions: submissions.map((item) => ({
       id: item.id,
@@ -122,17 +125,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       } : {},
       select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
     });
-    if (hasReviewInput && assignment.gradeColumn) {
-      if (assignment.gradeColumn.classId !== assignment.classId) {
-        throw new Error("GRADE_COLUMN_CLASS_MISMATCH");
-      }
-      await tx.gradeScore.upsert({
-        where: { columnId_studentId: { columnId: assignment.gradeColumn.id, studentId: student.id } },
-        create: { columnId: assignment.gradeColumn.id, studentId: student.id, score },
-        update: { score },
-      });
-    }
     return submission;
   });
-  return NextResponse.json({ ...saved, gradebookSynced: hasReviewInput && Boolean(assignment.gradeColumn) });
+  return NextResponse.json({ ...saved, gradeColumnLinked: Boolean(assignment.gradeColumn), gradebookScoreChanged: false });
 }

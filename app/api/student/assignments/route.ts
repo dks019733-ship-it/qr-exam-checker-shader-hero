@@ -29,6 +29,17 @@ export async function GET() {
     include: {
       teachingAssignment: { include: { subject: { select: { code: true, name: true } }, owner: { select: { name: true } } } },
       files: { select: { id: true, fileName: true, contentType: true, sizeBytes: true } },
+      gradeColumn: {
+        select: {
+          title: true,
+          maxScore: true,
+          scores: {
+            where: { studentId: student.id },
+            select: { score: true },
+            take: 1,
+          },
+        },
+      },
       submissions: {
         where: { studentId: student.id },
         select: {
@@ -49,11 +60,11 @@ export async function GET() {
       const submission = assignment.submissions[0] ?? null;
       return {
         id: assignment.id,
-        title: assignment.title,
+        title: assignment.gradeColumn?.title ?? assignment.title,
         description: assignment.description,
         mode: assignment.mode,
         dueAt: assignment.dueAt?.toISOString() ?? null,
-        maxScore: assignment.maxScore,
+        maxScore: assignment.gradeColumn?.maxScore ?? assignment.maxScore,
         googleFormUrl: assignment.googleFormUrl,
         subject: assignment.teachingAssignment.subject,
         teacher: assignment.teachingAssignment.owner.name || "ครูผู้สอน",
@@ -63,7 +74,7 @@ export async function GET() {
           status: submission.status,
           submittedAt: submission.submittedAt.toISOString(),
           isLate: Boolean(assignment.dueAt && submission.submittedAt > assignment.dueAt),
-          score: submission.score,
+          score: assignment.gradeColumn ? (assignment.gradeColumn.scores[0]?.score ?? null) : submission.score,
           feedback: submission.feedback,
           files: submission.files,
         } : null,
