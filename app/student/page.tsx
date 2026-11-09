@@ -152,7 +152,7 @@ export default function StudentPortalPage() {
             dueDate: task.dueAt ? new Date(task.dueAt).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "ไม่กำหนด",
             dueAt: task.dueAt,
             status: submitted ? "submitted" : "pending",
-            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : task.submission.status === "REVIEWED" ? (score === null ? "ตรวจแล้ว" : maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : "รอตรวจ",
+            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : score !== null && score !== undefined ? (maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
             rawScore: score ?? null,
             maxScore,
             points: maxScore !== null ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
