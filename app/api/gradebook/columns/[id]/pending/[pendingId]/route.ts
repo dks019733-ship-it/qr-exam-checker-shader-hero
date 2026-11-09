@@ -27,12 +27,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   await prisma.$transaction([
     ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
-      where: { columnId: { in: staleColumnIds }, studentId },
+      where: { columnId: { in: staleColumnIds }, studentId, manualOverride: false },
     })] : []),
     prisma.gradeScore.upsert({
       where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
-      create: { columnId: destinationColumnId, studentId, score: pending.score },
-      update: { score: pending.score },
+      create: { columnId: destinationColumnId, studentId, score: pending.score, manualOverride: true },
+      update: { score: pending.score, manualOverride: true },
     }),
     prisma.formResponseReview.upsert({
       where: { columnId_responseId: { columnId: pending.columnId, responseId: pending.responseId } },
