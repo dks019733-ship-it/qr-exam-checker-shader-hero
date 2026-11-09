@@ -12,6 +12,7 @@ export async function PUT(
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบครู" }, { status: 401 });
+  const ownerId = session.user.id;
 
   const { id, submissionId } = await context.params;
   const body = await request.json().catch(() => null);
@@ -25,21 +26,35 @@ export async function PUT(
   }
 
   const assignment = await prisma.assignment.findFirst({
-    where: { id, ownerId: session.user.id },
+    where: { id, ownerId },
     select: { id: true, classId: true, gradeColumn: { select: { id: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
 
   try {
-    const result = await prisma.submission.updateMany({
-      where: { id: submissionId, assignmentId: assignment.id, status: { not: "REVIEWED" } },
-      data: {
-        feedback,
-        status: action,
-        reviewedAt: new Date(),
-      },
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await tx.submission.updateMany({
+        where: { id: submissionId, assignmentId: assignment.id, status: { not: "REVIEWED" } },
+        data: {
+          feedback,
+          status: action,
+          reviewedAt: new Date(),
+        },
+      });
+      if (result.count !== 1) return { conflict: true as const };
+
+      const updated = await tx.submission.findUnique({
+        where: { id: submissionId },
+        select: { id: true, status: true, score: true, feedback: true, reviewedAt: true, student: { select: { classId: true } } },
+      });
+      if (!updated || updated.student.classId !== assignment.classId) {
+        throw new Error("SUBMISSION_STUDENT_CLASS_MISMATCH");
+      }
+      const { student: _student, ...submission } = updated;
+      return { conflict: false as const, submission };
     });
-    if (result.count !== 1) {
+
+    if (outcome.conflict) {
       const exists = await prisma.submission.findFirst({
         where: { id: submissionId, assignmentId: assignment.id },
         select: { id: true },
@@ -50,16 +65,8 @@ export async function PUT(
       );
     }
 
-    const updated = await prisma.submission.findUnique({
-      where: { id: submissionId },
-      select: { id: true, status: true, score: true, feedback: true, reviewedAt: true, student: { select: { classId: true } } },
-    });
-    if (!updated || updated.student.classId !== assignment.classId) {
-      return NextResponse.json({ error: "รายการส่งงานไม่ตรงกับห้องเรียนของงานนี้" }, { status: 409 });
-    }
-    const { student: _student, ...submission } = updated;
     return NextResponse.json({
-      ...submission,
+      ...outcome.submission,
       gradeColumnLinked: Boolean(assignment.gradeColumn),
       gradebookScoreChanged: false,
     });
