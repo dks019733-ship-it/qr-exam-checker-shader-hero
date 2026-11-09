@@ -34,24 +34,30 @@ export async function PUT(
     return NextResponse.json({ error: "คะแนนเกินคะแนนเต็มของงาน" }, { status: 400 });
   }
 
-  const submission = await prisma.submission.findFirst({
-    where: { id: submissionId, assignmentId: assignment.id },
-    select: { id: true, status: true },
-  });
-  if (!submission) return NextResponse.json({ error: "ไม่พบรายการส่งงาน" }, { status: 404 });
-  if (submission.status === "REVIEWED") {
-    return NextResponse.json({ error: "งานนี้ตรวจและล็อกผลแล้ว ไม่สามารถเปลี่ยนสถานะได้" }, { status: 409 });
-  }
-
   try {
-    const updated = await prisma.submission.update({
-      where: { id: submission.id },
+    // Atomic compare-and-set: concurrent upload/review requests cannot overwrite REVIEWED.
+    const result = await prisma.submission.updateMany({
+      where: { id: submissionId, assignmentId: assignment.id, status: { not: "REVIEWED" } },
       data: action === "RETURNED"
         ? { score: null, feedback, status: "RETURNED", reviewedAt: new Date() }
         : { score, feedback, status: "REVIEWED", reviewedAt: new Date() },
+    });
+    if (result.count !== 1) {
+      const exists = await prisma.submission.findFirst({
+        where: { id: submissionId, assignmentId: assignment.id },
+        select: { id: true },
+      });
+      return NextResponse.json(
+        { error: exists ? "งานนี้ตรวจและล็อกผลแล้ว หรือมีการเปลี่ยนสถานะพร้อมกัน กรุณาโหลดข้อมูลใหม่" : "ไม่พบรายการส่งงาน" },
+        { status: exists ? 409 : 404 },
+      );
+    }
+    const updated = await prisma.submission.findUnique({
+      where: { id: submissionId },
       select: { id: true, status: true, score: true, feedback: true, reviewedAt: true },
     });
     return NextResponse.json(updated);
+
   } catch (error) {
     console.error("[AssignmentReview] update failed:", error);
     return NextResponse.json({ error: "บันทึกผลตรวจงานไม่สำเร็จ" }, { status: 500 });
