@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, BookOpen, CalendarClock, FileUp, Plus, RefreshCw } from "lucide-react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 
+type GradePeriod = "MIDTERM" | "AFTER_MIDTERM";
 type TeachingAssignment = {
   id: string;
   subject: { code: string; name: string };
@@ -30,6 +31,7 @@ export function AssignmentManager() {
   const [googleFormUrl, setGoogleFormUrl] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [maxScore, setMaxScore] = useState("10");
+  const [gradePeriod, setGradePeriod] = useState<GradePeriod>("MIDTERM");
   const [autoMarkAttendance, setAutoMarkAttendance] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState("");
   const [attendanceSessionId, setAttendanceSessionId] = useState("");
@@ -116,6 +118,7 @@ export function AssignmentManager() {
           googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
           maxScore: maxScore === "" ? null : Number(maxScore),
+          gradePeriod,
           autoMarkAttendance,
           attendanceSessionId: linkedSessionId,
         }),
@@ -162,7 +165,7 @@ export function AssignmentManager() {
         <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f3eb] text-[#4d5f4a]"><Plus className="h-5 w-5" /></div>
-            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">งานจะถูกเผยแพร่หลังบันทึกและแนบไฟล์สำเร็จ</p></div>
+            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">คะแนนของงานจะสร้างช่องในสมุดคะแนนของรายวิชาและภาคเรียนที่เลือกโดยอัตโนมัติ</p></div>
           </div>
 
           {teachingAssignments.length === 0 ? (
@@ -181,7 +184,8 @@ export function AssignmentManager() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">กำหนดส่ง (ไม่บังคับ)</span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">คะแนนเต็ม (ไม่บังคับ)</span><input type="number" min="0" max="10000" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">คะแนนเต็ม (จำเป็นสำหรับสมุดคะแนน)</span><input required type="number" min="0.01" max="10000" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ภาคเรียนในสมุดคะแนน</span><select value={gradePeriod} onChange={(event) => setGradePeriod(event.target.value as GradePeriod)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="MIDTERM">ก่อนกลางภาค</option><option value="AFTER_MIDTERM">หลังกลางภาค</option></select></label>
               </div>
 
               {mode === "SYSTEM_UPLOAD" && <div className="rounded-xl border border-[#e6e8df] bg-[#fafbf8] p-4">
