@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       classroom: { select: { id: true, name: true } },
       teachingAssignment: { include: { subject: { select: { code: true, name: true } } } },
       files: { select: { id: true, fileName: true, contentType: true, sizeBytes: true } },
+      gradeColumn: { select: { id: true, period: true, maxScore: true } },
       _count: { select: { submissions: true } },
     },
     orderBy: [{ createdAt: "desc" }],
