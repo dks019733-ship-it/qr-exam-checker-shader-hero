@@ -384,9 +384,6 @@ export function AssignmentManager() {
                         <div className="min-w-[6rem] text-right">
                           <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-[#888888]">ส่งแล้ว</div>
                           <div className="text-lg font-black tabular-nums text-[#166534]">{item._count.submissions} <span className="text-xs font-bold text-[#999999]">รายการ</span></div>
-                          <div className="mt-1.5 h-1.5 w-20 overflow-hidden rounded-full bg-[#F4F4F2]">
-                            <div className="h-full rounded-full bg-[#166534]" style={{ width: item._count.submissions > 0 ? "100%" : "0%" }} />
-                          </div>
                         </div>
                         <div className="border-l border-[#EAE8E3] pl-4">
                           <Link href={"/dashboard/assignments/" + item.id} aria-label={`ดูรายละเอียดและตรวจงาน ${item.title}`} className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-[#EAE8E3] bg-[#F4F4F2] text-[#166534] transition hover:border-[#166534] hover:bg-[#166534] hover:text-white"><FileText className="h-4 w-4" /></Link>
