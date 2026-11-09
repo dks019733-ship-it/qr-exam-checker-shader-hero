@@ -77,7 +77,9 @@ jobs:
             20261103_z_add_system_guardian \
             20261104_guardian_retry_idempotency \
             20261106_site_announcement \
-            20261106_subject_based_access
+            20261106_subject_based_access \
+            20261108_attendance_assignments \
+            20261108_feature_availability
           do
             npx prisma migrate resolve --applied "$migration"
           done
