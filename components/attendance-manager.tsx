@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CalendarDays, Check, CheckCheck, Clock3, Search, Save, Users, X } from "lucide-react";
+import {
+  AlertCircle, BookOpen, CalendarDays, Check, CheckCircle2, CheckCheck,
+  ChevronLeft, ChevronRight, Clock3, Hash, Search, Save, Sparkles, Users, UserX,
+} from "lucide-react";
 
 type TeachingAssignment = {
   id: string;
@@ -24,26 +27,55 @@ type AttendancePayload = {
   students: StudentRow[];
 };
 
-const STATUS_OPTIONS: { value: AttendanceStatus; label: string; short: string; className: string }[] = [
-  { value: "PRESENT", label: "มา", short: "มา", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-  { value: "LATE", label: "สาย", short: "สาย", className: "border-amber-200 bg-amber-50 text-amber-800" },
-  { value: "LEAVE", label: "ลา", short: "ลา", className: "border-sky-200 bg-sky-50 text-sky-800" },
-  { value: "ABSENT", label: "ขาด", short: "ขาด", className: "border-rose-200 bg-rose-50 text-rose-800" },
+const STATUS_OPTIONS: {
+  value: AttendanceStatus;
+  label: string;
+  icon: typeof Check;
+  selectedClass: string;
+}[] = [
+  { value: "PRESENT", label: "มาเรียน", icon: Check, selectedClass: "bg-gradient-to-b from-[#2C3E32] to-[#1E2B23] text-white border-[#1E2B23] shadow-lg shadow-[#2C3E32]/20" },
+  { value: "LEAVE", label: "ลา", icon: AlertCircle, selectedClass: "bg-gradient-to-b from-[#96846E] to-[#7A6B58] text-white border-[#7A6B58] shadow-lg shadow-[#96846E]/20" },
+  { value: "LATE", label: "สาย", icon: Clock3, selectedClass: "bg-gradient-to-b from-[#B88059] to-[#966747] text-white border-[#966747] shadow-lg shadow-[#B88059]/20" },
+  { value: "ABSENT", label: "ขาด", icon: UserX, selectedClass: "bg-gradient-to-b from-[#8C3A3A] to-[#6E2D2D] text-white border-[#6E2D2D] shadow-lg shadow-[#8C3A3A]/20" },
 ];
+
+const THAI_MONTHS = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+const WEEK_DAYS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
 function localDateValue() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function dateParts(value: string) {
+  const parts = value.split("-").map(Number);
+  return { year: parts[0], month: parts[1], day: parts[2] };
 }
 
 function thaiDate(value: string) {
   if (!value) return "—";
-  const [year, month, day] = value.split("-").map(Number);
-  return new Intl.DateTimeFormat("th-TH", { dateStyle: "long", timeZone: "UTC" })
-    .format(new Date(Date.UTC(year, month - 1, day)));
+  const { year, month, day } = dateParts(value);
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function dateValue(year: number, monthIndex: number, day: number) {
+  return [
+    year,
+    String(monthIndex + 1).padStart(2, "0"),
+    String(day).padStart(2, "0"),
+  ].join("-");
 }
 
 export function AttendanceManager() {
@@ -55,8 +87,14 @@ export function AttendanceManager() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [navDate, setNavDate] = useState(() => {
+    const parts = dateParts(localDateValue());
+    return new Date(parts.year, parts.month - 1, 1);
+  });
 
   useEffect(() => {
     let active = true;
@@ -70,23 +108,30 @@ export function AttendanceManager() {
         setAssignments(data);
         if (data.length) setAssignmentId(data[0].id);
       })
-      .catch((err) => { if (active) setError(err.message || "เกิดข้อผิดพลาด"); })
-      .finally(() => { if (active) setLoading(false); });
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => { active = false; };
   }, []);
 
   const loadAttendance = useCallback(async () => {
     if (!assignmentId || !date) {
       setStudents([]);
+      setLoading(false);
+      setDirty(false);
       return;
     }
     setLoading(true);
     setError("");
     setNotice("");
+    setDirty(false);
     try {
       const params = new URLSearchParams({ teachingAssignmentId: assignmentId, date });
-      const response = await fetch(`/api/attendance?${params}`, { cache: "no-store" });
-      const data = await response.json();
+      const response = await fetch("/api/attendance?" + params.toString(), { cache: "no-store" });
+      const data = await response.json() as AttendancePayload & { error?: string };
       if (!response.ok) throw new Error(data.error || "โหลดข้อมูลเช็กชื่อไม่สำเร็จ");
       setStudents(data.students);
       setTopic(data.session?.topic || "");
@@ -118,20 +163,51 @@ export function AttendanceManager() {
     unmarked: students.filter((student) => !student.attendance).length,
   }), [students]);
 
+  const selected = assignments.find((assignment) => assignment.id === assignmentId);
+  const currentYear = navDate.getFullYear();
+  const currentMonth = navDate.getMonth();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  const calendarCells = [
+    ...Array.from({ length: firstDayOfMonth }, (_, index) => ({ key: "blank-" + index, day: 0 })),
+    ...Array.from({ length: daysInMonth }, (_, index) => ({ key: "day-" + (index + 1), day: index + 1 })),
+  ];
+
   function setStatus(studentId: string, status: AttendanceStatus) {
     setStudents((current) => current.map((student) =>
       student.id === studentId ? { ...student, attendance: status } : student,
     ));
+    setDirty(true);
+    setNotice("");
   }
 
   function markAllPresent() {
     setStudents((current) => current.map((student) =>
       student.attendance === "LEAVE" ? student : { ...student, attendance: "PRESENT" },
     ));
+    setDirty(true);
+    setNotice("");
+  }
+
+  function openCalendar() {
+    const parts = dateParts(date);
+    setNavDate(new Date(parts.year, parts.month - 1, 1));
+    setShowDatePicker((open) => !open);
+  }
+
+  function selectDate(value: string) {
+    if (value === date) { setShowDatePicker(false); return; }
+    if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปลี่ยนวันและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+    setDate(value);
+    setShowDatePicker(false);
+  }
+
+  function chooseDate(day: number) {
+    selectDate(dateValue(currentYear, currentMonth, day));
   }
 
   async function saveAttendance() {
-    if (!assignmentId || !date) return;
+    if (!assignmentId || !date || saving || students.length === 0) return;
     setSaving(true);
     setError("");
     setNotice("");
@@ -152,7 +228,8 @@ export function AttendanceManager() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
-      setNotice(`บันทึกสถานะนักเรียน ${data.savedRecords} คนแล้ว`);
+      setDirty(false);
+      setNotice("บันทึกสถานะนักเรียน " + data.savedRecords + " คนแล้ว");
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
@@ -160,124 +237,323 @@ export function AttendanceManager() {
     }
   }
 
-  const selected = assignments.find((assignment) => assignment.id === assignmentId);
+  const summaryCards = [
+    {
+      label: "มาเรียน",
+      value: counts.PRESENT,
+      total: students.length,
+      icon: CheckCircle2,
+      tone: "text-[#2C3E32]",
+      bar: "bg-[#2C3E32]",
+    },
+    {
+      label: "ลา / สาย",
+      value: counts.LEAVE + counts.LATE,
+      total: students.length,
+      icon: Clock3,
+      tone: "text-[#B88059]",
+      bar: "bg-[#B88059]",
+    },
+    {
+      label: "ขาดเรียน",
+      value: counts.ABSENT,
+      total: students.length,
+      icon: UserX,
+      tone: "text-[#8C3A3A]",
+      bar: "bg-[#8C3A3A]",
+    },
+  ];
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4] px-4 py-8 text-[#1c241b] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#71816c]">CLASSROOM MANAGEMENT</p>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">เช็กชื่อเข้าเรียน</h1>
-            <p className="mt-2 text-sm text-[#687565]">บันทึกและติดตามสถานะการเข้าเรียนแยกตามรายวิชาและวันที่</p>
-          </div>
-          <button
-            type="button"
-            onClick={saveAttendance}
-            disabled={!assignmentId || loading || saving || students.length === 0}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#4d5f4a] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#374535] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />{saving ? "กำลังบันทึก..." : "บันทึกการเช็กชื่อ"}
-          </button>
-        </header>
+    <div className="min-h-screen bg-[#F4F4F2] pb-36 font-sans text-[#1A1A1A] selection:bg-[#EAE8E3]">
+      {showDatePicker && (
+        <button
+          type="button"
+          aria-label="ปิดปฏิทิน"
+          className="fixed inset-0 z-40 cursor-default"
+          onClick={() => setShowDatePicker(false)}
+        />
+      )}
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: "นักเรียนทั้งหมด", value: students.length, icon: Users, tone: "text-slate-700 bg-slate-100" },
-            { label: "มา", value: counts.PRESENT, icon: Check, tone: "text-emerald-800 bg-emerald-50" },
-            { label: "สาย", value: counts.LATE, icon: Clock3, tone: "text-amber-800 bg-amber-50" },
-            { label: "ลา", value: counts.LEAVE, icon: CalendarDays, tone: "text-sky-800 bg-sky-50" },
-            { label: "ขาด", value: counts.ABSENT, icon: X, tone: "text-rose-800 bg-rose-50" },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <div key={item.label} className="rounded-2xl border border-[#e6e8df] bg-white p-4 shadow-sm">
-                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.tone}`}><Icon className="h-4 w-4" /></div>
-                <p className="mt-3 text-xs font-medium text-[#788174]">{item.label}</p>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{item.value}</p>
-              </div>
-            );
-          })}
-        </section>
-
-        <section className="rounded-2xl border border-[#e6e8df] bg-white p-4 shadow-sm sm:p-5">
-          <div className="grid gap-4 md:grid-cols-[1.3fr_1fr_1.2fr]">
-            <label className="block">
-              <span className="mb-2 block text-xs font-semibold text-[#687565]">รายวิชา / ห้องเรียน</span>
-              <select value={assignmentId} onChange={(event) => setAssignmentId(event.target.value)} disabled={loading && assignments.length === 0} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm outline-none focus:border-[#718b6b] focus:ring-2 focus:ring-[#718b6b]/15">
-                {assignments.length === 0 && <option value="">ยังไม่มีรายวิชาที่กำหนด</option>}
-                {assignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-xs font-semibold text-[#687565]">วันที่เข้าเรียน</span>
-              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm outline-none focus:border-[#718b6b] focus:ring-2 focus:ring-[#718b6b]/15" />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-xs font-semibold text-[#687565]">หัวข้อ / บันทึกประจำคาบ</span>
-              <input value={topic} onChange={(event) => setTopic(event.target.value)} maxLength={240} placeholder="เช่น ระบบหมุนเวียนเลือดและภูมิคุ้มกัน" className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm outline-none focus:border-[#718b6b] focus:ring-2 focus:ring-[#718b6b]/15" />
-            </label>
-          </div>
-          <div className="mt-4 flex flex-col gap-3 border-t border-[#edf0e9] pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <header className="relative z-30 px-4 pt-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between rounded-3xl border border-white bg-white/75 px-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] backdrop-blur-xl sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#2C3E32] to-[#1E2B23] text-[#F7F7F5] shadow-md">
+              <Users className="h-4 w-4" />
+            </div>
             <div>
-              <p className="text-sm font-bold">{selected ? `${selected.subject.code} · ${selected.subject.name}` : "เลือกวิชา"}</p>
-              <p className="mt-1 text-xs text-[#778173]">{selected?.classroom.name || "—"} · {thaiDate(date)}</p>
+              <h1 className="text-sm font-black tracking-tight">ระบบบันทึกเวลาเรียน</h1>
+              <p className="mt-0.5 text-[10px] font-semibold tracking-[0.12em] text-[#8B7A66]">ATTENDANCE MANAGEMENT</p>
+            </div>
+          </div>
+          <div className="hidden items-center gap-2 rounded-full border border-[#EAE8E3] bg-white px-3 py-1.5 text-[11px] font-bold text-[#687565] sm:flex">
+            <span className="h-2 w-2 rounded-full bg-[#2C3E32]" />
+            บันทึกข้อมูลจริง
+          </div>
+        </div>
+      </header>
+
+      <main className="relative z-10 mx-auto max-w-5xl space-y-7 px-4 pt-7 sm:px-6 lg:px-8">
+        <section className="relative z-50 rounded-[2rem] border border-white bg-white/85 p-5 shadow-[0_8px_40px_rgba(0,0,0,0.035)] backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-8">
+          <div className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#1A1A1A]">
+            <Sparkles className="h-4 w-4 text-[#8B7A66]" />
+            ข้อมูลคาบเรียน <span className="font-semibold text-[#9A968E]">(Class Info)</span>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            <label className="block min-w-0 space-y-2">
+              <span className="flex items-center gap-1.5 pl-1 text-[10px] font-bold uppercase tracking-widest text-[#888888]">
+                <Hash className="h-3 w-3" /> รายวิชา / ห้องเรียน
+              </span>
+              <select
+                value={assignmentId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  if (nextId === assignmentId) return;
+                  if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปลี่ยนรายวิชาและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+                  setAssignmentId(nextId);
+                }}
+                disabled={loading && assignments.length === 0}
+                className="min-h-[50px] w-full rounded-2xl border border-[#EAE8E3] bg-[#F9F9F8] px-4 text-sm font-bold text-[#1A1A1A] shadow-inner outline-none transition focus:border-[#2C3E32] focus:bg-white focus:shadow-md disabled:opacity-60"
+              >
+                {assignments.length === 0 && <option value="">ยังไม่มีรายวิชาที่กำหนด</option>}
+                {assignments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.subject.code} · {item.subject.name} — {item.classroom.name}
+                  </option>
+                ))}
+              </select>
+              <p className="pl-1 text-[11px] text-[#999999]">เลือกวิชาและห้องเรียนที่ต้องการเช็กชื่อ</p>
+            </label>
+
+            <label className="block min-w-0 space-y-2">
+              <span className="flex items-center gap-1.5 pl-1 text-[10px] font-bold uppercase tracking-widest text-[#888888]">
+                <BookOpen className="h-3 w-3" /> เรื่องที่สอนวันนี้
+              </span>
+              <input
+                type="text"
+                value={topic}
+                onChange={(event) => { setTopic(event.target.value); setDirty(true); setNotice(""); }}
+                maxLength={240}
+                placeholder="หัวข้อการเรียนการสอน"
+                className="min-h-[50px] w-full rounded-2xl border border-[#EAE8E3] bg-[#F9F9F8] px-4 text-sm font-bold text-[#1A1A1A] shadow-inner outline-none transition placeholder:font-normal placeholder:text-[#A6A39D] focus:border-[#2C3E32] focus:bg-white focus:shadow-md"
+              />
+              <p className="pl-1 text-[11px] text-[#999999]">บันทึกหัวข้อไว้กับคาบเรียนนี้</p>
+            </label>
+
+            <div className="relative z-50 min-w-0 space-y-2">
+              <span className="flex items-center gap-1.5 pl-1 text-[10px] font-bold uppercase tracking-widest text-[#888888]">
+                <CalendarDays className="h-3 w-3" /> วันที่เข้าเรียน
+              </span>
+              <button
+                type="button"
+                onClick={openCalendar}
+                aria-expanded={showDatePicker}
+                className={"flex min-h-[50px] w-full items-center justify-between rounded-2xl border px-4 text-left text-sm font-black text-[#1A1A1A] shadow-inner outline-none transition " + (showDatePicker ? "border-white bg-white/70 shadow-md ring-2 ring-[#2C3E32]/15" : "border-[#EAE8E3] bg-[#F9F9F8] hover:border-[#D1CDC4] hover:bg-white")}
+              >
+                <span>{thaiDate(date)}</span>
+                <CalendarDays className={"h-4 w-4 " + (showDatePicker ? "text-[#2C3E32]" : "text-[#999999]")} />
+              </button>
+
+              {showDatePicker && (
+                <div className="absolute right-0 top-full z-50 mt-3 w-[min(19rem,calc(100vw-2rem))] rounded-[1.75rem] border border-white/90 bg-white/95 p-5 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.18)] backdrop-blur-3xl">
+                  <div className="mb-4 flex items-center justify-between">
+                    <button type="button" aria-label="เดือนก่อนหน้า" onClick={() => setNavDate(new Date(currentYear, currentMonth - 1, 1))} className="rounded-full p-2 text-[#888888] transition hover:bg-[#F4F4F2] hover:text-[#1A1A1A]">
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <p className="text-sm font-black text-[#1A1A1A]">{THAI_MONTHS[currentMonth]} {currentYear + 543}</p>
+                    <button type="button" aria-label="เดือนถัดไป" onClick={() => setNavDate(new Date(currentYear, currentMonth + 1, 1))} className="rounded-full p-2 text-[#888888] transition hover:bg-[#F4F4F2] hover:text-[#1A1A1A]">
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mb-2 grid grid-cols-7 gap-1 text-center">
+                    {WEEK_DAYS.map((day, index) => <span key={day + index} className="py-1 text-[10px] font-black text-[#999999]">{day}</span>)}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarCells.map((cell) => {
+                      if (!cell.day) return <span key={cell.key} className="h-9" />;
+                      const value = dateValue(currentYear, currentMonth, cell.day);
+                      const isSelected = date === value;
+                      const today = localDateValue() === value;
+                      return (
+                        <button
+                          key={cell.key}
+                          type="button"
+                          onClick={() => chooseDate(cell.day)}
+                          aria-pressed={isSelected}
+                          className={"mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold transition " + (isSelected ? "bg-gradient-to-b from-[#2C3E32] to-[#1E2B23] text-white shadow-md" : today ? "border border-[#D1CDC4] bg-[#EAE8E3]/60 text-[#1A1A1A]" : "text-[#666666] hover:bg-[#F4F4F2] hover:text-[#1A1A1A]")}
+                        >
+                          {cell.day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button type="button" onClick={() => selectDate(localDateValue())} className="mt-4 w-full rounded-xl border border-[#EAE8E3] py-2 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F4F4F2]">
+                    เลือกวันนี้
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 border-t border-[#EAE8E3]/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-black text-[#1A1A1A]">{selected ? selected.subject.code + " · " + selected.subject.name : "เลือกวิชาเพื่อเริ่มเช็กชื่อ"}</p>
+              <p className="mt-1 text-xs text-[#888888]">{selected?.classroom.name || "—"} · {thaiDate(date)}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={markAllPresent} disabled={!students.length} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 text-xs font-semibold text-[#4d5f4a] hover:bg-[#f4f6f1] disabled:opacity-50">
-                <CheckCheck className="h-4 w-4" />เลือกมาให้ทุกคน
+              <button
+                type="button"
+                onClick={markAllPresent}
+                disabled={!students.length || loading}
+                className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[#EAE8E3] bg-white px-4 text-xs font-bold text-[#4d5f4a] shadow-sm transition hover:border-[#D1CDC4] hover:bg-[#F9F9F8] disabled:opacity-50"
+              >
+                <CheckCheck className="h-4 w-4" /> เช็กมาทุกคน
               </button>
-              <span className="text-xs text-[#788174]">ยังไม่ระบุ {counts.unmarked} คน</span>
+              <span className="rounded-full bg-[#F4F4F2] px-3 py-2 text-[11px] font-semibold text-[#77736C]">ยังไม่ระบุ {counts.unmarked} คน</span>
             </div>
           </div>
         </section>
 
-        {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
-        {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
+        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-wrap gap-3">
+            {summaryCards.map((item) => {
+              const Icon = item.icon;
+              const percentage = item.total ? (item.value / item.total) * 100 : 0;
+              return (
+                <div key={item.label} className="min-w-[calc(33.333%_-_0.5rem)] flex-1 rounded-[1.4rem] border border-[#EAE8E3] bg-white px-4 py-3.5 shadow-sm sm:min-w-[125px] sm:flex-none sm:px-5">
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#666666]">{item.label}</span>
+                    <Icon className={"h-3.5 w-3.5 " + item.tone} />
+                  </div>
+                  <p className={"text-2xl font-black tabular-nums " + item.tone}>
+                    {item.value}<span className="text-xs font-medium text-[#999999]">/{item.total}</span>
+                  </p>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#F4F4F2]">
+                    <div className={"h-full rounded-full " + item.bar} style={{ width: percentage + "%" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="relative w-full md:max-w-xs">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999999]" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="ค้นหาชื่อหรือรหัสนักเรียน..."
+              className="min-h-[48px] w-full rounded-2xl border border-[#EAE8E3] bg-white pl-11 pr-4 text-xs font-bold text-[#1A1A1A] shadow-sm outline-none transition placeholder:font-normal placeholder:text-[#A6A39D] focus:border-[#2C3E32] focus:shadow-md"
+            />
+          </div>
+        </section>
 
-        <section className="overflow-hidden rounded-2xl border border-[#e6e8df] bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-[#edf0e9] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-2xl border border-[#E8C7C4] bg-[#FBF1F0] px-4 py-3 text-sm text-[#8C3A3A]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}
+          </div>
+        )}
+        {notice && (
+          <div role="status" className="flex items-center gap-2 rounded-2xl border border-[#C9D8CC] bg-[#EFF5F0] px-4 py-3 text-sm font-semibold text-[#2C3E32]">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />{notice}
+          </div>
+        )}
+
+        <section className="relative z-10 space-y-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[#EAE8E3]/80 px-2 pb-3 sm:px-5">
             <div>
-              <h2 className="text-base font-bold">รายชื่อนักเรียน</h2>
-              <p className="mt-1 text-xs text-[#788174]">เลือกสถานะของนักเรียนแต่ละคน แล้วกดบันทึก</p>
+              <h2 className="text-sm font-black tracking-tight text-[#1A1A1A]">รายชื่อนักเรียน</h2>
+              <p className="mt-1 text-[11px] text-[#888888]">เลือกสถานะการเข้าเรียนของนักเรียนแต่ละคน</p>
             </div>
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a9384]" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาชื่อ เลขที่ หรือรหัสนักเรียน" className="min-h-10 w-full rounded-xl border border-[#dfe4d8] pl-9 pr-3 text-sm outline-none focus:border-[#718b6b]" />
-            </div>
+            <span className="shrink-0 rounded-full bg-white px-3 py-1.5 text-[10px] font-bold text-[#77736C] shadow-sm">{filteredStudents.length} / {students.length} คน</span>
           </div>
 
           {loading ? (
-            <div className="p-12 text-center text-sm text-[#788174]">กำลังโหลดข้อมูล...</div>
+            <div className="rounded-[1.5rem] border border-[#EAE8E3] bg-white p-12 text-center text-sm text-[#788174] shadow-sm">กำลังโหลดข้อมูล...</div>
           ) : students.length === 0 ? (
-            <div className="p-12 text-center text-sm text-[#788174]">{assignments.length ? "ยังไม่มีนักเรียนในห้องเรียนนี้" : "เพิ่มรายวิชาและผูกห้องเรียนก่อนเริ่มเช็กชื่อ"}</div>
+            <div className="rounded-[1.5rem] border border-dashed border-[#D1CDC4] bg-white/60 p-12 text-center text-sm text-[#788174]">
+              {assignments.length ? "ยังไม่มีนักเรียนในห้องเรียนนี้" : "เพิ่มรายวิชาและผูกห้องเรียนก่อนเริ่มเช็กชื่อ"}
+            </div>
           ) : filteredStudents.length === 0 ? (
-            <div className="p-10 text-center text-sm text-[#788174]">ไม่พบนักเรียนที่ตรงกับคำค้นหา</div>
+            <div className="rounded-[1.5rem] border border-dashed border-[#D1CDC4] bg-white/60 p-12 text-center text-sm text-[#788174]">
+              <Search className="mx-auto mb-3 h-7 w-7 text-[#CCCCCC]" />
+              ไม่พบรายชื่อนักเรียนที่ค้นหา
+            </div>
           ) : (
-            <div className="divide-y divide-[#edf0e9]">
+            <div className="space-y-3">
               {filteredStudents.map((student) => (
-                <div key={student.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f0f3eb] text-sm font-bold text-[#4d5f4a]">{student.rollNo || "—"}</div>
+                <article key={student.id} className="group flex flex-col justify-between gap-4 rounded-[1.5rem] border border-[#EAE8E3] bg-white p-4 shadow-sm transition duration-200 hover:border-white hover:shadow-lg md:flex-row md:items-center sm:px-6 sm:py-4">
+                  <div className="flex min-w-0 items-center gap-4 md:w-1/2">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#EAE8E3] bg-[#F4F4F2] text-sm font-black text-[#1A1A1A] transition group-hover:scale-105">
+                      {student.rollNo || "—"}
+                    </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{student.name}</p>
-                      <p className="mt-1 text-xs text-[#788174]">เลขที่ {student.rollNo || "—"} · รหัส {student.studentNo}</p>
+                      <h3 className="truncate text-sm font-black tracking-tight text-[#1A1A1A]">{student.name}</h3>
+                      <p className="mt-1 text-[11px] font-bold text-[#8B7A66]">รหัสประจำตัว: {student.studentNo}</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5 sm:w-[340px]">
-                    {STATUS_OPTIONS.map((option) => (
-                      <button key={option.value} type="button" aria-pressed={student.attendance === option.value} onClick={() => setStatus(student.id, option.value)} className={`min-h-10 rounded-lg border px-2 text-xs font-bold transition ${student.attendance === option.value ? option.className + " ring-2 ring-current/10" : "border-[#e6e8df] bg-white text-[#687565] hover:bg-[#f8f9f6]"}`}>
-                        {option.label}
-                      </button>
-                    ))}
+
+                  <div className="relative flex w-full items-center justify-between gap-1 rounded-[1.2rem] border border-[#EAE8E3] bg-[#F4F4F2] p-1.5 shadow-inner md:w-1/2">
+                    {STATUS_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const isSelected = student.attendance === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => setStatus(student.id, option.value)}
+                          className={"relative z-10 flex min-h-[48px] flex-1 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-[10px] font-black transition duration-200 sm:flex-row sm:gap-1.5 sm:text-[11px] " + (isSelected ? option.selectedClass : "border-transparent text-[#888888] hover:bg-white/70 hover:text-[#1A1A1A]")}
+                        >
+                          <Icon className={"h-3.5 w-3.5 " + (isSelected ? "text-white" : "text-[#999999]")} />
+                          <span className="tracking-wide">{option.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           )}
         </section>
-        <p className="text-xs leading-6 text-[#8a9384]">สถานะจะยังไม่ถูกบันทึกจนกว่าจะกดปุ่ม “บันทึกการเช็กชื่อ” · การเลือก “ลา” จะไม่ถูกเปลี่ยนเป็น “มา” โดยอัตโนมัติ</p>
+
+        <p className="px-2 text-[11px] leading-6 text-[#8A9384]">
+          สถานะจะยังไม่ถูกบันทึกจนกว่าจะกดปุ่มบันทึกด้านล่าง · การเลือก “ลา” จะไม่ถูกเปลี่ยนเป็น “มา” โดยอัตโนมัติ
+        </p>
+      </main>
+
+      <div className="pointer-events-none fixed bottom-4 left-0 right-0 z-[60] px-3 sm:bottom-6 sm:px-4">
+        <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-3 rounded-[1.75rem] border border-white/90 bg-white/85 p-2 pl-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)] backdrop-blur-2xl">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#888888]">สถานะข้อมูล</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs font-black text-[#1A1A1A]">
+              {saving ? (
+                <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#2C3E32]/20 border-t-[#2C3E32]" /> กำลังบันทึก...</>
+              ) : dirty ? (
+                <><span className="h-2 w-2 rounded-full bg-[#B88059]" /> มีรายการรอบันทึก</>
+              ) : notice ? (
+                <span className="flex items-center gap-1 text-[#2C3E32]"><CheckCircle2 className="h-3.5 w-3.5" /> บันทึกเรียบร้อย</span>
+              ) : (
+                "ข้อมูลพร้อมใช้งาน"
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveAttendance}
+            disabled={!assignmentId || loading || saving || students.length === 0 || !dirty}
+            className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-[1.25rem] bg-gradient-to-r from-[#1A1A1A] to-[#333333] px-5 text-xs font-black text-white shadow-md transition hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-45 sm:px-6"
+          >
+            {saving ? (
+              <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> กำลังซิงค์...</>
+            ) : notice && !dirty ? (
+              <><CheckCircle2 className="h-4 w-4" /> บันทึกแล้ว</>
+            ) : (
+              <><Save className="h-4 w-4" /> บันทึกข้อมูล</>
+            )}
+          </button>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
