@@ -2,7 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, FileUp, Plus, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  Calendar,
+  Check,
+  Clock,
+  ExternalLink,
+  FileText,
+  FileUp,
+  Layers,
+  Link2,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  UploadCloud,
+} from "lucide-react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 
 type GradeColumnOption = {
@@ -28,6 +42,10 @@ type AssignmentRow = {
   _count: { submissions: number };
   gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
 };
+
+const fieldClass =
+  "min-h-12 w-full rounded-[1.1rem] border border-[#EAE8E3] bg-[#F9F9F8] px-5 py-3 text-sm font-semibold text-[#1A1A1A] outline-none transition-all placeholder:font-medium placeholder:text-[#999999] hover:bg-white focus:border-[#166534] focus:bg-white focus:ring-2 focus:ring-[#166534]/10 disabled:cursor-not-allowed disabled:opacity-60";
+const labelClass = "mb-2.5 block pl-1 text-[10px] font-black uppercase tracking-widest text-[#888888]";
 
 export function AssignmentManager() {
   const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([]);
@@ -105,6 +123,7 @@ export function AssignmentManager() {
   }, [teachingAssignmentId, teachingAssignments, gradeColumnsVersion]);
 
   const selectedGradeColumn = gradeColumns.find((column) => column.id === gradeColumnId);
+  const selectedCourse = teachingAssignments.find((item) => item.id === teachingAssignmentId);
 
   async function resolveAttendanceSession() {
     if (!autoMarkAttendance) return null;
@@ -182,6 +201,7 @@ export function AssignmentManager() {
       setDueAt("");
       setFiles([]);
       setAutoMarkAttendance(false);
+      setAttendanceDate("");
       setAttendanceSessionId("");
       setNotice("เผยแพร่งานให้นักเรียนเรียบร้อยแล้ว");
       await refresh();
@@ -193,54 +213,191 @@ export function AssignmentManager() {
     }
   }
 
-  const selectedCourse = teachingAssignments.find((item) => item.id === teachingAssignmentId);
+  const modeLabel = (value: AssignmentRow["mode"]) =>
+    value === "TEACHER_CHECK" ? "ตรวจกับครู" : value === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
+  const statusLabel = (value: AssignmentRow["status"]) =>
+    value === "PUBLISHED" ? "เผยแพร่แล้ว" : value === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง";
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4] px-4 py-8 text-[#1c241b] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col gap-2">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#71816c]">CLASSROOM WORKFLOW</p>
-          <h1 className="text-3xl font-extrabold tracking-tight">มอบหมายและติดตามงาน</h1>
-          <p className="text-sm text-[#687565]">สร้างงานตามรายวิชา กำหนดวิธีส่ง และติดตามรายการส่งจากนักเรียน</p>
+    <main className="relative min-h-screen overflow-hidden bg-[#F4F4F2] px-4 pb-20 pt-8 text-[#1A1A1A] sm:px-6 sm:pt-10 lg:px-8">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -right-24 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#EAE8E3]/60 blur-3xl" />
+        <div className="absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[#D1CDC4]/30 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-4xl space-y-9">
+        <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div className="space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#166534]">CLASSROOM WORKFLOW</p>
+            <h1 className="text-3xl font-black tracking-tight text-[#1A1A1A] sm:text-4xl">มอบหมายและติดตามงาน</h1>
+            <p className="max-w-2xl text-sm font-medium leading-6 text-[#666666]">สร้างงานตามรายวิชา กำหนดวิธีส่ง และติดตามรายการส่งจากนักเรียนอย่างเป็นระบบ</p>
+          </div>
+          <Link href="/dashboard" className="inline-flex shrink-0 items-center gap-2 self-start rounded-full border border-[#EAE8E3] bg-white px-5 py-2.5 text-xs font-bold text-[#166534] shadow-sm transition hover:border-[#86EFAC] hover:bg-[#F0FDF4] sm:self-auto">
+            <ExternalLink className="h-4 w-4" /> กลับหน้าหลัก
+          </Link>
         </header>
 
-        <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f3eb] text-[#4d5f4a]"><Plus className="h-5 w-5" /></div>
-            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">เลือกชื่องานจากสมุดออนไลน์ที่มีอยู่แล้ว ระบบจะเชื่อมงานโดยไม่สร้างหรือแก้ไขคะแนน</p></div>
+        <section className="relative rounded-[2rem] border border-white bg-white/85 p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.05)] backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-8 lg:p-10">
+          <div className="flex items-center justify-between border-b border-[#EAE8E3] pb-5 sm:pb-6">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#166534] to-[#14532D] text-white shadow-lg shadow-[#166534]/20 sm:h-12 sm:w-12">
+                <Plus className="h-5 w-5 text-[#A7F3D0]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black tracking-tight sm:text-xl">สร้างงานใหม่</h2>
+                <p className="mt-1 text-xs font-medium text-[#666666]">ตั้งค่ารายละเอียดและวิธีส่งงาน</p>
+              </div>
+            </div>
+            <span className="hidden rounded-full border border-[#D1FAE5] bg-[#F0FDF4] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#166534] sm:inline-flex">New Assignment</span>
           </div>
 
-          {teachingAssignments.length === 0 ? (
-            <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">ยังไม่มีรายวิชาที่ผูกกับห้องเรียน กรุณาตั้งค่าที่เมนู “รายวิชาที่สอน” ก่อน</p>
+          {teachingAssignments.length === 0 && !loading ? (
+            <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">ยังไม่มีรายวิชาที่ผูกกับห้องเรียน กรุณาตั้งค่าที่เมนู “รายวิชาที่สอน” ก่อน</p>
           ) : (
-            <form onSubmit={createAssignment} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายวิชา / ห้องเรียน</span><select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setGradeColumnId(""); }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm">{teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}</select></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รูปแบบการส่งงาน</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option><option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option><option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option></select></label>
+            <form onSubmit={createAssignment} className="space-y-6 pt-6">
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="block">
+                  <span className={labelClass}>รายวิชา / ห้องเรียน</span>
+                  <select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setGradeColumnId(""); }} className={fieldClass}>
+                    {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className={labelClass}>รูปแบบการส่งงาน</span>
+                  <select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className={fieldClass}>
+                    <option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option>
+                    <option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option>
+                    <option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option>
+                  </select>
+                </label>
               </div>
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ชื่องานจากสมุดออนไลน์</span><select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm disabled:bg-[#f5f6f2]"><option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>{gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}</select>{selectedGradeColumn && <span className="mt-1 block text-xs text-[#788174]">ชื่องานและคะแนนเต็มจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}</label>
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายละเอียด / คำชี้แจง</span><textarea maxLength={5000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="อธิบายสิ่งที่นักเรียนต้องทำ..." className="w-full rounded-xl border border-[#dfe4d8] px-3 py-3 text-sm outline-none focus:border-[#718b6b]" /></label>
 
-              {mode === "GOOGLE_FORM" && <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ลิงก์ Google Forms</span><input required type="url" value={googleFormUrl} onChange={(event) => setGoogleFormUrl(event.target.value)} placeholder="https://forms.gle/..." className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm outline-none focus:border-[#718b6b]" /></label>}
-              {mode !== "GOOGLE_FORM" && <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ไฟล์คำสั่งงาน / ใบงานจากครู {mode === "SYSTEM_UPLOAD" ? "(จำเป็น)" : "(ไม่บังคับ)"}</span><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setFiles(Array.from(event.target.files || []))} className="block w-full rounded-xl border border-[#dfe4d8] p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#f0f3eb] file:px-3 file:py-2 file:font-bold" />{files.length > 0 && <span className="mt-1 block text-xs text-[#788174]">เลือกแล้ว {files.length} ไฟล์</span>}</label>}
+              <label className="block">
+                <span className={labelClass}>ชื่องานจากสมุดออนไลน์</span>
+                <select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className={fieldClass}>
+                  <option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>
+                  {gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}
+                </select>
+                {selectedGradeColumn && <span className="mt-2 block rounded-xl bg-[#F0FDF4] px-4 py-3 text-xs font-medium leading-5 text-[#166534]"><Check className="mr-1 inline h-3.5 w-3.5" /> คะแนนเต็มและชื่องานจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}
+              </label>
 
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">กำหนดส่ง (ไม่บังคับ)</span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
+              <label className="block">
+                <span className={labelClass}>รายละเอียด / คำชี้แจง</span>
+                <textarea maxLength={5000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="อธิบายสิ่งที่นักเรียนต้องทำอย่างละเอียด..." className="w-full resize-y rounded-[1.25rem] border border-[#EAE8E3] bg-[#F9F9F8] px-5 py-4 text-sm font-medium leading-6 text-[#1A1A1A] outline-none transition hover:bg-white focus:border-[#166534] focus:bg-white focus:ring-2 focus:ring-[#166534]/10" />
+              </label>
 
-              {mode === "SYSTEM_UPLOAD" && <div className="rounded-xl border border-[#e6e8df] bg-[#fafbf8] p-4">
-                <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={autoMarkAttendance} onChange={(event) => setAutoMarkAttendance(event.target.checked)} className="h-4 w-4 accent-[#4d5f4a]" /> เช็กชื่อ “มา” อัตโนมัติเมื่อส่งงานสำเร็จในระบบ</label>
-                {autoMarkAttendance && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="block"><span className="mb-1.5 block text-xs text-[#687565]">วันที่ของคาบเช็กชื่อ</span><input required type="date" value={attendanceDate} onChange={async (event) => { setAttendanceDate(event.target.value); setAttendanceSessionId(""); if (event.target.value && teachingAssignmentId) { const params = new URLSearchParams({ teachingAssignmentId, date: event.target.value }); const response = await fetch("/api/attendance?" + params.toString()); const data = await response.json(); if (response.ok && data.session?.id) setAttendanceSessionId(data.session.id); } }} className="min-h-10 w-full rounded-lg border border-[#dfe4d8] px-3 text-sm" /></label><p className="self-end text-xs leading-5 text-[#687565]">{attendanceSessionId ? "เมื่อส่งไฟล์สำเร็จ ระบบจะบันทึก “มา” เฉพาะกรณีที่ยังไม่มีสถานะเช็กชื่อเดิม" : "ต้องบันทึกคาบเช็กชื่อของวันที่เลือกก่อน จึงจะเปิดใช้ตัวเลือกนี้ได้"}</p></div>}
-              </div>}
+              {mode === "GOOGLE_FORM" && (
+                <label className="block">
+                  <span className={labelClass}><Link2 className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> ลิงก์ Google Forms</span>
+                  <input required type="url" value={googleFormUrl} onChange={(event) => setGoogleFormUrl(event.target.value)} placeholder="https://forms.gle/..." className={fieldClass} />
+                </label>
+              )}
 
-              {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
-              {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{notice}</p>}
-              <button type="submit" disabled={saving || !selectedCourse || !selectedGradeColumn || gradeColumnsLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#4d5f4a] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#374535] disabled:opacity-50"><FileUp className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "บันทึกและเผยแพร่งาน"}</button>
+              {mode !== "GOOGLE_FORM" && (
+                <div className="space-y-2.5">
+                  <span className={labelClass}><FileUp className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> ไฟล์คำสั่งงาน / ใบงานจากครู {mode === "SYSTEM_UPLOAD" ? "(จำเป็น)" : "(ไม่บังคับ)"}</span>
+                  <label className="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.5rem] border-2 border-dashed border-[#A7F3D0] bg-[#F9F9F8] px-5 py-8 text-center transition hover:border-[#166534]/50 hover:bg-[#F0FDF4]/40">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[#EAE8E3] bg-white text-[#166534] shadow-sm transition group-hover:scale-105"><UploadCloud className="h-6 w-6" /></span>
+                    <span className="text-sm font-black text-[#1A1A1A]">ลากไฟล์มาวาง หรือ <span className="text-[#166534] underline underline-offset-4">คลิกเพื่อเลือกไฟล์</span></span>
+                    <span className="text-[11px] font-bold tracking-wide text-[#888888]">รองรับ PDF, JPG, PNG, WebP, DOC และ DOCX</span>
+                    <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setFiles(Array.from(event.target.files || []))} className="sr-only" />
+                  </label>
+                  {files.length > 0 && <p className="text-xs font-semibold text-[#166534]">เลือกแล้ว {files.length} ไฟล์: {files.map((file) => file.name).join(", ")}</p>}
+                </div>
+              )}
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <label className="block">
+                  <span className={labelClass}><Calendar className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> กำหนดส่ง (วันที่และเวลา)</span>
+                  <input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className={fieldClass} />
+                </label>
+                <div className="space-y-2.5">
+                  <span className={labelClass}><Clock className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> การตั้งค่าคะแนน</span>
+                  <div className="flex min-h-12 items-center rounded-[1.1rem] border border-[#EAE8E3] bg-[#F9F9F8] px-5 text-sm font-semibold text-[#555555]">
+                    {selectedGradeColumn ? <>คะแนนเต็ม <strong className="ml-1 text-[#166534]">{selectedGradeColumn.maxScore}</strong><span className="ml-1">คะแนน · อ้างอิงสมุดออนไลน์</span></> : "เลือกชื่องานเพื่อดูคะแนนเต็ม"}
+                  </div>
+                </div>
+              </div>
+
+              {mode === "SYSTEM_UPLOAD" && (
+                <div className="rounded-[1.5rem] border border-[#EAE8E3] bg-[#F9F9F8] p-4 sm:p-5">
+                  <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-[#333333]">
+                    <input type="checkbox" checked={autoMarkAttendance} onChange={(event) => setAutoMarkAttendance(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#166534]" />
+                    <span>เช็กชื่อ “มา” อัตโนมัติเมื่อนักเรียนส่งงานสำเร็จในระบบ</span>
+                  </label>
+                  {autoMarkAttendance && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="block"><span className={labelClass}>วันที่ของคาบเช็กชื่อ</span><input required type="date" value={attendanceDate} onChange={async (event) => { setAttendanceDate(event.target.value); setAttendanceSessionId(""); if (event.target.value && teachingAssignmentId) { const params = new URLSearchParams({ teachingAssignmentId, date: event.target.value }); const response = await fetch("/api/attendance?" + params.toString()); const data = await response.json(); if (response.ok && data.session?.id) setAttendanceSessionId(data.session.id); } }} className={fieldClass} /></label>
+                      <p className="self-end rounded-xl bg-white p-3 text-xs leading-5 text-[#687565]">{attendanceSessionId ? "พบคาบเช็กชื่อแล้ว ระบบจะบันทึก “มา” เฉพาะกรณีที่ยังไม่มีสถานะเดิม" : "ต้องบันทึกคาบเช็กชื่อของวันที่เลือกก่อน จึงจะเปิดใช้ตัวเลือกนี้ได้"}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {error && <div role="alert" className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
+              {notice && <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800">{notice}</p>}
+
+              <div className="border-t border-[#EAE8E3] pt-5">
+                <button type="submit" disabled={saving || !selectedCourse || !selectedGradeColumn || gradeColumnsLoading} className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[1.25rem] border border-[#A7F3D0] bg-[#E5F3EB] px-5 py-4 text-sm font-black tracking-wide text-[#166534] transition hover:border-[#86EFAC] hover:bg-[#D1FAE5] hover:shadow-[0_15px_40px_rgba(22,101,52,0.12)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <Sparkles className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "มอบหมายงานให้นักเรียน"}
+                </button>
+              </div>
             </form>
           )}
         </section>
 
-        <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold">งานที่สร้างไว้</h2><p className="mt-1 text-xs text-[#788174]">รายการงานในห้องเรียนที่คุณรับผิดชอบ</p></div><button type="button" onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold"><RefreshCw className="h-3.5 w-3.5" />รีเฟรช</button></div>
-          {loading ? <p className="py-8 text-center text-sm text-[#788174]">กำลังโหลด...</p> : assignments.length === 0 ? <p className="py-8 text-center text-sm text-[#788174]">ยังไม่มีงานที่สร้าง</p> : <div className="divide-y divide-[#edf0e9]">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link href={"/dashboard/assignments/" + item.id} className="truncate text-sm font-semibold text-[#4d5f4a] hover:underline">{item.gradeColumn?.title || item.title} · ตรวจงาน</Link><p className="mt-1 text-xs text-[#788174]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</p></div><div className="flex items-center gap-2 text-xs"><span className="rounded-lg bg-[#f0f3eb] px-2.5 py-1 font-semibold text-[#4d5f4a]">{item.mode === "TEACHER_CHECK" ? "ตรวจกับครู" : item.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms"}</span><span className="rounded-lg border border-[#e6e8df] px-2.5 py-1">{item.status === "PUBLISHED" ? "เผยแพร่แล้ว" : item.status === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง"}</span><span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-800">{item.gradeColumn ? "เชื่อมสมุดออนไลน์แล้ว" : "ยังไม่เชื่อมสมุดออนไลน์"}</span><span className="text-[#788174]">ส่งแล้ว {item._count.submissions}</span></div></div>)}</div>}
+        <section className="space-y-5">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E5F3EB] text-[#166534]"><Layers className="h-5 w-5" /></div>
+              <div><h2 className="text-lg font-black tracking-tight">งานที่สร้างไว้</h2><p className="mt-0.5 text-xs font-medium text-[#888888]">รายการงานในห้องเรียนที่คุณรับผิดชอบ</p></div>
+            </div>
+            <button type="button" onClick={refresh} disabled={loading} className="inline-flex items-center gap-2 rounded-full border border-[#EAE8E3] bg-white px-4 py-2.5 text-xs font-bold text-[#166534] shadow-sm transition hover:bg-[#F0FDF4] disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />รีเฟรช</button>
+          </div>
+
+          {loading ? (
+            <div className="rounded-[1.5rem] border border-[#EAE8E3] bg-white/80 py-12 text-center text-sm font-semibold text-[#888888]">กำลังโหลดรายการงาน...</div>
+          ) : assignments.length === 0 ? (
+            <div className="rounded-[1.5rem] border border-dashed border-[#D1CDC4] bg-white/50 py-12 text-center">
+              <Layers className="mx-auto mb-3 h-8 w-8 text-[#CCCCCC]" />
+              <p className="text-sm font-bold text-[#888888]">ยังไม่มีงานที่มอบหมาย</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {assignments.map((item) => {
+                const total = Math.max(1, item._count.submissions);
+                return (
+                  <article key={item.id} className="group rounded-[1.5rem] border border-[#EAE8E3] bg-white/90 p-5 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-[#166534]/30 hover:shadow-lg sm:p-6">
+                    <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-lg border border-[#D1FAE5] bg-[#F0FDF4] px-2.5 py-1 text-[10px] font-black text-[#166534]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</span>
+                          <span className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-bold text-[#666666]">{modeLabel(item.mode)}</span>
+                        </div>
+                        <h3 className="truncate text-base font-black text-[#1A1A1A] transition-colors group-hover:text-[#166534]">{item.gradeColumn?.title || item.title}</h3>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-[#888888]">
+                          <span className="inline-flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> {item.gradeColumn ? `เต็ม ${item.gradeColumn.maxScore} คะแนน` : "ยังไม่เชื่อมสมุดออนไลน์"}</span>
+                          <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5" /> {statusLabel(item.status)}</span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center justify-between gap-5 sm:justify-end">
+                        <div className="min-w-[6rem] text-right">
+                          <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-[#888888]">ส่งแล้ว</div>
+                          <div className="text-lg font-black tabular-nums text-[#166534]">{item._count.submissions} <span className="text-xs font-bold text-[#999999]">รายการ</span></div>
+                          <div className="mt-1.5 h-1.5 w-20 overflow-hidden rounded-full bg-[#F4F4F2]">
+                            <div className="h-full rounded-full bg-[#166534]" style={{ width: item._count.submissions > 0 ? "100%" : "0%" }} />
+                          </div>
+                        </div>
+                        <div className="border-l border-[#EAE8E3] pl-4">
+                          <Link href={"/dashboard/assignments/" + item.id} aria-label={`ดูรายละเอียดและตรวจงาน ${item.title}`} className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-[#EAE8E3] bg-[#F4F4F2] text-[#166534] transition hover:border-[#166534] hover:bg-[#166534] hover:text-white"><FileText className="h-4 w-4" /></Link>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       </div>
     </main>
