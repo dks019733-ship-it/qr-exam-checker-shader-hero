@@ -61,7 +61,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       const gradebookData = await gradebookResponse.json();
       if (!gradebookResponse.ok) throw new Error(gradebookData.error || "โหลดช่องคะแนนไม่สำเร็จ");
       const available = (gradebookData.columns || []).filter((column: GradeColumnOption) =>
-        column.teachingAssignmentId === data.assignment.teachingAssignmentId &&
+        (column.teachingAssignmentId === data.assignment.teachingAssignmentId || column.teachingAssignmentId === null) &&
         (!column.assignmentId || column.assignmentId === assignmentId)
       );
       setGradeColumns(available);
