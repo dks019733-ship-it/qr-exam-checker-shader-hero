@@ -195,9 +195,15 @@ export function AttendanceManager() {
     setShowDatePicker((open) => !open);
   }
 
-  function chooseDate(day: number) {
-    setDate(dateValue(currentYear, currentMonth, day));
+  function selectDate(value: string) {
+    if (value === date) { setShowDatePicker(false); return; }
+    if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปลี่ยนวันและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+    setDate(value);
     setShowDatePicker(false);
+  }
+
+  function chooseDate(day: number) {
+    selectDate(dateValue(currentYear, currentMonth, day));
   }
 
   async function saveAttendance() {
@@ -301,7 +307,12 @@ export function AttendanceManager() {
               </span>
               <select
                 value={assignmentId}
-                onChange={(event) => setAssignmentId(event.target.value)}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  if (nextId === assignmentId) return;
+                  if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปลี่ยนรายวิชาและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+                  setAssignmentId(nextId);
+                }}
                 disabled={loading && assignments.length === 0}
                 className="min-h-[50px] w-full rounded-2xl border border-[#EAE8E3] bg-[#F9F9F8] px-4 text-sm font-bold text-[#1A1A1A] shadow-inner outline-none transition focus:border-[#2C3E32] focus:bg-white focus:shadow-md disabled:opacity-60"
               >
@@ -377,7 +388,7 @@ export function AttendanceManager() {
                       );
                     })}
                   </div>
-                  <button type="button" onClick={() => { setDate(localDateValue()); setShowDatePicker(false); }} className="mt-4 w-full rounded-xl border border-[#EAE8E3] py-2 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F4F4F2]">
+                  <button type="button" onClick={() => selectDate(localDateValue()) className="mt-4 w-full rounded-xl border border-[#EAE8E3] py-2 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F4F4F2]">
                     เลือกวันนี้
                   </button>
                 </div>
