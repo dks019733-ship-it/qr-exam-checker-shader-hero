@@ -114,16 +114,31 @@ export async function POST(request: Request) {
         throw new Error("SUBMISSION_ALREADY_REVIEWED");
       }
 
-      const submission = existingSubmission?.status === "RETURNED"
-        ? await tx.submission.update({
-            where: { id: existingSubmission.id },
-            data: { status: "SUBMITTED", submittedAt: new Date(), score: null, feedback: "", reviewedAt: null },
-            select: { id: true, submittedAt: true },
-          })
-        : existingSubmission ?? await tx.submission.create({
-            data: { assignmentId, studentId: studentId! },
-            select: { id: true, submittedAt: true },
-          });
+      let submission: { id: string; submittedAt: Date };
+      if (existingSubmission?.status === "RETURNED") {
+        const transitioned = await tx.submission.updateMany({
+          where: { id: existingSubmission.id, status: "RETURNED" },
+          data: { status: "SUBMITTED", submittedAt: new Date(), score: null, feedback: "", reviewedAt: null },
+        });
+        if (transitioned.count !== 1) throw new Error("SUBMISSION_STATE_CHANGED");
+        submission = (await tx.submission.findUniqueOrThrow({
+          where: { id: existingSubmission.id },
+          select: { id: true, submittedAt: true },
+        }));
+      } else if (existingSubmission) {
+        // Acquire a row write lock without changing the submission timestamp.
+        const locked = await tx.submission.updateMany({
+          where: { id: existingSubmission.id, status: "SUBMITTED" },
+          data: { updatedAt: new Date() },
+        });
+        if (locked.count !== 1) throw new Error("SUBMISSION_ALREADY_REVIEWED");
+        submission = existingSubmission;
+      } else {
+        submission = await tx.submission.create({
+          data: { assignmentId, studentId: studentId! },
+          select: { id: true, submittedAt: true },
+        });
+      }
       const file = await tx.submissionFile.create({
         data: { submissionId: submission.id, objectKey, fileName, contentType, sizeBytes },
         select: { id: true, fileName: true, contentType: true, sizeBytes: true },
@@ -162,7 +177,7 @@ export async function POST(request: Request) {
     if (!assignmentFile && !submissionFile) {
       await deleteStoredObject(objectKey).catch((cleanupError) => console.error("[FileUpload] orphan cleanup failed:", cleanupError));
     }
-    if (error instanceof Error && error.message === "SUBMISSION_ALREADY_REVIEWED") {
+    if (error instanceof Error && (error.message === "SUBMISSION_ALREADY_REVIEWED" || error.message === "SUBMISSION_STATE_CHANGED")) {
       return NextResponse.json({ error: "งานนี้ตรวจแล้ว ไม่สามารถเพิ่มหรือเปลี่ยนไฟล์ส่งงานได้" }, { status: 409 });
     }
     console.error("[FileUpload] completion failed:", error);
