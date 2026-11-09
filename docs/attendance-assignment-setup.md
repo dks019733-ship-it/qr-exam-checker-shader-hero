@@ -46,8 +46,11 @@ The server checks declared MIME type, file extension, actual object size, stored
 
 - The database stores object keys and file metadata, not file contents.
 - Students can upload only to published SYSTEM_UPLOAD assignments in their authenticated classroom.
+- TEACHER_CHECK assignments may include optional teacher attachments; active students in the published assignment's classroom can download them through the authenticated file-download endpoint.
 - Teachers can download submissions only when they own the assignment.
 - Students can download only published assignment attachments and their own submissions.
 - A successful student upload records the actual server timestamp. Additional files can be uploaded after a partial failure without resetting that timestamp. A RETURNED submission can be resubmitted; a REVIEWED submission is locked against further uploads. Late status is derived from the server timestamp and assignment deadline; it is never backdated.
+- Teachers can return a submission for revision only with feedback. Students see the returned status and feedback. SYSTEM_UPLOAD students can upload corrected files; TEACHER_CHECK students bring corrected physical work back to the teacher. The next successful resubmission/receipt returns the state to SUBMITTED and clears the previous score and review feedback.
+- Automatic attendance is supported only for SYSTEM_UPLOAD assignments because the server can verify successful file completion. The UI hides this option for TEACHER_CHECK and Google Forms, and the API rejects unsupported modes.
 - If automatic attendance is enabled and the attendance feature is available, successful submission creates a PRESENT record only when no record exists for the linked session. Existing teacher decisions (PRESENT, ABSENT, LATE or LEAVE) are preserved.
 - Missing R2 environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
