@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true },
+    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true, gradeColumn: { select: { id: true, period: true, maxScore: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
 
@@ -63,7 +63,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id, mode: "TEACHER_CHECK", status: "PUBLISHED" },
-    select: { id: true, classId: true, maxScore: true },
+    select: { id: true, classId: true, maxScore: true, gradeColumn: { select: { id: true, classId: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานตรวจในชั้นเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
   const student = await prisma.student.findFirst({
@@ -104,26 +104,35 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json(saved);
   }
 
-  const saved = await prisma.submission.upsert({
-        where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
-        create: {
-          assignmentId: assignment.id,
-          studentId: student.id,
-          status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
-          submittedAt: now,
-          ...(hasReviewInput ? {
-            reviewedAt: now,
-            score,
-            feedback,
-          } : {}),
-        },
-        update: hasReviewInput ? {
-          status: "REVIEWED",
-          reviewedAt: now,
-          ...(hasScore ? { score } : {}),
-          ...(hasFeedback ? { feedback } : {}),
-        } : {},
-        select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+  const saved = await prisma.$transaction(async (tx) => {
+    const submission = await tx.submission.upsert({
+      where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
+      create: {
+        assignmentId: assignment.id,
+        studentId: student.id,
+        status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
+        submittedAt: now,
+        ...(hasReviewInput ? { reviewedAt: now, score, feedback } : {}),
+      },
+      update: hasReviewInput ? {
+        status: "REVIEWED",
+        reviewedAt: now,
+        ...(hasScore ? { score } : {}),
+        ...(hasFeedback ? { feedback } : {}),
+      } : {},
+      select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+    });
+    if (hasReviewInput && assignment.gradeColumn) {
+      if (assignment.gradeColumn.classId !== assignment.classId) {
+        throw new Error("GRADE_COLUMN_CLASS_MISMATCH");
+      }
+      await tx.gradeScore.upsert({
+        where: { columnId_studentId: { columnId: assignment.gradeColumn.id, studentId: student.id } },
+        create: { columnId: assignment.gradeColumn.id, studentId: student.id, score },
+        update: { score },
       });
-  return NextResponse.json(saved);
+    }
+    return submission;
+  });
+  return NextResponse.json({ ...saved, gradebookSynced: hasReviewInput && Boolean(assignment.gradeColumn) });
 }
