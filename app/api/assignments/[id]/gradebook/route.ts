@@ -42,24 +42,44 @@ export async function POST(
   if (assignment.gradeColumn) return NextResponse.json({ error: "งานนี้เชื่อมกับสมุดคะแนนอยู่แล้ว" }, { status: 409 });
 
   try {
-    const column = await prisma.gradeColumn.create({
-      data: {
-        ownerId: assignment.ownerId,
-        classId: assignment.classId,
-        title: assignment.title,
-        period,
-        maxScore,
-        teachingAssignmentId: assignment.teachingAssignmentId,
-        assignmentId: assignment.id,
-      },
-      select: { id: true, period: true, maxScore: true },
-    });
-    await prisma.assignment.update({
-      where: { id: assignment.id },
-      data: { maxScore },
+    const column = await prisma.$transaction(async (tx) => {
+      const scores = await tx.submission.findMany({
+        where: { assignmentId: assignment.id, status: "REVIEWED", score: { not: null } },
+        select: { studentId: true, score: true },
+      });
+      if (scores.some((item) => item.score !== null && item.score > maxScore)) {
+        throw new Error("EXISTING_SCORE_EXCEEDS_MAX");
+      }
+
+      const created = await tx.gradeColumn.create({
+        data: {
+          ownerId: assignment.ownerId,
+          classId: assignment.classId,
+          title: assignment.title,
+          period,
+          maxScore,
+          teachingAssignmentId: assignment.teachingAssignmentId,
+          assignmentId: assignment.id,
+          scores: {
+            create: scores.flatMap((item) => item.score === null ? [] : [{
+              studentId: item.studentId,
+              score: item.score,
+            }]),
+          },
+        },
+        select: { id: true, period: true, maxScore: true },
+      });
+      await tx.assignment.update({
+        where: { id: assignment.id },
+        data: { maxScore },
+      });
+      return created;
     });
     return NextResponse.json(column, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "EXISTING_SCORE_EXCEEDS_MAX") {
+      return NextResponse.json({ error: "คะแนนเต็มต้องไม่น้อยกว่าคะแนนที่ครูตรวจและบันทึกไว้แล้ว" }, { status: 400 });
+    }
     console.error("[Assignments] link gradebook failed:", error);
     return NextResponse.json({ error: "เชื่อมงานกับสมุดคะแนนไม่สำเร็จ อาจมีการเชื่อมพร้อมกัน กรุณาโหลดข้อมูลใหม่" }, { status: 409 });
   }
