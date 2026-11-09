@@ -8,7 +8,7 @@ import { compressImageBalanced } from "@/lib/client-file-compression";
 type GradeColumnOption = {
   id: string;
   title: string;
-  period: "MIDTERM" | "AFTER_MIDTERM";
+  period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM";
   maxScore: number;
   teachingAssignmentId: string | null;
   assignmentId: string | null;
@@ -90,7 +90,7 @@ export function AssignmentManager() {
         if (!response.ok) throw new Error(data.error || "โหลดช่องคะแนนไม่สำเร็จ");
         if (!active) return;
         const available = (data.columns || []).filter((column: GradeColumnOption) =>
-          column.teachingAssignmentId === teachingAssignmentId && !column.assignmentId
+          (column.teachingAssignmentId === teachingAssignmentId || column.teachingAssignmentId === null) && !column.assignmentId
         );
         setGradeColumns(available);
       })
@@ -218,7 +218,7 @@ export function AssignmentManager() {
                 <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายวิชา / ห้องเรียน</span><select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setGradeColumnId(""); }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm">{teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}</select></label>
                 <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รูปแบบการส่งงาน</span><select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option><option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option><option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option></select></label>
               </div>
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ชื่องานจากสมุดออนไลน์</span><select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm disabled:bg-[#f5f6f2]"><option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>{gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "MIDTERM" ? "ก่อนกลางภาค" : "หลังกลางภาค"}</option>)}</select>{selectedGradeColumn && <span className="mt-1 block text-xs text-[#788174]">ชื่องานและคะแนนเต็มจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}</label>
+              <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ชื่องานจากสมุดออนไลน์</span><select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm disabled:bg-[#f5f6f2]"><option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>{gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}</select>{selectedGradeColumn && <span className="mt-1 block text-xs text-[#788174]">ชื่องานและคะแนนเต็มจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}</label>
               <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">รายละเอียด / คำชี้แจง</span><textarea maxLength={5000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="อธิบายสิ่งที่นักเรียนต้องทำ..." className="w-full rounded-xl border border-[#dfe4d8] px-3 py-3 text-sm outline-none focus:border-[#718b6b]" /></label>
 
               {mode === "GOOGLE_FORM" && <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ลิงก์ Google Forms</span><input required type="url" value={googleFormUrl} onChange={(event) => setGoogleFormUrl(event.target.value)} placeholder="https://forms.gle/..." className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm outline-none focus:border-[#718b6b]" /></label>}
