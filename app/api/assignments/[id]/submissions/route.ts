@@ -12,7 +12,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true, gradeColumn: { select: { id: true, period: true, maxScore: true } } },
+    select: { id: true, title: true, mode: true, maxScore: true, dueAt: true, classId: true, teachingAssignmentId: true, gradeColumn: { select: { id: true, title: true, period: true, maxScore: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
 
