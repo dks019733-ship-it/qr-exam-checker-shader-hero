@@ -207,10 +207,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         where: {
           columnId: { in: await getFormScoreColumnIds(column.id) },
           studentId: previousReview.studentId,
+          manualOverride: false,
         },
       })] : []),
       ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
-        where: { columnId: { in: staleColumnIds }, studentId },
+        where: { columnId: { in: staleColumnIds }, studentId, manualOverride: false },
       })] : []),
       prisma.gradeColumn.update({ where: { id }, data: { maxScore } }),
       prisma.formResponseReview.upsert({
@@ -220,8 +221,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }),
       prisma.gradeScore.upsert({
         where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
-        create: { columnId: destinationColumnId, studentId, score: total },
-        update: { score: total },
+        create: { columnId: destinationColumnId, studentId, score: total, manualOverride: true },
+        update: { score: total, manualOverride: true },
       }),
       prisma.pendingFormScore.deleteMany({ where: { columnId: id, responseId } }),
       ...(column.assignment?.mode === "GOOGLE_FORM" ? [prisma.submission.upsert({
