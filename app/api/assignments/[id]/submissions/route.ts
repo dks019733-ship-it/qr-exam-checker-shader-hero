@@ -24,6 +24,16 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     },
     orderBy: [{ submittedAt: "desc" }],
   });
+  const gradeScores = assignment.gradeColumn && submissions.length
+    ? await prisma.gradeScore.findMany({
+        where: {
+          columnId: assignment.gradeColumn.id,
+          studentId: { in: submissions.map((item) => item.studentId) },
+        },
+        select: { studentId: true, score: true },
+      })
+    : [];
+  const gradeScoreByStudent = new Map(gradeScores.map((item) => [item.studentId, item.score]));
   const receivedStudentIds = new Set(submissions.map((item) => item.studentId));
   const students = assignment.mode === "TEACHER_CHECK"
     ? await prisma.student.findMany({
@@ -43,7 +53,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       status: item.status,
       submittedAt: item.submittedAt.toISOString(),
       isLate: Boolean(assignment.dueAt && item.submittedAt > assignment.dueAt),
-      score: item.score,
+      score: assignment.gradeColumn
+        ? (gradeScoreByStudent.has(item.studentId) ? gradeScoreByStudent.get(item.studentId) ?? null : null)
+        : item.score,
       feedback: item.feedback,
       reviewedAt: item.reviewedAt?.toISOString() ?? null,
       student: item.student,

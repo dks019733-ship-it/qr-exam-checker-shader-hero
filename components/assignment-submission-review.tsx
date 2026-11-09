@@ -9,6 +9,7 @@ type Submission = {
   status: string;
   submittedAt: string;
   isLate: boolean;
+  score: number | null;
   feedback: string;
   student: { id: string; rollNo: string; studentNo: string; name: string };
   files: { id: string; fileName: string; contentType: string; sizeBytes: number }[];
@@ -206,7 +207,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
         <section className="overflow-hidden rounded-2xl border border-[#e6e8df] bg-white shadow-sm">
           {loading ? <p className="p-12 text-center text-sm text-[#788174]">กำลังโหลดรายการส่งงาน...</p> : submissions.length === 0 ? <p className="p-12 text-center text-sm text-[#788174]">ยังไม่มีนักเรียนส่งงาน</p> : <div className="divide-y divide-[#edf0e9]">{submissions.map((item) => <article key={item.id} className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-              <div><p className="text-sm font-bold">{item.student.name}</p><p className="mt-1 text-xs text-[#788174]">เลขที่ {item.student.rollNo || "—"} · รหัส {item.student.studentNo}</p><p className="mt-1 text-xs text-[#788174]">ส่งเมื่อ {new Date(item.submittedAt).toLocaleString("th-TH")} {item.isLate && <span className="font-bold text-rose-700">· ส่งล่าช้า</span>}</p></div>
+              <div><p className="text-sm font-bold">{item.student.name}</p><p className="mt-1 text-xs text-[#788174]">เลขที่ {item.student.rollNo || "—"} · รหัส {item.student.studentNo}</p><p className="mt-1 text-xs text-[#788174]">ส่งเมื่อ {new Date(item.submittedAt).toLocaleString("th-TH")} {item.isLate && <span className="font-bold text-rose-700">· ส่งล่าช้า</span>}</p>{gradebook && <p className="mt-2 text-xs font-semibold text-[#4d5f4a]">คะแนนในสมุดออนไลน์: {item.score === null ? "—" : String(item.score) + "/" + String(gradebook.maxScore)}</p>}</div>
               <span className="w-fit rounded-lg bg-[#f0f3eb] px-2.5 py-1 text-xs font-semibold text-[#4d5f4a]">{item.status === "REVIEWED" ? "ตรวจแล้ว" : item.status === "RETURNED" ? "ส่งกลับแก้ไข" : "รอตรวจ"}</span>
             </div>
             {item.files.length > 0 && <div className="flex flex-wrap gap-2">{item.files.map((file) => <button key={file.id} type="button" onClick={() => openFile(file.id)} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold text-[#4d5f4a] hover:bg-[#f8f9f6]"><Download className="h-3.5 w-3.5" />{file.fileName}</button>)}</div>}

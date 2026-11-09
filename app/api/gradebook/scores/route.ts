@@ -18,10 +18,10 @@ export async function PUT(request: Request) {
   if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนน" }, { status: 404 });
   const student = await prisma.student.findFirst({ where: { id: studentId, classId: column.classId, isActive: true }, select: { id: true } });
   if (!student) return NextResponse.json({ error: "นักเรียนไม่ได้อยู่ในห้องนี้" }, { status: 400 });
-  if (score === null) {
-    await prisma.gradeScore.deleteMany({ where: { columnId, studentId } });
-    return NextResponse.json({ ok: true, score: null });
-  }
-  const saved = await prisma.gradeScore.upsert({ where: { columnId_studentId: { columnId, studentId } }, create: { columnId, studentId, score }, update: { score } });
+  const saved = await prisma.gradeScore.upsert({
+    where: { columnId_studentId: { columnId, studentId } },
+    create: { columnId, studentId, score, manualOverride: true },
+    update: { score, manualOverride: true },
+  });
   return NextResponse.json(saved);
 }

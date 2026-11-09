@@ -363,11 +363,12 @@ model GradeColumn {
 }
 
 model GradeScore {
-  id        String      @id @default(cuid())
-  columnId  String
-  studentId String
-  score     Float?
-  column    GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  id             String      @id @default(cuid())
+  columnId       String
+  studentId      String
+  score          Float?
+  manualOverride Boolean     @default(false)
+  column         GradeColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
   student   Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   updatedAt DateTime    @updatedAt
   @@unique([columnId, studentId])

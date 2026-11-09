@@ -36,7 +36,7 @@ export async function GET() {
           maxScore: true,
           scores: {
             where: { studentId: student.id },
-            select: { score: true },
+            select: { score: true, updatedAt: true },
             take: 1,
           },
         },
@@ -58,7 +58,21 @@ export async function GET() {
 
   return NextResponse.json({
     assignments: assignments.map((assignment) => {
-      const submission = assignment.submissions[0] ?? null;
+      const storedSubmission = assignment.submissions[0] ?? null;
+      const gradeScore = assignment.gradeColumn?.scores[0] ?? null;
+      // Older Google Forms responses may already have a gradebook score but no Assignment submission row.
+      const submission = storedSubmission ?? (
+        assignment.mode === "GOOGLE_FORM" && gradeScore
+          ? {
+              id: null,
+              status: "SUBMITTED" as const,
+              submittedAt: gradeScore.updatedAt,
+              score: gradeScore.score,
+              feedback: "",
+              files: [],
+            }
+          : null
+      );
       return {
         id: assignment.id,
         gradeColumnId: assignment.gradeColumn?.id ?? null,
@@ -76,7 +90,7 @@ export async function GET() {
           status: submission.status,
           submittedAt: submission.submittedAt.toISOString(),
           isLate: Boolean(assignment.dueAt && submission.submittedAt > assignment.dueAt),
-          score: assignment.gradeColumn ? (assignment.gradeColumn.scores[0]?.score ?? null) : submission.score,
+          score: assignment.gradeColumn ? (gradeScore ? gradeScore.score : null) : submission.score,
           feedback: submission.feedback,
           files: submission.files,
         } : null,

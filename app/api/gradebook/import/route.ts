@@ -74,8 +74,8 @@ export async function POST(request: Request) {
 
   const operations = [...writes.values()].map((entry) => prisma.gradeScore.upsert({
     where: { columnId_studentId: { columnId: entry.columnId, studentId: entry.studentId } },
-    create: entry,
-    update: { score: entry.score },
+    create: { ...entry, manualOverride: true },
+    update: { score: entry.score, manualOverride: true },
   }));
   for (let index = 0; index < operations.length; index += 250) {
     await prisma.$transaction(operations.slice(index, index + 250));

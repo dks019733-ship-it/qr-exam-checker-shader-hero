@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
-import { getFormScoreColumnIds, getFormScoreDestination, getOtherFormScoreColumnIds } from "@/lib/gradebook-form-destination";
+import { getFormScoreDestination } from "@/lib/gradebook-form-destination";
 import { matchFormStudent } from "@/lib/google-form-student-match";
 
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
@@ -41,7 +41,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id, googleFormId: { not: null } },
-    include: { googleForm: { select: { formId: true } }, classroom: { select: { id: true, name: true } } },
+    include: { googleForm: { select: { formId: true } }, classroom: { select: { id: true, name: true } }, assignment: { select: { id: true, mode: true } } },
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ช่องคะแนนนี้ไม่ได้เชื่อมกับ Google Form" }, { status: 404 });
   try {
@@ -60,13 +60,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const nameIds = fieldIds(["ชื่อ-นามสกุล", "ชื่อสกุล", "ชื่อ-สกุล", "ชื่อนักเรียน", "ชื่อ"]);
     if (!(rollIds.questionId || rollIds.itemId) || !(roomIds.questionId || roomIds.itemId) || !(nameIds.questionId || nameIds.itemId)) return NextResponse.json({ error: "ฟอร์มนี้ต้องมีคำถามสำหรับเลขที่ ห้อง และชื่อ-นามสกุล (ใช้ชื่อช่องใกล้เคียงได้) กรุณาตรวจคำถามในฟอร์ม" }, { status: 400 });
     const maxFormScore = items.reduce((sum, item) => sum + Number(item.questionItem?.question?.grading?.pointValue || 0), 0);
-    if (!maxFormScore) return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
+    if (!maxFormScore && column.assignment?.mode !== "GOOGLE_FORM") return NextResponse.json({ error: "ฟอร์มนี้ยังไม่มีคะแนนแบบทดสอบที่ระบบอ่านได้" }, { status: 400 });
     const gradedQuestionIds = items.flatMap((item) => {
       const question = item.questionItem?.question;
       return question?.questionId && Number(question.grading?.pointValue || 0) > 0 ? [question.questionId] : [];
     });
     // Keep the displayed full score aligned with the actual quiz before storing raw responses.
-    await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+    if (maxFormScore > 0) await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
     const [students, classrooms, savedReviews] = await Promise.all([
       prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
       prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true } }),
@@ -96,20 +96,39 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         responsesSeen++;
         const savedReview = response.responseId ? reviewByResponse.get(response.responseId) : undefined;
         const score = savedReview?.score ?? responseScore(response, gradedQuestionIds);
-        if (typeof score !== "number") { ungraded++; continue; }
         const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
         const roll = answerFor(response, rollIds.questionId, rollIds.itemId);
         const name = answerFor(response, nameIds.questionId, nameIds.itemId);
         const manuallyMatched = savedReview?.studentId ? roster.find((student) => student.id === savedReview.studentId) : undefined;
         const matchedStudent = manuallyMatched || matchFormStudent(roster, roll, room, name);
         if (matchedStudent) {
-          const classScores = scoresByClass.get(matchedStudent.classId) || new Map<string, number>();
-          classScores.set(matchedStudent.id, score);
-          scoresByClass.set(matchedStudent.classId, classScores);
+          // Submission state is independent from grading: essay responses count as submitted immediately.
+          if (column.assignment?.mode === "GOOGLE_FORM" && response.responseId) {
+            const submittedAt = response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : new Date();
+            await prisma.submission.upsert({
+              where: { assignmentId_studentId: { assignmentId: column.assignment.id, studentId: matchedStudent.id } },
+              create: { assignmentId: column.assignment.id, studentId: matchedStudent.id, status: "SUBMITTED", submittedAt },
+              update: {},
+            });
+            await prisma.submission.updateMany({
+              where: { assignmentId: column.assignment.id, studentId: matchedStudent.id, status: { not: "REVIEWED" } },
+              data: { status: "SUBMITTED", ...(response.lastSubmittedTime ? { submittedAt } : {}) },
+            });
+          }
+          if (typeof score === "number") {
+            const classScores = scoresByClass.get(matchedStudent.classId) || new Map<string, number>();
+            classScores.set(matchedStudent.id, score);
+            scoresByClass.set(matchedStudent.classId, classScores);
+          } else {
+            ungraded++;
+          }
           if (response.responseId) matchedResponseIds.push(response.responseId);
-        } else if (response.responseId) {
+        } else if (response.responseId && typeof score === "number") {
           pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: roll, studentName: name || "ไม่ระบุชื่อในฟอร์ม", room, manualReviewRequired: !!room && normalizedRoom(room) !== normalizedRoom(column.classroom.name), score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
-        } else skipped++;
+        } else {
+          if (typeof score !== "number") ungraded++;
+          else skipped++;
+        }
       }
       pageToken = result.nextPageToken;
       if (!pageToken) break;
@@ -123,46 +142,42 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       })));
     }
     if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });
-    const formColumnIds = await getFormScoreColumnIds(column.id);
-    const matchedStudentIds = [...new Set([...scoresByClass.values()].flatMap((classScores) => [...classScores.keys()]))];
-    const existingScores = await prisma.gradeScore.findMany({
-      where: { columnId: { in: formColumnIds } },
-      select: { studentId: true },
-    });
-    const matchedStudentIdSet = new Set(matchedStudentIds);
-    const staleStudentIds = [...new Set(existingScores.map(({ studentId }) => studentId))]
-      .filter((studentId) => !matchedStudentIdSet.has(studentId));
-    for (let i = 0; i < staleStudentIds.length; i += 500) {
-      await prisma.gradeScore.deleteMany({
-        where: { columnId: { in: formColumnIds }, studentId: { in: staleStudentIds.slice(i, i + 500) } },
-      });
-    }
+    // Existing scores are never deleted merely because a response is missing from this sync.
+    // Teacher-confirmed values are protected by GradeScore.manualOverride.
     let imported = 0;
+    let preservedManualScores = 0;
     const destinations = new Map<string, string>();
-    for (const classroom of classrooms) {
-      destinations.set(classroom.id, await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classroom.id));
+    if (maxFormScore > 0) {
+      for (const classroom of classrooms) {
+        destinations.set(classroom.id, await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classroom.id));
+      }
     }
     for (const [classId, classScores] of scoresByClass) {
       const destinationColumnId = destinations.get(classId);
       if (!destinationColumnId) throw new Error("ไม่พบช่องคะแนนปลายทางของห้องเรียน");
-      const staleColumnIds = await getOtherFormScoreColumnIds(column.id, destinationColumnId);
       const entries = [...classScores.entries()];
-      imported += entries.length;
       for (let i = 0; i < entries.length; i += 25) {
         const batch = entries.slice(i, i + 25);
-        await prisma.$transaction([
-          ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
-            where: { columnId: { in: staleColumnIds }, studentId: { in: batch.map(([studentId]) => studentId) } },
-          })] : []),
-          ...batch.map(([studentId, score]) => prisma.gradeScore.upsert({
-            where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
-            create: { columnId: destinationColumnId, studentId, score },
-            update: { score },
-          })),
-        ]);
+        const studentIds = batch.map(([studentId]) => studentId);
+        const manualScores = await prisma.gradeScore.count({
+          where: { columnId: destinationColumnId, studentId: { in: studentIds }, manualOverride: true },
+        });
+        preservedManualScores += manualScores;
+        imported += batch.length - manualScores;
+        // Update only machine-managed rows. Insert missing rows; skip existing teacher overrides.
+        await prisma.$transaction(batch.flatMap(([studentId, score]) => [
+          prisma.gradeScore.updateMany({
+            where: { columnId: destinationColumnId, studentId, manualOverride: false },
+            data: { score },
+          }),
+          prisma.gradeScore.createMany({
+            data: [{ columnId: destinationColumnId, studentId, score, manualOverride: false }],
+            skipDuplicates: true,
+          }),
+        ]));
       }
     }
-    return NextResponse.json({ imported, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
+    return NextResponse.json({ imported, preservedManualScores, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";

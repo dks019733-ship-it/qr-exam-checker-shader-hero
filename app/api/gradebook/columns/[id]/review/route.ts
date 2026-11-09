@@ -166,7 +166,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id, googleFormId: { not: null } },
-    include: { googleForm: { select: { formId: true } } },
+    include: { googleForm: { select: { formId: true } }, assignment: { select: { id: true, mode: true } } },
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ไม่พบช่องคะแนน Google Forms" }, { status: 404 });
   const student = await prisma.student.findFirst({ where: { id: studentId, class: { ownerId: session.user.id }, isActive: true }, select: { id: true, classId: true } });
@@ -175,7 +175,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const token = await getGoogleFormsAccessToken(session.user.id, "responses");
     const form = await googleFormsRequest<FormInfo>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}`);
-    await googleFormsRequest<FormResponse>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}/responses/${encodeURIComponent(responseId)}`);
+    const formResponse = await googleFormsRequest<FormResponse>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}/responses/${encodeURIComponent(responseId)}`);
     const validQuestions = new Map((form.items || []).flatMap((item) => {
       const question = item.questionItem?.question;
       return question?.questionId && Number(question.grading?.pointValue || 0) > 0
@@ -207,10 +207,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         where: {
           columnId: { in: await getFormScoreColumnIds(column.id) },
           studentId: previousReview.studentId,
+          manualOverride: false,
         },
       })] : []),
       ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
-        where: { columnId: { in: staleColumnIds }, studentId },
+        where: { columnId: { in: staleColumnIds }, studentId, manualOverride: false },
       })] : []),
       prisma.gradeColumn.update({ where: { id }, data: { maxScore } }),
       prisma.formResponseReview.upsert({
@@ -220,10 +221,22 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }),
       prisma.gradeScore.upsert({
         where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
-        create: { columnId: destinationColumnId, studentId, score: total },
-        update: { score: total },
+        create: { columnId: destinationColumnId, studentId, score: total, manualOverride: true },
+        update: { score: total, manualOverride: true },
       }),
       prisma.pendingFormScore.deleteMany({ where: { columnId: id, responseId } }),
+      ...(column.assignment?.mode === "GOOGLE_FORM" ? [prisma.submission.upsert({
+        where: { assignmentId_studentId: { assignmentId: column.assignment.id, studentId } },
+        create: {
+          assignmentId: column.assignment.id,
+          studentId,
+          status: "REVIEWED",
+          submittedAt: formResponse.lastSubmittedTime ? new Date(formResponse.lastSubmittedTime) : new Date(),
+          score: total,
+          reviewedAt: new Date(),
+        },
+        update: { status: "REVIEWED", score: total, reviewedAt: new Date() },
+      })] : []),
     ]);
     return NextResponse.json({ ok: true, score: total });
   } catch (error) {
