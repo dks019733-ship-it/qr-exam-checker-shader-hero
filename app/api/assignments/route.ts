@@ -22,10 +22,11 @@ export async function GET(request: Request) {
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  const ownerId = session.user.id;
 
   const classId = new URL(request.url).searchParams.get("classId");
   const assignments = await prisma.assignment.findMany({
-    where: { ownerId: session.user.id, ...(classId ? { classId } : {}) },
+    where: { ownerId: ownerId, ...(classId ? { classId } : {}) },
     include: {
       classroom: { select: { id: true, name: true } },
       teachingAssignment: { include: { subject: { select: { code: true, name: true } } } },
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  const ownerId = session.user.id;
 
   const body = await request.json().catch(() => null);
   const teachingAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   const teachingAssignment = await prisma.teachingAssignment.findFirst({
-    where: { id: teachingAssignmentId, ownerId: session.user.id },
+    where: { id: teachingAssignmentId, ownerId: ownerId },
     select: { id: true, ownerId: true, classId: true },
   });
   if (!teachingAssignment) return NextResponse.json({ error: "ไม่พบรายวิชาหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
@@ -84,7 +86,7 @@ export async function POST(request: Request) {
   const gradeColumn = await prisma.gradeColumn.findFirst({
     where: {
       id: gradeColumnId,
-      ownerId: session.user.id,
+      ownerId: ownerId,
       classId: teachingAssignment.classId,
       OR: [{ teachingAssignmentId }, { teachingAssignmentId: null }],
       assignmentId: null,
@@ -99,7 +101,7 @@ export async function POST(request: Request) {
     const attendance = await prisma.attendanceSession.findFirst({
       where: {
         id: attendanceSessionId,
-        ownerId: session.user.id,
+        ownerId: ownerId,
         teachingAssignmentId,
         classId: teachingAssignment.classId,
       },
@@ -137,7 +139,7 @@ export async function POST(request: Request) {
       const linked = await tx.gradeColumn.updateMany({
         where: {
           id: gradeColumn.id,
-          ownerId: session.user.id,
+          ownerId: ownerId,
           classId: teachingAssignment.classId,
           OR: [{ teachingAssignmentId }, { teachingAssignmentId: null }],
           assignmentId: null,
