@@ -59,6 +59,7 @@ interface AssignmentItem {
   period?: string;
   createdAt?: string;
   assignmentId?: string;
+  gradeColumnId?: string | null;
   mode?: "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM";
   dueAt?: string | null;
   files?: { id: string; fileName: string; contentType: string; sizeBytes: number }[];
@@ -143,6 +144,7 @@ export default function StudentPortalPage() {
           return {
             id: "assignment:" + task.id,
             assignmentId: task.id,
+            gradeColumnId: task.gradeColumnId,
             mode: task.mode,
             subject,
             teacher: task.teacher,
@@ -163,7 +165,15 @@ export default function StudentPortalPage() {
             submission: task.submission || null,
           } as AssignmentItem;
         });
-        setAssignments([...(data.assignments || []), ...managedTasks]);
+        // A linked gradebook column is the same coursework item as its managed assignment.
+        // Keep the managed assignment card (submission state, due date and action), not a duplicate gradebook card.
+        const linkedGradeColumnIds = new Set(
+          managedTasks.map((task) => task.gradeColumnId).filter((id): id is string => Boolean(id)),
+        );
+        const standaloneGradebookTasks = (data.assignments || []).filter(
+          (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
+        );
+        setAssignments([...standaloneGradebookTasks, ...managedTasks]);
         setScores(data.scores || []);
         setAnnouncements(data.announcements || []);
         if (data.subjects && Array.isArray(data.subjects)) {

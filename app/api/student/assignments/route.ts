@@ -31,6 +31,7 @@ export async function GET() {
       files: { select: { id: true, fileName: true, contentType: true, sizeBytes: true } },
       gradeColumn: {
         select: {
+          id: true,
           title: true,
           maxScore: true,
           scores: {
@@ -60,6 +61,7 @@ export async function GET() {
       const submission = assignment.submissions[0] ?? null;
       return {
         id: assignment.id,
+        gradeColumnId: assignment.gradeColumn?.id ?? null,
         title: assignment.gradeColumn?.title ?? assignment.title,
         description: assignment.description,
         mode: assignment.mode,
