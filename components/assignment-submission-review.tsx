@@ -19,6 +19,9 @@ type Submission = {
 export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: string }) {
   const [title, setTitle] = useState("");
   const [maxScore, setMaxScore] = useState<number | null>(null);
+  const [gradebook, setGradebook] = useState<{ id: string; period: "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null>(null);
+  const [linkPeriod, setLinkPeriod] = useState<"MIDTERM" | "AFTER_MIDTERM">("MIDTERM");
+  const [linkMaxScore, setLinkMaxScore] = useState("10");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [unreceived, setUnreceived] = useState<UnreceivedStudent[]>([]);
   const [mode, setMode] = useState("");
@@ -38,6 +41,9 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       setTitle(data.assignment.title);
       setMode(data.assignment.mode);
       setMaxScore(data.assignment.maxScore);
+      setGradebook(data.assignment.gradeColumn || null);
+      if (data.assignment.gradeColumn?.period) setLinkPeriod(data.assignment.gradeColumn.period);
+      setLinkMaxScore(String(data.assignment.maxScore ?? data.assignment.gradeColumn?.maxScore ?? 10));
       setUnreceived(data.unreceivedStudents || []);
       setSubmissions(data.submissions);
       setDrafts(Object.fromEntries(data.submissions.map((item: Submission) => [item.id, {
@@ -76,10 +82,31 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "บันทึกผลตรวจไม่สำเร็จ");
-      setNotice(status === "RETURNED" ? "ส่งงานกลับให้นักเรียน " + item.student.name + " แก้ไขแล้ว" : "บันทึกผลตรวจของ " + item.student.name + " แล้ว");
+      setNotice(status === "RETURNED" ? "ส่งงานกลับให้นักเรียน " + item.student.name + " แก้ไขแล้ว" : "บันทึกผลตรวจของ " + item.student.name + " แล้ว" + (data.gradebookSynced ? " และซิงก์สมุดคะแนนแล้ว" : ""));
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  async function linkToGradebook() {
+    setSavingId("gradebook");
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/assignments/" + assignmentId + "/gradebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period: linkPeriod, maxScore: Number(linkMaxScore) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "เชื่อมสมุดคะแนนไม่สำเร็จ");
+      setNotice("เชื่อมงานกับสมุดคะแนนแล้ว คะแนนที่ตรวจใหม่จะซิงก์อัตโนมัติ");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เชื่อมสมุดคะแนนไม่สำเร็จ");
     } finally {
       setSavingId("");
     }
@@ -98,6 +125,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
         <header><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#71816c]">SUBMISSION REVIEW</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight">ตรวจงานและให้คะแนน</h1><p className="mt-2 text-sm text-[#687565]">{title || "กำลังโหลดงาน..."}</p></header>
         {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
         {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
+        {!loading && (gradebook ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">เชื่อมสมุดคะแนนแล้ว · {gradebook.period === "MIDTERM" ? "ก่อนกลางภาค" : "หลังกลางภาค"} · เต็ม {gradebook.maxScore} คะแนน · ผลตรวจใหม่จะอัปเดตคะแนนในสมุดคะแนนอัตโนมัติ</p> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h2 className="text-sm font-bold text-amber-950">งานเดิมยังไม่เชื่อมกับสมุดคะแนน</h2><p className="mt-1 text-xs text-amber-900">เลือกภาคเรียนและคะแนนเต็มเพื่อเชื่อมงานนี้ คะแนนที่ตรวจใหม่หลังจากนี้จะซิงก์เข้าช่องคะแนน</p><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block"><span className="mb-1 block text-xs font-semibold text-amber-950">ภาคเรียน</span><select value={linkPeriod} onChange={(event) => setLinkPeriod(event.target.value as typeof linkPeriod)} className="min-h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm"><option value="MIDTERM">ก่อนกลางภาค</option><option value="AFTER_MIDTERM">หลังกลางภาค</option></select></label><label className="block"><span className="mb-1 block text-xs font-semibold text-amber-950">คะแนนเต็ม</span><input type="number" min="0.01" max="10000" step="0.5" value={linkMaxScore} onChange={(event) => setLinkMaxScore(event.target.value)} className="min-h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm" /></label><button type="button" disabled={savingId === "gradebook" || !Number.isFinite(Number(linkMaxScore)) || Number(linkMaxScore) <= 0} onClick={() => void linkToGradebook()} className="min-h-10 rounded-lg bg-amber-900 px-4 text-xs font-bold text-white disabled:opacity-50">{savingId === "gradebook" ? "กำลังเชื่อม..." : "เชื่อมสมุดคะแนน"}</button></div></section>)}
         {mode === "TEACHER_CHECK" && !loading && unreceived.length > 0 && (
           <section className="rounded-2xl border border-[#e6e8df] bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-sm font-bold">ยังไม่ได้บันทึกว่าส่งกับครู ({unreceived.length} คน)</h2>
