@@ -27,7 +27,7 @@ export async function PUT(
 
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, maxScore: true },
+    select: { id: true, maxScore: true, classId: true, gradeColumn: { select: { id: true, classId: true } } },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
   if (action === "REVIEWED" && score !== null && assignment.maxScore !== null && score > assignment.maxScore) {
@@ -35,14 +35,38 @@ export async function PUT(
   }
 
   try {
-    // Atomic compare-and-set: concurrent upload/review requests cannot overwrite REVIEWED.
-    const result = await prisma.submission.updateMany({
-      where: { id: submissionId, assignmentId: assignment.id, status: { not: "REVIEWED" } },
-      data: action === "RETURNED"
-        ? { score: null, feedback, status: "RETURNED", reviewedAt: new Date() }
-        : { score, feedback, status: "REVIEWED", reviewedAt: new Date() },
+    // Keep the submission state and gradebook score in one transaction.
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await tx.submission.updateMany({
+        where: { id: submissionId, assignmentId: assignment.id, status: { not: "REVIEWED" } },
+        data: action === "RETURNED"
+          ? { score: null, feedback, status: "RETURNED", reviewedAt: new Date() }
+          : { score, feedback, status: "REVIEWED", reviewedAt: new Date() },
+      });
+      if (result.count !== 1) return { conflict: true as const };
+
+      const updated = await tx.submission.findUnique({
+        where: { id: submissionId },
+        select: { id: true, status: true, score: true, feedback: true, reviewedAt: true, studentId: true, student: { select: { classId: true } } },
+      });
+      if (!updated || updated.student.classId !== assignment.classId) {
+        throw new Error("SUBMISSION_STUDENT_CLASS_MISMATCH");
+      }
+
+      if (action === "REVIEWED" && assignment.gradeColumn) {
+        if (assignment.gradeColumn.classId !== updated.student.classId) {
+          throw new Error("GRADE_COLUMN_CLASS_MISMATCH");
+        }
+        await tx.gradeScore.upsert({
+          where: { columnId_studentId: { columnId: assignment.gradeColumn.id, studentId: updated.studentId } },
+          create: { columnId: assignment.gradeColumn.id, studentId: updated.studentId, score },
+          update: { score },
+        });
+      }
+      const { student: _student, studentId: _studentId, ...submission } = updated;
+      return { conflict: false as const, submission };
     });
-    if (result.count !== 1) {
+    if (outcome.conflict) {
       const exists = await prisma.submission.findFirst({
         where: { id: submissionId, assignmentId: assignment.id },
         select: { id: true },
@@ -52,11 +76,7 @@ export async function PUT(
         { status: exists ? 409 : 404 },
       );
     }
-    const updated = await prisma.submission.findUnique({
-      where: { id: submissionId },
-      select: { id: true, status: true, score: true, feedback: true, reviewedAt: true },
-    });
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...outcome.submission, gradebookSynced: action === "REVIEWED" && Boolean(assignment.gradeColumn) });
 
   } catch (error) {
     console.error("[AssignmentReview] update failed:", error);
