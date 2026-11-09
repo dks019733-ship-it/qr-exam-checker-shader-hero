@@ -59,6 +59,7 @@ interface AssignmentItem {
   period?: string;
   createdAt?: string;
   assignmentId?: string;
+  gradeColumnId?: string | null;
   mode?: "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM";
   dueAt?: string | null;
   files?: { id: string; fileName: string; contentType: string; sizeBytes: number }[];
