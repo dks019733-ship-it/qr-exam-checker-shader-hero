@@ -27,9 +27,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, classId: true },
+    select: { id: true, classId: true, assignmentId: true, teachingAssignmentId: true },
   });
   if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนนหรือไม่มีสิทธิ์" }, { status: 404 });
+  if (column.assignmentId && teachingAssignmentId !== column.teachingAssignmentId) {
+    return NextResponse.json({ error: "รายวิชาของช่องคะแนนที่ผูกกับงานมอบหมายต้องแก้จากรายวิชาของงานต้นทาง" }, { status: 409 });
+  }
 
   if (teachingAssignmentId) {
     const assignment = await prisma.teachingAssignment.findFirst({
@@ -61,7 +64,9 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  const result = await prisma.gradeColumn.deleteMany({ where: { id, ownerId: session.user.id } });
-  if (!result.count) return NextResponse.json({ error: "ไม่พบช่องคะแนน" }, { status: 404 });
+  const column = await prisma.gradeColumn.findFirst({ where: { id, ownerId: session.user.id }, select: { id: true, assignmentId: true } });
+  if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนน" }, { status: 404 });
+  if (column.assignmentId) return NextResponse.json({ error: "ช่องคะแนนนี้เชื่อมกับงานมอบหมายอยู่ กรุณาจัดการจากหน้ามอบหมายงานเพื่อป้องกันคะแนนไม่ซิงก์" }, { status: 409 });
+  await prisma.gradeColumn.delete({ where: { id: column.id } });
   return NextResponse.json({ ok: true });
 }

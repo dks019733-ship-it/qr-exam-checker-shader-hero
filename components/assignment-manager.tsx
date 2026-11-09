@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AlertCircle, BookOpen, CalendarClock, FileUp, Plus, RefreshCw } from "lucide-react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 
+type GradePeriod = "MIDTERM" | "AFTER_MIDTERM";
 type TeachingAssignment = {
   id: string;
   subject: { code: string; name: string };
@@ -18,6 +19,7 @@ type AssignmentRow = {
   classroom: { name: string };
   teachingAssignment: { subject: { code: string; name: string } };
   _count: { submissions: number };
+  gradeColumn?: { id: string; period: "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
 };
 
 export function AssignmentManager() {
@@ -30,6 +32,7 @@ export function AssignmentManager() {
   const [googleFormUrl, setGoogleFormUrl] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [maxScore, setMaxScore] = useState("10");
+  const [gradePeriod, setGradePeriod] = useState<GradePeriod>("MIDTERM");
   const [autoMarkAttendance, setAutoMarkAttendance] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState("");
   const [attendanceSessionId, setAttendanceSessionId] = useState("");
@@ -116,6 +119,7 @@ export function AssignmentManager() {
           googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
           maxScore: maxScore === "" ? null : Number(maxScore),
+          gradePeriod,
           autoMarkAttendance,
           attendanceSessionId: linkedSessionId,
         }),
@@ -162,7 +166,7 @@ export function AssignmentManager() {
         <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f3eb] text-[#4d5f4a]"><Plus className="h-5 w-5" /></div>
-            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">งานจะถูกเผยแพร่หลังบันทึกและแนบไฟล์สำเร็จ</p></div>
+            <div><h2 className="font-bold">สร้างงานใหม่</h2><p className="mt-1 text-xs text-[#788174]">คะแนนของงานจะสร้างช่องในสมุดคะแนนของรายวิชาและภาคเรียนที่เลือกโดยอัตโนมัติ</p></div>
           </div>
 
           {teachingAssignments.length === 0 ? (
@@ -181,7 +185,8 @@ export function AssignmentManager() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">กำหนดส่ง (ไม่บังคับ)</span><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">คะแนนเต็ม (ไม่บังคับ)</span><input type="number" min="0" max="10000" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">คะแนนเต็ม (จำเป็นสำหรับสมุดคะแนน)</span><input required type="number" min="0.01" max="10000" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" /></label>
+                <label className="block"><span className="mb-2 block text-xs font-semibold text-[#687565]">ภาคเรียนในสมุดคะแนน</span><select value={gradePeriod} onChange={(event) => setGradePeriod(event.target.value as GradePeriod)} className="min-h-11 w-full rounded-xl border border-[#dfe4d8] bg-white px-3 text-sm"><option value="MIDTERM">ก่อนกลางภาค</option><option value="AFTER_MIDTERM">หลังกลางภาค</option></select></label>
               </div>
 
               {mode === "SYSTEM_UPLOAD" && <div className="rounded-xl border border-[#e6e8df] bg-[#fafbf8] p-4">
@@ -198,7 +203,7 @@ export function AssignmentManager() {
 
         <section className="rounded-2xl border border-[#e6e8df] bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-4 flex items-center justify-between"><div><h2 className="font-bold">งานที่สร้างไว้</h2><p className="mt-1 text-xs text-[#788174]">รายการงานในห้องเรียนที่คุณรับผิดชอบ</p></div><button type="button" onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold"><RefreshCw className="h-3.5 w-3.5" />รีเฟรช</button></div>
-          {loading ? <p className="py-8 text-center text-sm text-[#788174]">กำลังโหลด...</p> : assignments.length === 0 ? <p className="py-8 text-center text-sm text-[#788174]">ยังไม่มีงานที่สร้าง</p> : <div className="divide-y divide-[#edf0e9]">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link href={"/dashboard/assignments/" + item.id} className="truncate text-sm font-semibold text-[#4d5f4a] hover:underline">{item.title} · ตรวจงาน</Link><p className="mt-1 text-xs text-[#788174]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</p></div><div className="flex items-center gap-2 text-xs"><span className="rounded-lg bg-[#f0f3eb] px-2.5 py-1 font-semibold text-[#4d5f4a]">{item.mode === "TEACHER_CHECK" ? "ตรวจกับครู" : item.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms"}</span><span className="rounded-lg border border-[#e6e8df] px-2.5 py-1">{item.status === "PUBLISHED" ? "เผยแพร่แล้ว" : item.status === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง"}</span><span className="text-[#788174]">ส่งแล้ว {item._count.submissions}</span></div></div>)}</div>}
+          {loading ? <p className="py-8 text-center text-sm text-[#788174]">กำลังโหลด...</p> : assignments.length === 0 ? <p className="py-8 text-center text-sm text-[#788174]">ยังไม่มีงานที่สร้าง</p> : <div className="divide-y divide-[#edf0e9]">{assignments.map((item) => <div key={item.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><Link href={"/dashboard/assignments/" + item.id} className="truncate text-sm font-semibold text-[#4d5f4a] hover:underline">{item.title} · ตรวจงาน</Link><p className="mt-1 text-xs text-[#788174]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</p></div><div className="flex items-center gap-2 text-xs"><span className="rounded-lg bg-[#f0f3eb] px-2.5 py-1 font-semibold text-[#4d5f4a]">{item.mode === "TEACHER_CHECK" ? "ตรวจกับครู" : item.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms"}</span><span className="rounded-lg border border-[#e6e8df] px-2.5 py-1">{item.status === "PUBLISHED" ? "เผยแพร่แล้ว" : item.status === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง"}</span><span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-800">{item.gradeColumn ? "ซิงก์สมุดคะแนนแล้ว" : "ยังไม่เชื่อมคะแนน"}</span><span className="text-[#788174]">ส่งแล้ว {item._count.submissions}</span></div></div>)}</div>}
         </section>
       </div>
     </main>

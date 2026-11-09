@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const MODES = new Set(["TEACHER_CHECK", "SYSTEM_UPLOAD", "GOOGLE_FORM"]);
+const GRADE_PERIODS = new Set(["MIDTERM", "AFTER_MIDTERM"]);
 
 function isAllowedGoogleFormUrl(value: string) {
   try {
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
       classroom: { select: { id: true, name: true } },
       teachingAssignment: { include: { subject: { select: { code: true, name: true } } } },
       files: { select: { id: true, fileName: true, contentType: true, sizeBytes: true } },
+      gradeColumn: { select: { id: true, period: true, maxScore: true } },
       _count: { select: { submissions: true } },
     },
     orderBy: [{ createdAt: "desc" }],
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
   const dueAt = body?.dueAt ? new Date(body.dueAt) : null;
   const maxScore = body?.maxScore === null || body?.maxScore === undefined || body?.maxScore === ""
     ? null : Number(body.maxScore);
+  const gradePeriod = typeof body?.gradePeriod === "string" ? body.gradePeriod : "";
   const autoMarkAttendance = body?.autoMarkAttendance === true;
   const attendanceSessionId = typeof body?.attendanceSessionId === "string" ? body.attendanceSessionId : null;
 
@@ -63,8 +66,11 @@ export async function POST(request: Request) {
   if (dueAt && Number.isNaN(dueAt.getTime())) {
     return NextResponse.json({ error: "กำหนดส่งไม่ถูกต้อง" }, { status: 400 });
   }
-  if (maxScore !== null && (!Number.isFinite(maxScore) || maxScore < 0 || maxScore > 10000)) {
-    return NextResponse.json({ error: "คะแนนเต็มไม่ถูกต้อง" }, { status: 400 });
+  if (maxScore === null || !Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 10000) {
+    return NextResponse.json({ error: "กรุณากำหนดคะแนนเต็มมากกว่า 0 เพื่อเชื่อมกับสมุดคะแนน" }, { status: 400 });
+  }
+  if (!GRADE_PERIODS.has(gradePeriod)) {
+    return NextResponse.json({ error: "กรุณาเลือกภาคเรียนของคะแนนงาน" }, { status: 400 });
   }
   if (status === "PUBLISHED" && mode === "SYSTEM_UPLOAD") {
     return NextResponse.json(
@@ -119,8 +125,18 @@ export async function POST(request: Request) {
         dueAt,
         maxScore,
         autoMarkAttendance,
+        gradeColumn: {
+          create: {
+            ownerId: teachingAssignment.ownerId,
+            classId: teachingAssignment.classId,
+            title,
+            period: gradePeriod as "MIDTERM" | "AFTER_MIDTERM",
+            maxScore,
+            teachingAssignmentId,
+          },
+        },
       },
-      select: { id: true, title: true, mode: true, status: true, classId: true, dueAt: true, createdAt: true },
+      select: { id: true, title: true, mode: true, status: true, classId: true, dueAt: true, createdAt: true, gradeColumn: { select: { id: true, period: true, maxScore: true } } },
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {

@@ -341,11 +341,13 @@ model GradeColumn {
   maxScore     Float        @default(10)
   examId       String?      @unique
   googleFormId String?      @unique
+  assignmentId String?      @unique
   sourceColumnId String?
   owner        User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   classroom    Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
   exam         Exam?        @relation(fields: [examId], references: [id], onDelete: SetNull)
   googleForm   GoogleForm?  @relation(fields: [googleFormId], references: [id], onDelete: SetNull)
+  assignment   Assignment?  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   teachingAssignmentId String?
   teachingAssignment TeachingAssignment? @relation(fields: [teachingAssignmentId], references: [id], onDelete: SetNull)
   sourceColumn GradeColumn? @relation("GradeColumnDestinations", fields: [sourceColumnId], references: [id], onDelete: Cascade)
@@ -614,6 +616,7 @@ model Assignment {
   attendanceSession    AttendanceSession? @relation(fields: [attendanceSessionId], references: [id], onDelete: SetNull)
   files                AssignmentFile[]
   submissions          Submission[]
+  gradeColumn           GradeColumn?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   @@index([ownerId, classId, status, dueAt])
