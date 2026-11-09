@@ -122,17 +122,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       } : {},
       select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
     });
-    if (hasReviewInput && assignment.gradeColumn) {
-      if (assignment.gradeColumn.classId !== assignment.classId) {
-        throw new Error("GRADE_COLUMN_CLASS_MISMATCH");
-      }
-      await tx.gradeScore.upsert({
-        where: { columnId_studentId: { columnId: assignment.gradeColumn.id, studentId: student.id } },
-        create: { columnId: assignment.gradeColumn.id, studentId: student.id, score },
-        update: { score },
-      });
-    }
     return submission;
   });
-  return NextResponse.json({ ...saved, gradebookSynced: hasReviewInput && Boolean(assignment.gradeColumn) });
+  return NextResponse.json({ ...saved, gradeColumnLinked: Boolean(assignment.gradeColumn), gradebookScoreChanged: false });
 }
