@@ -149,8 +149,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       select: { studentId: true },
     });
     const matchedStudentIdSet = new Set(matchedStudentIds);
-    const staleStudentIds = [...new Set(existingScores.map(({ studentId }) => studentId))]
-      .filter((studentId) => !matchedStudentIdSet.has(studentId));
+    const staleStudentIds = maxFormScore > 0
+      ? [...new Set(existingScores.map(({ studentId }) => studentId))]
+          .filter((studentId) => !matchedStudentIdSet.has(studentId))
+      : [];
     for (let i = 0; i < staleStudentIds.length; i += 500) {
       await prisma.gradeScore.deleteMany({
         where: { columnId: { in: formColumnIds }, studentId: { in: staleStudentIds.slice(i, i + 500) } },
@@ -158,8 +160,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
     let imported = 0;
     const destinations = new Map<string, string>();
-    for (const classroom of classrooms) {
-      destinations.set(classroom.id, await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classroom.id));
+    if (maxFormScore > 0) {
+      for (const classroom of classrooms) {
+        destinations.set(classroom.id, await getFormScoreDestination({ ...column, maxScore: maxFormScore }, classroom.id));
+      }
     }
     for (const [classId, classScores] of scoresByClass) {
       const destinationColumnId = destinations.get(classId);
