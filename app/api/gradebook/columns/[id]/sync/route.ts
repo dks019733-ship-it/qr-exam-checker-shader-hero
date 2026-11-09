@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
-import { getFormScoreColumnIds, getFormScoreDestination, getOtherFormScoreColumnIds } from "@/lib/gradebook-form-destination";
+import { getFormScoreDestination } from "@/lib/gradebook-form-destination";
 import { matchFormStudent } from "@/lib/google-form-student-match";
 
 type FormItem = { itemId?: string; title?: string; questionItem?: { question?: { questionId?: string; grading?: { pointValue?: number } } } };
@@ -112,7 +112,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             });
             await prisma.submission.updateMany({
               where: { assignmentId: column.assignment.id, studentId: matchedStudent.id, status: { not: "REVIEWED" } },
-              data: { status: "SUBMITTED", submittedAt },
+              data: { status: "SUBMITTED", ...(response.lastSubmittedTime ? { submittedAt } : {}) },
             });
           }
           if (typeof score === "number") {
@@ -142,23 +142,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       })));
     }
     if (matchedResponseIds.length) await prisma.pendingFormScore.deleteMany({ where: { columnId: column.id, responseId: { in: matchedResponseIds } } });
-    const formColumnIds = await getFormScoreColumnIds(column.id);
-    const matchedStudentIds = [...new Set([...scoresByClass.values()].flatMap((classScores) => [...classScores.keys()]))];
-    const existingScores = await prisma.gradeScore.findMany({
-      where: { columnId: { in: formColumnIds } },
-      select: { studentId: true },
-    });
-    const matchedStudentIdSet = new Set(matchedStudentIds);
-    const staleStudentIds = maxFormScore > 0
-      ? [...new Set(existingScores.map(({ studentId }) => studentId))]
-          .filter((studentId) => !matchedStudentIdSet.has(studentId))
-      : [];
-    for (let i = 0; i < staleStudentIds.length; i += 500) {
-      await prisma.gradeScore.deleteMany({
-        where: { columnId: { in: formColumnIds }, studentId: { in: staleStudentIds.slice(i, i + 500) } },
-      });
-    }
+    // Existing scores are never deleted merely because a response is missing from this sync.
+    // Teacher-confirmed values are protected by GradeScore.manualOverride.
     let imported = 0;
+    let preservedManualScores = 0;
     const destinations = new Map<string, string>();
     if (maxFormScore > 0) {
       for (const classroom of classrooms) {
@@ -168,24 +155,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     for (const [classId, classScores] of scoresByClass) {
       const destinationColumnId = destinations.get(classId);
       if (!destinationColumnId) throw new Error("ไม่พบช่องคะแนนปลายทางของห้องเรียน");
-      const staleColumnIds = await getOtherFormScoreColumnIds(column.id, destinationColumnId);
       const entries = [...classScores.entries()];
-      imported += entries.length;
       for (let i = 0; i < entries.length; i += 25) {
         const batch = entries.slice(i, i + 25);
-        await prisma.$transaction([
-          ...(staleColumnIds.length ? [prisma.gradeScore.deleteMany({
-            where: { columnId: { in: staleColumnIds }, studentId: { in: batch.map(([studentId]) => studentId) } },
-          })] : []),
-          ...batch.map(([studentId, score]) => prisma.gradeScore.upsert({
-            where: { columnId_studentId: { columnId: destinationColumnId, studentId } },
-            create: { columnId: destinationColumnId, studentId, score },
-            update: { score },
-          })),
-        ]);
+        const studentIds = batch.map(([studentId]) => studentId);
+        const manualScores = await prisma.gradeScore.count({
+          where: { columnId: destinationColumnId, studentId: { in: studentIds }, manualOverride: true },
+        });
+        preservedManualScores += manualScores;
+        imported += batch.length - manualScores;
+        // Update only machine-managed rows. Insert missing rows; skip existing teacher overrides.
+        await prisma.$transaction(batch.flatMap(([studentId, score]) => [
+          prisma.gradeScore.updateMany({
+            where: { columnId: destinationColumnId, studentId, manualOverride: false },
+            data: { score },
+          }),
+          prisma.gradeScore.createMany({
+            data: [{ columnId: destinationColumnId, studentId, score, manualOverride: false }],
+            skipDuplicates: true,
+          }),
+        ]));
       }
     }
-    return NextResponse.json({ imported, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
+    return NextResponse.json({ imported, preservedManualScores, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
     if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";
