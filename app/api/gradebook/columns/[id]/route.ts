@@ -27,9 +27,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id },
-    select: { id: true, classId: true },
+    select: { id: true, classId: true, assignmentId: true, teachingAssignmentId: true },
   });
   if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนนหรือไม่มีสิทธิ์" }, { status: 404 });
+  if (column.assignmentId && teachingAssignmentId !== column.teachingAssignmentId) {
+    return NextResponse.json({ error: "รายวิชาของช่องคะแนนที่ผูกกับงานมอบหมายต้องแก้จากรายวิชาของงานต้นทาง" }, { status: 409 });
+  }
 
   if (teachingAssignmentId) {
     const assignment = await prisma.teachingAssignment.findFirst({
