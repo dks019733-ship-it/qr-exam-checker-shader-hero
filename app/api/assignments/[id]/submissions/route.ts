@@ -89,13 +89,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
     select: { id: true, status: true },
   });
-  const saved = existing?.status === "RETURNED" && !hasReviewInput
-    ? await prisma.submission.update({
-        where: { id: existing.id },
-        data: { status: "SUBMITTED", submittedAt: now, score: null, feedback: "", reviewedAt: null },
-        select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
-      })
-    : await prisma.submission.upsert({
+  if (existing?.status === "RETURNED" && !hasReviewInput) {
+    const transitioned = await prisma.submission.updateMany({
+      where: { id: existing.id, status: "RETURNED" },
+      data: { status: "SUBMITTED", submittedAt: now, score: null, feedback: "", reviewedAt: null },
+    });
+    if (transitioned.count !== 1) {
+      return NextResponse.json({ error: "สถานะงานเปลี่ยนไปแล้ว กรุณาโหลดข้อมูลใหม่" }, { status: 409 });
+    }
+    const saved = await prisma.submission.findUniqueOrThrow({
+      where: { id: existing.id },
+      select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+    });
+    return NextResponse.json(saved);
+  }
+
+  const saved = await prisma.submission.upsert({
         where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
         create: {
           assignmentId: assignment.id,
