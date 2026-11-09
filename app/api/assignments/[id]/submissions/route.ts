@@ -85,28 +85,36 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
 
   const now = new Date();
-  const saved = await prisma.submission.upsert({
+  const existing = await prisma.submission.findUnique({
     where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
-    create: {
-      assignmentId: assignment.id,
-      studentId: student.id,
-      status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
-      submittedAt: now,
-      ...(hasReviewInput ? {
-        reviewedAt: now,
-        score,
-        feedback,
-      } : {}),
-    },
-    // A receipt-only retry is deliberately a no-op. In particular, it must not
-    // replace a previous score, feedback, review state, or original submit time.
-    update: hasReviewInput ? {
-      status: "REVIEWED",
-      reviewedAt: now,
-      ...(hasScore ? { score } : {}),
-      ...(hasFeedback ? { feedback } : {}),
-    } : {},
-    select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+    select: { id: true, status: true },
   });
+  const saved = existing?.status === "RETURNED" && !hasReviewInput
+    ? await prisma.submission.update({
+        where: { id: existing.id },
+        data: { status: "SUBMITTED", submittedAt: now, score: null, feedback: "", reviewedAt: null },
+        select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+      })
+    : await prisma.submission.upsert({
+        where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
+        create: {
+          assignmentId: assignment.id,
+          studentId: student.id,
+          status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
+          submittedAt: now,
+          ...(hasReviewInput ? {
+            reviewedAt: now,
+            score,
+            feedback,
+          } : {}),
+        },
+        update: hasReviewInput ? {
+          status: "REVIEWED",
+          reviewedAt: now,
+          ...(hasScore ? { score } : {}),
+          ...(hasFeedback ? { feedback } : {}),
+        } : {},
+        select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+      });
   return NextResponse.json(saved);
 }
