@@ -33,7 +33,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       })
     : [];
   return NextResponse.json({
-    assignment,
+    assignment: {
+      ...assignment,
+      title: assignment.gradeColumn?.title ?? assignment.title,
+    },
     unreceivedStudents: students.filter((student) => !receivedStudentIds.has(student.id)),
     submissions: submissions.map((item) => ({
       id: item.id,
