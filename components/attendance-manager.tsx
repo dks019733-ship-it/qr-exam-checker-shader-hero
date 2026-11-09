@@ -164,7 +164,6 @@ export function AttendanceManager() {
   }), [students]);
 
   const selected = assignments.find((assignment) => assignment.id === assignmentId);
-  const allPresent = students.length > 0 && students.every((student) => student.attendance === "PRESENT");
   const currentYear = navDate.getFullYear();
   const currentMonth = navDate.getMonth();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -411,7 +410,7 @@ export function AttendanceManager() {
               const Icon = item.icon;
               const percentage = item.total ? (item.value / item.total) * 100 : 0;
               return (
-                <div key={item.label} className="min-w-[calc(33.333%-0.5rem)] flex-1 rounded-[1.4rem] border border-[#EAE8E3] bg-white px-4 py-3.5 shadow-sm sm:min-w-[125px] sm:flex-none sm:px-5">
+                <div key={item.label} className="min-w-[calc(33.333%_-_0.5rem)] flex-1 rounded-[1.4rem] border border-[#EAE8E3] bg-white px-4 py-3.5 shadow-sm sm:min-w-[125px] sm:flex-none sm:px-5">
                   <div className="mb-1 flex items-center justify-between gap-3">
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#666666]">{item.label}</span>
                     <Icon className={"h-3.5 w-3.5 " + item.tone} />
