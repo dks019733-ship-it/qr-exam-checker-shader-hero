@@ -63,7 +63,27 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Prepare disposable PostgreSQL schema
+      - name: Validate committed migrations against the base schema
+        run: |
+          git fetch origin main --depth=1
+          git show FETCH_HEAD:prisma/schema.prisma > /tmp/schema-main.prisma
+          npx prisma db push --schema=/tmp/schema-main.prisma --skip-generate
+          for migration in \
+            20261028_pending_form_scores \
+            20261028_teacher_learning_area \
+            20261102_teacher_ai_memory \
+            20261103_cross_room_form_scores \
+            20261103_form_response_reviews \
+            20261103_z_add_system_guardian \
+            20261104_guardian_retry_idempotency \
+            20261106_site_announcement \
+            20261106_subject_based_access
+          do
+            npx prisma migrate resolve --applied "$migration"
+          done
+          npx prisma migrate deploy
+
+      - name: Validate current Prisma schema against disposable PostgreSQL
         run: npx prisma db push --skip-generate
 
       - name: TypeScript check

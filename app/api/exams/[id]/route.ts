@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +7,9 @@ type Context = { params: Promise<{ id: string }> };
 const choices = new Set(["A", "B", "C", "D"]);
 
 export async function GET(_request: Request, context: Context) {
+  const unavailable = await featureAvailabilityResponse("exams");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await context.params;
@@ -18,6 +22,9 @@ export async function GET(_request: Request, context: Context) {
 }
 
 export async function PUT(request: Request, context: Context) {
+  const unavailable = await featureAvailabilityResponse("exams");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await context.params;

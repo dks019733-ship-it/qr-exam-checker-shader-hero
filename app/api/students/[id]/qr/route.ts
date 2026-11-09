@@ -1,9 +1,13 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { studentQrPngBuffer } from "@/lib/qr";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const unavailable = await featureAvailabilityResponse("answer_sheet");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

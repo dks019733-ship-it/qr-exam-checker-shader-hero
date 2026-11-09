@@ -1,3 +1,4 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -5,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 const periods = ["MIDTERM", "AFTER_MIDTERM"] as const;
 
 export async function GET(request: Request) {
+  const unavailable = await featureAvailabilityResponse("gradebook");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerId = session.user.id;
@@ -54,6 +58,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const unavailable = await featureAvailabilityResponse("gradebook");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerId = session.user.id;

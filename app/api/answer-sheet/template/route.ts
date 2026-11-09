@@ -1,9 +1,13 @@
+import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { answerSheetTemplateSchema, isSafeImageDataUrl } from "@/lib/answer-sheet";
 
 export async function GET() {
+  const unavailable = await featureAvailabilityResponse("answer_sheet");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -15,6 +19,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const unavailable = await featureAvailabilityResponse("answer_sheet");
+  if (unavailable) return unavailable;
+
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

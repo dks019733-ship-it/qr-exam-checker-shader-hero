@@ -21,6 +21,11 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     select: { id: true, classId: true },
   });
   if (!student) return NextResponse.json({ error: "ไม่พบนักเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
+  const duplicateRollNo = await prisma.student.findFirst({
+    where: { classId: student.classId, rollNo, id: { not: student.id } },
+    select: { id: true },
+  });
+  if (duplicateRollNo) return NextResponse.json({ error: "เลขที่นี้มีนักเรียนคนอื่นใช้แล้วในห้องเรียน" }, { status: 409 });
 
   try {
     const updated = await prisma.student.update({

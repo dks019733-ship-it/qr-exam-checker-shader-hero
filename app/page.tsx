@@ -14,19 +14,37 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { SignInButton, SignOutButton } from "@/components/auth-buttons";
 import { SystemGuardianPanel } from "@/components/system-guardian-panel";
 import { SiteAnnouncementBanner } from "@/components/site-announcement-banner";
 import { isSystemOwner } from "@/lib/system-guardian";
+import { FEATURE_CATALOG, getFeatureAvailability, type FeatureKey } from "@/lib/feature-availability";
 
-const tools = [
+type ToolCard = { title: string; description: string; href: string; icon: LucideIcon; feature?: FeatureKey; highlight?: boolean };
+
+const tools: ToolCard[] = [
   {
     title: "จัดการห้องเรียนและนักเรียน",
     description: "สร้างห้องเรียน นำเข้ารายชื่อ และจัดการข้อมูลนักเรียนในที่เดียว",
     href: "/dashboard/classes",
     icon: Users,
+  },
+  {
+    title: "เช็กชื่อเข้าเรียน",
+    description: "บันทึก มา สาย ลา ขาด แยกตามรายวิชาและวันที่ พร้อมสรุปสถานะ",
+    href: "/dashboard/attendance",
+    feature: "attendance",
+    icon: Users,
+  },
+  {
+    title: "มอบหมายและติดตามงาน",
+    description: "สร้างใบงาน เลือกวิธีส่ง ติดตามไฟล์ และตรวจงานนักเรียน",
+    href: "/dashboard/assignments",
+    feature: "assignments",
+    icon: ClipboardList,
   },
   {
     title: "รายวิชาที่สอน",
@@ -38,18 +56,21 @@ const tools = [
     title: "สร้างและจัดการข้อสอบ",
     description: "กำหนดข้อสอบและเฉลย เพื่อเตรียมตรวจและสรุปผลคะแนน",
     href: "/dashboard/exams",
+    feature: "exams",
     icon: ClipboardList,
   },
   {
     title: "ตรวจข้อสอบด้วย QR",
     description: "บันทึกคำตอบ คำนวณคะแนน และตรวจทานผลก่อนยืนยัน",
     href: "/dashboard/scan",
+    feature: "answer_sheet",
     icon: ScanLine,
   },
   {
     title: "กระดาษคำตอบ",
     description: "ตั้งค่าข้อมูลข้อสอบ สร้าง QR และพิมพ์กระดาษคำตอบ",
     href: "/dashboard/answer-sheet",
+    feature: "answer_sheet",
     icon: FileCheck2,
   },
   {
@@ -62,12 +83,14 @@ const tools = [
     title: "สมุดคะแนนออนไลน์",
     description: "รวมคะแนนงานและข้อสอบ พร้อมจัดการคะแนนของแต่ละห้องเรียน",
     href: "/dashboard/gradebook",
+    feature: "gradebook",
     icon: BookOpen,
   },
   {
     title: "ผู้ช่วย AI สำหรับครู",
     description: "แชท สร้างข้อสอบ หรือร่างเอกสารการสอนให้ครูตรวจทาน",
     href: "/dashboard/ai",
+    feature: "ai",
     icon: Sparkles,
     highlight: true,
   },
@@ -75,10 +98,11 @@ const tools = [
     title: "AI สร้าง Google Forms",
     description: "ให้ AI ช่วยร่างข้อสอบ แล้วครูตรวจทานก่อนสร้างแบบฟอร์ม",
     href: "/dashboard/ai/materials?kind=exam",
+    feature: "ai",
     icon: ClipboardList,
     highlight: true,
   },
-] as const;
+];
 
 const workflow = [
   {
@@ -130,6 +154,9 @@ export default async function HomePage() {
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
   const systemOwner = signedIn ? await isSystemOwner() : false;
+  const featureKeys = Object.keys(FEATURE_CATALOG) as FeatureKey[];
+  const featureStates = await Promise.all(featureKeys.map(async (key) => [key, await getFeatureAvailability(key)] as const));
+  const availability = Object.fromEntries(featureStates) as Record<FeatureKey, Awaited<ReturnType<typeof getFeatureAvailability>>>;
 
   return (
     <main className="min-h-screen bg-[#f8f7f4] text-[#1c241b]">
@@ -305,7 +332,7 @@ export default async function HomePage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-[#5c7057]">พื้นที่ทำงานครู</p>
-              <h2 id="tools-title" className="text-2xl font-extrabold tracking-tight text-[#1c241b] sm:text-3xl">เครื่องมือพร้อมใช้งาน</h2>
+              <h2 id="tools-title" className="text-2xl font-extrabold tracking-tight text-[#1c241b] sm:text-3xl">เครื่องมือในระบบ</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5e6d5b]">ทุกเครื่องมือเชื่อมกับพื้นที่ทำงานของคุณครู ลงชื่อเข้าใช้เพื่อเริ่มจัดการข้อมูล</p>
             </div>
             <span className="w-fit rounded-full border border-[#a3bfa0]/40 bg-[#eaf2e8] px-3 py-1.5 text-xs font-bold text-[#374535]">
@@ -314,7 +341,7 @@ export default async function HomePage() {
           </div>
 
           <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {tools.map(({ title, description, href, icon: Icon, ...tool }) => (
+            {tools.map(({ title, description, href, icon: Icon, feature, ...tool }) => (
               <WorkspaceLink
                 key={title}
                 signedIn={signedIn}
@@ -329,12 +356,13 @@ export default async function HomePage() {
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f0f3eb] text-[#4d5f4a] transition group-hover:bg-[#d8e6d5]">
                     <Icon className="h-5 w-5" aria-hidden="true" />
                   </span>
-                  <span className="rounded-full border border-[#a3bfa0]/40 bg-[#eaf2e8] px-2.5 py-1 text-[10px] font-bold text-[#374535]">
-                    {signedIn ? "พร้อมใช้งาน" : "เข้าสู่ระบบเพื่อเริ่ม"}
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${feature && availability[feature].status === "MAINTENANCE" ? "border-amber-200 bg-amber-50 text-amber-800" : feature && availability[feature].status === "UNAVAILABLE" ? "border-slate-200 bg-slate-100 text-slate-700" : "border-[#a3bfa0]/40 bg-[#eaf2e8] text-[#374535]"}`}>
+                    {feature ? (availability[feature].status === "MAINTENANCE" ? "ปิดปรับปรุง" : availability[feature].status === "UNAVAILABLE" ? "ยังไม่พร้อมใช้งาน" : "พร้อมใช้งาน") : signedIn ? "พร้อมใช้งาน" : "เข้าสู่ระบบเพื่อเริ่ม"}
                   </span>
                 </div>
                 <h3 className="mt-5 text-base font-extrabold text-[#1c241b]">{title}</h3>
                 <p className="mt-2 flex-1 text-sm leading-6 text-[#5e6d5b]">{description}</p>
+                {feature && availability[feature].reason && availability[feature].status !== "AVAILABLE" && <p className="mt-2 text-xs text-[#7a5a32]">{availability[feature].reason}{availability[feature].untilAt ? ` · เปิดอีกครั้ง ${new Intl.DateTimeFormat("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" }).format(availability[feature].untilAt)}` : ""}</p>}
                 <span className="mt-5 inline-flex items-center gap-2 border-t border-[#f0f3eb] pt-4 text-sm font-bold text-[#4d5f4a]">
                   {signedIn ? "เปิดเครื่องมือ" : "เข้าสู่ระบบ"}
                   <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
