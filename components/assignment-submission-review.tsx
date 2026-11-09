@@ -4,28 +4,33 @@ import { useEffect, useState } from "react";
 import { AlertCircle, Download, Save } from "lucide-react";
 
 type UnreceivedStudent = { id: string; rollNo: string; studentNo: string; name: string };
-
 type Submission = {
   id: string;
   status: string;
   submittedAt: string;
   isLate: boolean;
-  score: number | null;
   feedback: string;
   student: { id: string; rollNo: string; studentNo: string; name: string };
   files: { id: string; fileName: string; contentType: string; sizeBytes: number }[];
 };
+type GradeColumnOption = {
+  id: string;
+  title: string;
+  period: "MIDTERM" | "AFTER_MIDTERM";
+  maxScore: number;
+  teachingAssignmentId: string | null;
+  assignmentId: string | null;
+};
 
 export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: string }) {
   const [title, setTitle] = useState("");
-  const [maxScore, setMaxScore] = useState<number | null>(null);
-  const [gradebook, setGradebook] = useState<{ id: string; period: "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null>(null);
-  const [linkPeriod, setLinkPeriod] = useState<"MIDTERM" | "AFTER_MIDTERM">("MIDTERM");
-  const [linkMaxScore, setLinkMaxScore] = useState("10");
+  const [gradebook, setGradebook] = useState<GradeColumnOption | null>(null);
+  const [gradeColumns, setGradeColumns] = useState<GradeColumnOption[]>([]);
+  const [selectedGradeColumnId, setSelectedGradeColumnId] = useState("");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [unreceived, setUnreceived] = useState<UnreceivedStudent[]>([]);
   const [mode, setMode] = useState("");
-  const [drafts, setDrafts] = useState<Record<string, { score: string; feedback: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { feedback: string }>>({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
@@ -38,18 +43,29 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       const response = await fetch("/api/assignments/" + assignmentId + "/submissions", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "โหลดรายการส่งงานไม่สำเร็จ");
+
+      const currentColumn = data.assignment.gradeColumn || null;
       setTitle(data.assignment.title);
       setMode(data.assignment.mode);
-      setMaxScore(data.assignment.maxScore);
-      setGradebook(data.assignment.gradeColumn || null);
-      if (data.assignment.gradeColumn?.period) setLinkPeriod(data.assignment.gradeColumn.period);
-      setLinkMaxScore(String(data.assignment.maxScore ?? data.assignment.gradeColumn?.maxScore ?? 10));
+      setGradebook(currentColumn);
       setUnreceived(data.unreceivedStudents || []);
       setSubmissions(data.submissions);
       setDrafts(Object.fromEntries(data.submissions.map((item: Submission) => [item.id, {
-        score: item.score === null ? "" : String(item.score),
         feedback: item.feedback || "",
       }])));
+
+      const gradebookResponse = await fetch(
+        "/api/gradebook?classId=" + encodeURIComponent(data.assignment.classId),
+        { cache: "no-store" },
+      );
+      const gradebookData = await gradebookResponse.json();
+      if (!gradebookResponse.ok) throw new Error(gradebookData.error || "โหลดช่องคะแนนไม่สำเร็จ");
+      const available = (gradebookData.columns || []).filter((column: GradeColumnOption) =>
+        column.teachingAssignmentId === data.assignment.teachingAssignmentId &&
+        (!column.assignmentId || column.assignmentId === assignmentId)
+      );
+      setGradeColumns(available);
+      setSelectedGradeColumnId(currentColumn?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -62,13 +78,8 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
   async function save(item: Submission, status: "REVIEWED" | "RETURNED" = "REVIEWED") {
     const draft = drafts[item.id];
     if (!draft) return;
-    const score = status === "RETURNED" || draft.score.trim() === "" ? null : Number(draft.score);
     if (status === "RETURNED" && !draft.feedback.trim()) {
       setError("กรุณาระบุเหตุผลหรือคำแนะนำก่อนส่งงานกลับให้นักเรียน");
-      return;
-    }
-    if (score !== null && (!Number.isFinite(score) || score < 0 || (maxScore !== null && score > maxScore))) {
-      setError("คะแนนต้องอยู่ระหว่าง 0 ถึงคะแนนเต็ม");
       return;
     }
     setSavingId(item.id);
@@ -78,11 +89,13 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       const response = await fetch("/api/assignments/" + assignmentId + "/submissions/" + item.id, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, score, feedback: draft.feedback }),
+        body: JSON.stringify({ status, feedback: draft.feedback }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "บันทึกผลตรวจไม่สำเร็จ");
-      setNotice(status === "RETURNED" ? "ส่งงานกลับให้นักเรียน " + item.student.name + " แก้ไขแล้ว" : "บันทึกผลตรวจของ " + item.student.name + " แล้ว" + (data.gradebookSynced ? " และซิงก์สมุดคะแนนแล้ว" : ""));
+      if (!response.ok) throw new Error(data.error || "บันทึกสถานะงานไม่สำเร็จ");
+      setNotice(status === "RETURNED"
+        ? "ส่งงานกลับให้นักเรียน " + item.student.name + " แก้ไขแล้ว"
+        : "บันทึกสถานะตรวจงานของ " + item.student.name + " แล้ว โดยไม่เปลี่ยนคะแนนในสมุดออนไลน์");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
@@ -92,6 +105,10 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
   }
 
   async function linkToGradebook() {
+    if (!selectedGradeColumnId) {
+      setError("กรุณาเลือกช่องคะแนนจากสมุดออนไลน์");
+      return;
+    }
     setSavingId("gradebook");
     setError("");
     setNotice("");
@@ -99,14 +116,14 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       const response = await fetch("/api/assignments/" + assignmentId + "/gradebook", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ period: linkPeriod, maxScore: Number(linkMaxScore) }),
+        body: JSON.stringify({ gradeColumnId: selectedGradeColumnId }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "เชื่อมสมุดคะแนนไม่สำเร็จ");
-      setNotice("เชื่อมงานกับสมุดคะแนนแล้ว คะแนนที่ตรวจใหม่จะซิงก์อัตโนมัติ");
+      if (!response.ok) throw new Error(data.error || "เชื่อมสมุดออนไลน์ไม่สำเร็จ");
+      setNotice("เชื่อมกับช่องคะแนนเดิมแล้ว คะแนนที่มีอยู่ไม่ได้ถูกแก้ไข");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "เชื่อมสมุดคะแนนไม่สำเร็จ");
+      setError(err instanceof Error ? err.message : "เชื่อมสมุดออนไลน์ไม่สำเร็จ");
     } finally {
       setSavingId("");
     }
@@ -122,10 +139,48 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
   return (
     <main className="min-h-screen bg-[#f8f7f4] px-4 py-8 text-[#1c241b] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <header><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#71816c]">SUBMISSION REVIEW</p><h1 className="mt-2 text-3xl font-extrabold tracking-tight">ตรวจงานและให้คะแนน</h1><p className="mt-2 text-sm text-[#687565]">{title || "กำลังโหลดงาน..."}</p></header>
+        <header>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#71816c]">SUBMISSION TRACKING</p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight">ติดตามและตรวจสถานะงาน</h1>
+          <p className="mt-2 text-sm text-[#687565]">{title || "กำลังโหลดงาน..."}</p>
+        </header>
         {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
         {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
-        {!loading && (gradebook ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">เชื่อมสมุดคะแนนแล้ว · {gradebook.period === "MIDTERM" ? "ก่อนกลางภาค" : "หลังกลางภาค"} · เต็ม {gradebook.maxScore} คะแนน · ผลตรวจใหม่จะอัปเดตคะแนนในสมุดคะแนนอัตโนมัติ</p> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h2 className="text-sm font-bold text-amber-950">งานเดิมยังไม่เชื่อมกับสมุดคะแนน</h2><p className="mt-1 text-xs text-amber-900">เลือกภาคเรียนและคะแนนเต็มเพื่อเชื่อมงานนี้ คะแนนที่ตรวจใหม่หลังจากนี้จะซิงก์เข้าช่องคะแนน</p><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"><label className="block"><span className="mb-1 block text-xs font-semibold text-amber-950">ภาคเรียน</span><select value={linkPeriod} onChange={(event) => setLinkPeriod(event.target.value as typeof linkPeriod)} className="min-h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm"><option value="MIDTERM">ก่อนกลางภาค</option><option value="AFTER_MIDTERM">หลังกลางภาค</option></select></label><label className="block"><span className="mb-1 block text-xs font-semibold text-amber-950">คะแนนเต็ม</span><input type="number" min="0.01" max="10000" step="0.5" value={linkMaxScore} onChange={(event) => setLinkMaxScore(event.target.value)} className="min-h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm" /></label><button type="button" disabled={savingId === "gradebook" || !Number.isFinite(Number(linkMaxScore)) || Number(linkMaxScore) <= 0} onClick={() => void linkToGradebook()} className="min-h-10 rounded-lg bg-amber-900 px-4 text-xs font-bold text-white disabled:opacity-50">{savingId === "gradebook" ? "กำลังเชื่อม..." : "เชื่อมสมุดคะแนน"}</button></div></section>)}
+
+        {!loading && (
+          <section className="rounded-xl border border-[#e6e8df] bg-white p-4">
+            <h2 className="text-sm font-bold">เชื่อมกับสมุดออนไลน์</h2>
+            <p className="mt-1 text-xs text-[#687565]">
+              {gradebook
+                ? "เชื่อมอยู่กับ “" + gradebook.title + "” · เต็ม " + gradebook.maxScore + " คะแนน · ระบบจะไม่แก้ไขคะแนนที่บันทึกไว้"
+                : "เลือกช่องคะแนนเดิมของรายวิชานี้ เพื่อให้ชื่องานบนหน้านักเรียนตรงกับสมุดออนไลน์"}
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <select
+                value={selectedGradeColumnId}
+                onChange={(event) => setSelectedGradeColumnId(event.target.value)}
+                className="min-h-10 min-w-0 flex-1 rounded-lg border border-[#dfe4d8] bg-white px-3 text-sm"
+              >
+                <option value="">เลือกช่องคะแนนเดิม</option>
+                {gradeColumns.map((column) => (
+                  <option key={column.id} value={column.id}>
+                    {column.title} · เต็ม {column.maxScore} · {column.period === "MIDTERM" ? "ก่อนกลางภาค" : "หลังกลางภาค"}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={savingId === "gradebook" || !selectedGradeColumnId || selectedGradeColumnId === gradebook?.id}
+                onClick={() => void linkToGradebook()}
+                className="min-h-10 rounded-lg bg-[#4d5f4a] px-4 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {savingId === "gradebook" ? "กำลังเชื่อม..." : gradebook ? "เปลี่ยนช่องคะแนน" : "เชื่อมช่องคะแนน"}
+              </button>
+            </div>
+            {gradeColumns.length === 0 && <p className="mt-2 text-xs text-amber-800">ไม่พบช่องคะแนนที่ยังว่างในรายวิชานี้</p>}
+          </section>
+        )}
+
         {mode === "TEACHER_CHECK" && !loading && unreceived.length > 0 && (
           <section className="rounded-2xl border border-[#e6e8df] bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-sm font-bold">ยังไม่ได้บันทึกว่าส่งกับครู ({unreceived.length} คน)</h2>
@@ -147,6 +202,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
             </div>
           </section>
         )}
+
         <section className="overflow-hidden rounded-2xl border border-[#e6e8df] bg-white shadow-sm">
           {loading ? <p className="p-12 text-center text-sm text-[#788174]">กำลังโหลดรายการส่งงาน...</p> : submissions.length === 0 ? <p className="p-12 text-center text-sm text-[#788174]">ยังไม่มีนักเรียนส่งงาน</p> : <div className="divide-y divide-[#edf0e9]">{submissions.map((item) => <article key={item.id} className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
@@ -154,9 +210,8 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
               <span className="w-fit rounded-lg bg-[#f0f3eb] px-2.5 py-1 text-xs font-semibold text-[#4d5f4a]">{item.status === "REVIEWED" ? "ตรวจแล้ว" : item.status === "RETURNED" ? "ส่งกลับแก้ไข" : "รอตรวจ"}</span>
             </div>
             {item.files.length > 0 && <div className="flex flex-wrap gap-2">{item.files.map((file) => <button key={file.id} type="button" onClick={() => openFile(file.id)} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold text-[#4d5f4a] hover:bg-[#f8f9f6]"><Download className="h-3.5 w-3.5" />{file.fileName}</button>)}</div>}
-            <div className="grid gap-3 sm:grid-cols-[160px_1fr_auto] sm:items-end">
-              <label className="block"><span className="mb-1.5 block text-xs font-semibold text-[#687565]">คะแนน {maxScore !== null ? "(เต็ม " + maxScore + ")" : ""}</span><input type="number" min="0" max={maxScore ?? undefined} step="0.5" value={drafts[item.id]?.score ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], score: event.target.value } }))} className="min-h-10 w-full rounded-lg border border-[#dfe4d8] px-3 text-sm" /></label>
-              <label className="block"><span className="mb-1.5 block text-xs font-semibold text-[#687565]">ความคิดเห็นครู</span><input maxLength={5000} value={drafts[item.id]?.feedback ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], feedback: event.target.value } }))} placeholder="ข้อเสนอแนะเพิ่มเติม..." className="min-h-10 w-full rounded-lg border border-[#dfe4d8] px-3 text-sm" /></label>
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label className="block"><span className="mb-1.5 block text-xs font-semibold text-[#687565]">ความคิดเห็นครู</span><input maxLength={5000} value={drafts[item.id]?.feedback ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [item.id]: { feedback: event.target.value } }))} placeholder="ข้อเสนอแนะเพิ่มเติม..." className="min-h-10 w-full rounded-lg border border-[#dfe4d8] px-3 text-sm" /></label>
               <div className="flex flex-wrap gap-2"><button type="button" disabled={savingId === item.id || item.status === "REVIEWED"} onClick={() => save(item, "RETURNED")} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50">ส่งกลับให้นักเรียนแก้ไข</button><button type="button" disabled={savingId === item.id || item.status === "REVIEWED"} onClick={() => save(item)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#4d5f4a] px-4 text-xs font-bold text-white hover:bg-[#374535] disabled:opacity-50"><Save className="h-3.5 w-3.5" />{savingId === item.id ? "กำลังบันทึก" : "บันทึกผลตรวจ"}</button></div>
             </div>
           </article>)}</div>}
