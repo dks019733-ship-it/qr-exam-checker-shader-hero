@@ -869,11 +869,15 @@ export default function StudentPortalPage() {
                     <a href={selectedTask.actionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition">เปิด Google Forms <ExternalLink className="h-3.5 w-3.5" /></a>
                   </div>
                 ) : selectedTask.mode === "TEACHER_CHECK" ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-6 text-emerald-900">งานนี้ให้ทำลงสมุดหรือกระดาษ แล้วนำไปส่งให้ครูตรวจในชั้นเรียน ไม่ต้องอัปโหลดไฟล์ในระบบ</div>
+                  <div className="space-y-3">
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-6 text-emerald-900">งานนี้ให้ทำลงสมุดหรือกระดาษ แล้วนำไปส่งให้ครูตรวจในชั้นเรียน ไม่ต้องอัปโหลดไฟล์ในระบบ</div>
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                  </div>
                 ) : selectedTask.mode === "SYSTEM_UPLOAD" ? (
                   <div className="space-y-3">
                     {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
-                    {selectedTask.submission ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"><p className="font-bold">ส่งงานแล้ว{selectedTask.submission.isLate ? " · ส่งล่าช้า" : ""}</p><p className="mt-1">เวลาส่ง: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>{selectedTask.submission.feedback && <p className="mt-2">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}</div> : <div className="space-y-2"><label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-[#99A799]" /> เลือกไฟล์งาน (PDF, รูปภาพ, DOC/DOCX)</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} className="block w-full rounded-2xl border border-[#ADC2A9]/40 bg-[#FEF5ED]/90 p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#D3E4CD] file:px-3 file:py-2 file:text-xs file:font-bold" />{selectedFiles.length > 0 && <p className="text-xs text-[#5e6e5e]">เลือกแล้ว {selectedFiles.length} ไฟล์</p>}</div>}
+                    {selectedTask.submission && <div className={selectedTask.submission.status === "RETURNED" ? "rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950" : "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"}><p className="font-bold">{selectedTask.submission.status === "RETURNED" ? "ครูส่งงานกลับให้แก้ไข" : selectedTask.submission.status === "REVIEWED" ? "ครูตรวจงานแล้ว" : "ส่งงานแล้ว"}{selectedTask.submission.isLate ? " · ส่งล่าช้า" : ""}</p><p className="mt-1">เวลาส่งล่าสุด: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>{selectedTask.submission.feedback && <p className="mt-2">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}{!!selectedTask.submission.files.length && <p className="mt-2">ส่งแล้ว {selectedTask.submission.files.length} ไฟล์</p>}</div>}
+                    {selectedTask.submission?.status !== "REVIEWED" && <div className="space-y-2"><label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-[#99A799]" /> {selectedTask.submission?.status === "RETURNED" ? "เลือกไฟล์ฉบับแก้ไข" : "เลือกไฟล์งาน (PDF, รูปภาพ, DOC/DOCX)"}</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} className="block w-full rounded-2xl border border-[#ADC2A9]/40 bg-[#FEF5ED]/90 p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#D3E4CD] file:px-3 file:py-2 file:text-xs file:font-bold" />{selectedFiles.length > 0 && <p className="text-xs text-[#5e6e5e]">รอส่งอีก {selectedFiles.length} ไฟล์</p>}</div>}
                     {uploadError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700">{uploadError}</p>}
                   </div>
                 ) : (
@@ -893,26 +897,33 @@ export default function StudentPortalPage() {
                     if (!selectedTask.assignmentId || !selectedFiles.length) return;
                     setUploading(true);
                     setUploadError("");
+                    const pendingFiles = [...selectedFiles];
                     try {
                       const alreadyUploaded = new Set((selectedTask.submission?.files || []).map((item) => item.fileName.toLocaleLowerCase()));
-                      for (const originalFile of selectedFiles) {
+                      while (pendingFiles.length > 0) {
+                        const originalFile = pendingFiles[0];
                         const file = await compressImageBalanced(originalFile);
                         if (alreadyUploaded.has(file.name.toLocaleLowerCase())) {
-                          throw new Error("ไฟล์ " + file.name + " ถูกส่งแล้ว หากต้องการส่งไฟล์เพิ่มเติมให้เลือกไฟล์ชื่ออื่น");
+                          pendingFiles.shift();
+                          setSelectedFiles([...pendingFiles]);
+                          continue;
                         }
                         const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const presign = await presignResponse.json();
                         if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
-                        if (alreadyUploaded.has(String(presign.fileName).toLocaleLowerCase())) {
-                          throw new Error("ไฟล์ " + presign.fileName + " ถูกส่งแล้ว หากต้องการส่งไฟล์เพิ่มเติมให้เลือกไฟล์ชื่ออื่น");
+                        const safeFileName = String(presign.fileName || file.name);
+                        if (alreadyUploaded.has(safeFileName.toLocaleLowerCase())) {
+                          pendingFiles.shift();
+                          setSelectedFiles([...pendingFiles]);
+                          continue;
                         }
                         const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type, "If-None-Match": "*" }, body: file });
                         if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
-                        const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
+                        const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: safeFileName, contentType: file.type, sizeBytes: file.size }) });
                         const complete = await completeResponse.json();
                         if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
                         const submittedAt = complete.submission.submittedAt as string;
-                        alreadyUploaded.add(String(presign.fileName).toLocaleLowerCase());
+                        alreadyUploaded.add(String(complete.file.fileName).toLocaleLowerCase());
                         setSelectedTask((current) => current ? {
                           ...current,
                           submission: {
@@ -920,21 +931,23 @@ export default function StudentPortalPage() {
                             status: "SUBMITTED",
                             submittedAt,
                             isLate: Boolean(current.dueAt && new Date(submittedAt) > new Date(current.dueAt)),
-                            score: current.submission?.status === "RETURNED" ? null : current.submission?.score ?? null,
-                            feedback: current.submission?.status === "RETURNED" ? "" : current.submission?.feedback ?? "",
+                            score: null,
+                            feedback: "",
                             files: [...(current.submission?.files || []), complete.file],
                           },
                         } : current);
+                        pendingFiles.shift();
+                        setSelectedFiles([...pendingFiles]);
                       }
-                      setSelectedTask(null);
                       setSelectedFiles([]);
                       await checkCurrentSession();
                     } catch (error) {
+                      setSelectedFiles([...pendingFiles]);
                       setUploadError(error instanceof Error ? error.message : "ส่งงานไม่สำเร็จ");
                     } finally {
                       setUploading(false);
                     }
-                  }} className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{uploading ? "กำลังส่งไฟล์..." : "ยืนยันการส่งงาน"}</button>
+                  }} className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{uploading ? "กำลังส่งไฟล์..." : selectedTask.submission?.status === "RETURNED" ? "ส่งงานฉบับแก้ไข" : "ยืนยันการส่งงาน"}</button>
                 ) : (
                   <button onClick={() => { setSelectedTask(null); setSelectedFiles([]); setUploadError(""); }} className="px-6 py-2.5 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition shadow-md">{selectedTask.mode === "TEACHER_CHECK" ? "รับทราบ" : "ปิด"}</button>
                 )}
