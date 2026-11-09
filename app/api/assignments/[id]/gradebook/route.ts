@@ -37,8 +37,11 @@ export async function POST(
       id: gradeColumnId,
       ownerId: session.user.id,
       classId: assignment.classId,
-      teachingAssignmentId: assignment.teachingAssignmentId,
-      OR: [{ assignmentId: null }, { assignmentId: assignment.id }],
+      OR: [
+        { teachingAssignmentId: assignment.teachingAssignmentId },
+        { teachingAssignmentId: null },
+      ],
+      AND: [{ OR: [{ assignmentId: null }, { assignmentId: assignment.id }] }],
     },
     select: { id: true, title: true, period: true, maxScore: true },
   });
@@ -60,10 +63,13 @@ export async function POST(
           id: target.id,
           ownerId: assignment.ownerId,
           classId: assignment.classId,
-          teachingAssignmentId: assignment.teachingAssignmentId,
-          OR: [{ assignmentId: null }, { assignmentId: assignment.id }],
+          OR: [
+            { teachingAssignmentId: assignment.teachingAssignmentId },
+            { teachingAssignmentId: null },
+          ],
+          AND: [{ OR: [{ assignmentId: null }, { assignmentId: assignment.id }] }],
         },
-        data: { assignmentId: assignment.id },
+        data: { assignmentId: assignment.id, teachingAssignmentId: assignment.teachingAssignmentId },
       });
       if (result.count !== 1) throw new Error("GRADE_COLUMN_LINK_CONFLICT");
 
