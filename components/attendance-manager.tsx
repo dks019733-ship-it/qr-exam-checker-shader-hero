@@ -388,7 +388,7 @@ export function AttendanceManager() {
                       );
                     })}
                   </div>
-                  <button type="button" onClick={() => selectDate(localDateValue()) className="mt-4 w-full rounded-xl border border-[#EAE8E3] py-2 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F4F4F2]">
+                  <button type="button" onClick={() => selectDate(localDateValue())} className="mt-4 w-full rounded-xl border border-[#EAE8E3] py-2 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F4F4F2]">
                     เลือกวันนี้
                   </button>
                 </div>
