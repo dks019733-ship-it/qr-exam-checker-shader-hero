@@ -90,7 +90,7 @@ export async function GET() {
           status: submission.status,
           submittedAt: submission.submittedAt.toISOString(),
           isLate: Boolean(assignment.dueAt && submission.submittedAt > assignment.dueAt),
-          score: assignment.gradeColumn ? (gradeScore?.score ?? null) : submission.score,
+          score: assignment.gradeColumn ? (gradeScore ? gradeScore.score : null) : submission.score,
           feedback: submission.feedback,
           files: submission.files,
         } : null,
