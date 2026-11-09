@@ -298,7 +298,7 @@ export function AssignmentManager() {
                   <span className={labelClass}><FileUp className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> ไฟล์คำสั่งงาน / ใบงานจากครู {mode === "SYSTEM_UPLOAD" ? "(จำเป็น)" : "(ไม่บังคับ)"}</span>
                   <label className="group flex cursor-pointer flex-col items-center justify-center gap-3 rounded-[1.5rem] border-2 border-dashed border-[#A7F3D0] bg-[#F9F9F8] px-5 py-8 text-center transition hover:border-[#166534]/50 hover:bg-[#F0FDF4]/40">
                     <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[#EAE8E3] bg-white text-[#166534] shadow-sm transition group-hover:scale-105"><UploadCloud className="h-6 w-6" /></span>
-                    <span className="text-sm font-black text-[#1A1A1A]">ลากไฟล์มาวาง หรือ <span className="text-[#166534] underline underline-offset-4">คลิกเพื่อเลือกไฟล์</span></span>
+                    <span className="text-sm font-black text-[#1A1A1A]">คลิกเพื่อเลือกไฟล์</span>
                     <span className="text-[11px] font-bold tracking-wide text-[#888888]">รองรับ PDF, JPG, PNG, WebP, DOC และ DOCX</span>
                     <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setFiles(Array.from(event.target.files || []))} className="sr-only" />
                   </label>
@@ -365,7 +365,6 @@ export function AssignmentManager() {
           ) : (
             <div className="grid gap-4">
               {assignments.map((item) => {
-                const total = Math.max(1, item._count.submissions);
                 return (
                   <article key={item.id} className="group rounded-[1.5rem] border border-[#EAE8E3] bg-white/90 p-5 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-[#166534]/30 hover:shadow-lg sm:p-6">
                     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
