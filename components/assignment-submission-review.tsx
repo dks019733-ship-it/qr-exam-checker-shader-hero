@@ -16,7 +16,7 @@ type Submission = {
 type GradeColumnOption = {
   id: string;
   title: string;
-  period: "MIDTERM" | "AFTER_MIDTERM";
+  period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM";
   maxScore: number;
   teachingAssignmentId: string | null;
   assignmentId: string | null;
@@ -164,7 +164,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
                 <option value="">เลือกช่องคะแนนเดิม</option>
                 {gradeColumns.map((column) => (
                   <option key={column.id} value={column.id}>
-                    {column.title} · เต็ม {column.maxScore} · {column.period === "MIDTERM" ? "ก่อนกลางภาค" : "หลังกลางภาค"}
+                    {column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}
                   </option>
                 ))}
               </select>
