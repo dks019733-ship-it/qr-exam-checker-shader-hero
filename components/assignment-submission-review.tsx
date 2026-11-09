@@ -24,7 +24,7 @@ type GradeColumnOption = {
 
 export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: string }) {
   const [title, setTitle] = useState("");
-  const [gradebook, setGradebook] = useState<GradeColumnOption | null>(null);
+  const [gradebook, setGradebook] = useState<Pick<GradeColumnOption, "id" | "title" | "period" | "maxScore"> | null>(null);
   const [gradeColumns, setGradeColumns] = useState<GradeColumnOption[]>([]);
   const [selectedGradeColumnId, setSelectedGradeColumnId] = useState("");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
