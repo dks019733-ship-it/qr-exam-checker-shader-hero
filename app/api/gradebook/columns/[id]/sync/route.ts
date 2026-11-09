@@ -41,7 +41,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: session.user.id, googleFormId: { not: null } },
-    include: { googleForm: { select: { formId: true } }, classroom: { select: { id: true, name: true } } },
+    include: { googleForm: { select: { formId: true } }, classroom: { select: { id: true, name: true } }, assignment: { select: { id: true, mode: true } } },
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ช่องคะแนนนี้ไม่ได้เชื่อมกับ Google Form" }, { status: 404 });
   try {
@@ -96,20 +96,39 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         responsesSeen++;
         const savedReview = response.responseId ? reviewByResponse.get(response.responseId) : undefined;
         const score = savedReview?.score ?? responseScore(response, gradedQuestionIds);
-        if (typeof score !== "number") { ungraded++; continue; }
         const room = normalized(answerFor(response, roomIds.questionId, roomIds.itemId));
         const roll = answerFor(response, rollIds.questionId, rollIds.itemId);
         const name = answerFor(response, nameIds.questionId, nameIds.itemId);
         const manuallyMatched = savedReview?.studentId ? roster.find((student) => student.id === savedReview.studentId) : undefined;
         const matchedStudent = manuallyMatched || matchFormStudent(roster, roll, room, name);
         if (matchedStudent) {
-          const classScores = scoresByClass.get(matchedStudent.classId) || new Map<string, number>();
-          classScores.set(matchedStudent.id, score);
-          scoresByClass.set(matchedStudent.classId, classScores);
+          // Submission state is independent from grading: essay responses count as submitted immediately.
+          if (column.assignment?.mode === "GOOGLE_FORM" && response.responseId) {
+            const submittedAt = response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : new Date();
+            await prisma.submission.upsert({
+              where: { assignmentId_studentId: { assignmentId: column.assignment.id, studentId: matchedStudent.id } },
+              create: { assignmentId: column.assignment.id, studentId: matchedStudent.id, status: "SUBMITTED", submittedAt },
+              update: {},
+            });
+            await prisma.submission.updateMany({
+              where: { assignmentId: column.assignment.id, studentId: matchedStudent.id, status: { not: "REVIEWED" } },
+              data: { status: "SUBMITTED", submittedAt },
+            });
+          }
+          if (typeof score === "number") {
+            const classScores = scoresByClass.get(matchedStudent.classId) || new Map<string, number>();
+            classScores.set(matchedStudent.id, score);
+            scoresByClass.set(matchedStudent.classId, classScores);
+          } else {
+            ungraded++;
+          }
           if (response.responseId) matchedResponseIds.push(response.responseId);
-        } else if (response.responseId) {
+        } else if (response.responseId && typeof score === "number") {
           pendingRows.push({ columnId: column.id, responseId: response.responseId, rollNo: roll, studentName: name || "ไม่ระบุชื่อในฟอร์ม", room, manualReviewRequired: !!room && normalizedRoom(room) !== normalizedRoom(column.classroom.name), score, submittedAt: response.lastSubmittedTime ? new Date(response.lastSubmittedTime) : null });
-        } else skipped++;
+        } else {
+          if (typeof score !== "number") ungraded++;
+          else skipped++;
+        }
       }
       pageToken = result.nextPageToken;
       if (!pageToken) break;
