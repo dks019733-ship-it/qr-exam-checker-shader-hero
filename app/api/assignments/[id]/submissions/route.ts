@@ -53,7 +53,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       status: item.status,
       submittedAt: item.submittedAt.toISOString(),
       isLate: Boolean(assignment.dueAt && item.submittedAt > assignment.dueAt),
-      score: assignment.gradeColumn ? (gradeScoreByStudent.get(item.studentId) ?? item.score) : item.score,
+      score: assignment.gradeColumn
+        ? (gradeScoreByStudent.has(item.studentId) ? gradeScoreByStudent.get(item.studentId) ?? null : null)
+        : item.score,
       feedback: item.feedback,
       reviewedAt: item.reviewedAt?.toISOString() ?? null,
       student: item.student,
