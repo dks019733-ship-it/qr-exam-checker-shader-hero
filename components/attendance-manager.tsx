@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle, BookOpen, CalendarDays, Check, CheckCircle2, CheckCheck,
+  AlertCircle, ArrowLeft, BookOpen, CalendarDays, Check, CheckCircle2, CheckCheck,
   ChevronLeft, ChevronRight, Clock3, Hash, Search, Save, Sparkles, Users, UserX,
 } from "lucide-react";
 
@@ -286,10 +286,13 @@ export function AttendanceManager() {
               <p className="mt-0.5 text-[10px] font-semibold tracking-[0.12em] text-[#8B7A66]">ATTENDANCE MANAGEMENT</p>
             </div>
           </div>
-          <div className="hidden items-center gap-2 rounded-full border border-[#EAE8E3] bg-white px-3 py-1.5 text-[11px] font-bold text-[#687565] sm:flex">
-            <span className="h-2 w-2 rounded-full bg-[#2C3E32]" />
-            บันทึกข้อมูลจริง
-          </div>
+          <a
+            href="/"
+            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#EAE8E3] bg-white px-4 py-2 text-xs font-bold text-[#4d5f4a] shadow-sm transition hover:border-[#D1CDC4] hover:bg-[#F9F9F8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2C3E32] focus-visible:ring-offset-2"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>กลับหน้าหลัก</span>
+          </a>
         </div>
       </header>
 
