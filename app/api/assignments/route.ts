@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const MODES = new Set(["TEACHER_CHECK", "SYSTEM_UPLOAD", "GOOGLE_FORM"]);
-const GRADE_PERIODS = new Set(["MIDTERM", "AFTER_MIDTERM"]);
 
 function isAllowedGoogleFormUrl(value: string) {
   try {
@@ -31,7 +30,7 @@ export async function GET(request: Request) {
       classroom: { select: { id: true, name: true } },
       teachingAssignment: { include: { subject: { select: { code: true, name: true } } } },
       files: { select: { id: true, fileName: true, contentType: true, sizeBytes: true } },
-      gradeColumn: { select: { id: true, period: true, maxScore: true } },
+      gradeColumn: { select: { id: true, title: true, period: true, maxScore: true } },
       _count: { select: { submissions: true } },
     },
     orderBy: [{ createdAt: "desc" }],
@@ -48,29 +47,20 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const teachingAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
+  const gradeColumnId = typeof body?.gradeColumnId === "string" ? body.gradeColumnId : "";
   const description = typeof body?.description === "string" ? body.description.trim() : "";
   const mode = typeof body?.mode === "string" ? body.mode : "";
   const status = body?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT";
   const googleFormUrl = typeof body?.googleFormUrl === "string" ? body.googleFormUrl.trim() : "";
   const dueAt = body?.dueAt ? new Date(body.dueAt) : null;
-  const maxScore = body?.maxScore === null || body?.maxScore === undefined || body?.maxScore === ""
-    ? null : Number(body.maxScore);
-  const gradePeriod = typeof body?.gradePeriod === "string" ? body.gradePeriod : "";
   const autoMarkAttendance = body?.autoMarkAttendance === true;
   const attendanceSessionId = typeof body?.attendanceSessionId === "string" ? body.attendanceSessionId : null;
 
-  if (!teachingAssignmentId || !title || title.length > 160 || description.length > 5000 || !MODES.has(mode)) {
-    return NextResponse.json({ error: "กรุณาตรวจสอบชื่อ รายละเอียด และรูปแบบงาน" }, { status: 400 });
+  if (!teachingAssignmentId || !gradeColumnId || description.length > 5000 || !MODES.has(mode)) {
+    return NextResponse.json({ error: "กรุณาเลือกรายวิชา ช่องคะแนน และตรวจสอบรูปแบบงาน" }, { status: 400 });
   }
   if (dueAt && Number.isNaN(dueAt.getTime())) {
     return NextResponse.json({ error: "กำหนดส่งไม่ถูกต้อง" }, { status: 400 });
-  }
-  if (maxScore === null || !Number.isFinite(maxScore) || maxScore <= 0 || maxScore > 10000) {
-    return NextResponse.json({ error: "กรุณากำหนดคะแนนเต็มมากกว่า 0 เพื่อเชื่อมกับสมุดคะแนน" }, { status: 400 });
-  }
-  if (!GRADE_PERIODS.has(gradePeriod)) {
-    return NextResponse.json({ error: "กรุณาเลือกภาคเรียนของคะแนนงาน" }, { status: 400 });
   }
   if (status === "PUBLISHED" && mode === "SYSTEM_UPLOAD") {
     return NextResponse.json(
@@ -90,6 +80,20 @@ export async function POST(request: Request) {
     select: { id: true, ownerId: true, classId: true },
   });
   if (!teachingAssignment) return NextResponse.json({ error: "ไม่พบรายวิชาหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
+
+  const gradeColumn = await prisma.gradeColumn.findFirst({
+    where: {
+      id: gradeColumnId,
+      ownerId: session.user.id,
+      classId: teachingAssignment.classId,
+      teachingAssignmentId,
+      assignmentId: null,
+    },
+    select: { id: true, title: true, maxScore: true },
+  });
+  if (!gradeColumn) {
+    return NextResponse.json({ error: "ไม่พบช่องคะแนนที่ยังไม่ถูกเชื่อมในรายวิชาและห้องเรียนนี้ กรุณาโหลดรายการใหม่" }, { status: 409 });
+  }
 
   if (attendanceSessionId) {
     const attendance = await prisma.attendanceSession.findFirst({
@@ -111,36 +115,45 @@ export async function POST(request: Request) {
   }
 
   try {
-    const created = await prisma.assignment.create({
-      data: {
-        ownerId: teachingAssignment.ownerId,
-        classId: teachingAssignment.classId,
-        teachingAssignmentId,
-        attendanceSessionId,
-        title,
-        description,
-        mode: mode as "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM",
-        status,
-        googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : null,
-        dueAt,
-        maxScore,
-        autoMarkAttendance,
-        gradeColumn: {
-          create: {
-            ownerId: teachingAssignment.ownerId,
-            classId: teachingAssignment.classId,
-            title,
-            period: gradePeriod as "MIDTERM" | "AFTER_MIDTERM",
-            maxScore,
-            teachingAssignmentId,
-          },
+    const created = await prisma.$transaction(async (tx) => {
+      const assignment = await tx.assignment.create({
+        data: {
+          ownerId: teachingAssignment.ownerId,
+          classId: teachingAssignment.classId,
+          teachingAssignmentId,
+          attendanceSessionId,
+          title: gradeColumn.title,
+          description,
+          mode: mode as "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM",
+          status,
+          googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : null,
+          dueAt,
+          maxScore: gradeColumn.maxScore,
+          autoMarkAttendance,
         },
-      },
-      select: { id: true, title: true, mode: true, status: true, classId: true, dueAt: true, createdAt: true, gradeColumn: { select: { id: true, period: true, maxScore: true } } },
+        select: { id: true, title: true, mode: true, status: true, classId: true, dueAt: true, createdAt: true },
+      });
+
+      const linked = await tx.gradeColumn.updateMany({
+        where: {
+          id: gradeColumn.id,
+          ownerId: session.user.id,
+          classId: teachingAssignment.classId,
+          teachingAssignmentId,
+          assignmentId: null,
+        },
+        data: { assignmentId: assignment.id },
+      });
+      if (linked.count !== 1) throw new Error("GRADE_COLUMN_LINK_CONFLICT");
+
+      return {
+        ...assignment,
+        gradeColumn: { id: gradeColumn.id, title: gradeColumn.title, maxScore: gradeColumn.maxScore },
+      };
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("[Assignments] create failed:", error);
-    return NextResponse.json({ error: "สร้างงานไม่สำเร็จ กรุณาลองใหม่" }, { status: 500 });
+    return NextResponse.json({ error: "สร้างงานไม่สำเร็จ ช่องคะแนนอาจถูกเชื่อมกับงานอื่นแล้ว กรุณาโหลดข้อมูลใหม่" }, { status: 409 });
   }
 }
