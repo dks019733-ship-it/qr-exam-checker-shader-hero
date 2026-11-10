@@ -166,6 +166,14 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     where: { id, ownerId: session.user.id },
     select: {
       id: true,
+      _count: {
+        select: {
+          scores: true,
+          pendingFormScores: true,
+          formResponseReviews: true,
+          destinationColumns: true,
+        },
+      },
       assignment: {
         select: {
           id: true,
@@ -180,8 +188,14 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   if (column.assignment?.groupId) {
     return NextResponse.json({ error: "งานนี้เป็นงานกลุ่มหลายห้อง จึงไม่สามารถลบจากสมุดคะแนนเพียงห้องเดียวได้" }, { status: 409 });
   }
-  if (column.assignment && (column.assignment._count.submissions > 0 || column.assignment._count.files > 0)) {
-    return NextResponse.json({ error: "งานนี้มีประวัติการส่งหรือไฟล์แนบแล้ว ระบบไม่ลบเพื่อรักษาข้อมูล กรุณาปิดงานแทน" }, { status: 409 });
+  if (
+    column._count.scores > 0 ||
+    column._count.pendingFormScores > 0 ||
+    column._count.formResponseReviews > 0 ||
+    column._count.destinationColumns > 0 ||
+    (column.assignment && (column.assignment._count.submissions > 0 || column.assignment._count.files > 0))
+  ) {
+    return NextResponse.json({ error: "ช่องคะแนนนี้มีคะแนน ประวัติคำตอบ งานปลายทาง หรือประวัติส่งงานแล้ว ระบบไม่ลบเพื่อรักษาข้อมูล กรุณาปิดงานแทน" }, { status: 409 });
   }
 
   await prisma.$transaction(async (tx) => {
