@@ -24,37 +24,58 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     },
     orderBy: [{ submittedAt: "desc" }],
   });
-  const gradeScores = assignment.gradeColumn && submissions.length
-    ? await prisma.gradeScore.findMany({
-        where: {
-          columnId: assignment.gradeColumn.id,
-          studentId: { in: submissions.map((item) => item.studentId) },
-        },
-        select: { studentId: true, score: true },
-      })
-    : [];
-  const gradeScoreByStudent = new Map(gradeScores.map((item) => [item.studentId, item.score]));
+  const [gradeScores, students] = await Promise.all([
+    assignment.gradeColumn
+      ? prisma.gradeScore.findMany({
+          where: { columnId: assignment.gradeColumn.id },
+          select: { studentId: true, score: true, updatedAt: true },
+        })
+      : Promise.resolve([]),
+    assignment.mode === "TEACHER_CHECK"
+      ? prisma.student.findMany({
+          where: { classId: assignment.classId, isActive: true },
+          select: { id: true, rollNo: true, studentNo: true, name: true },
+          orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
+  const gradeScoreByStudent = new Map(gradeScores.map((item) => [item.studentId, item]));
   const receivedStudentIds = new Set(submissions.map((item) => item.studentId));
-  const students = assignment.mode === "TEACHER_CHECK"
-    ? await prisma.student.findMany({
-        where: { classId: assignment.classId, isActive: true },
-        select: { id: true, rollNo: true, studentNo: true, name: true },
-        orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }],
-      })
-    : [];
+
+  // A score entered in the online gradebook is also a completed review in this view.
+  // Represent it as a read-only row when no explicit submission record exists.
+  const gradebookOnlySubmissions = students.flatMap((student) => {
+    const gradeScore = gradeScoreByStudent.get(student.id);
+    if (receivedStudentIds.has(student.id) || !gradeScore || gradeScore.score === null) return [];
+    return [{
+      id: "gradebook:" + student.id,
+      status: "REVIEWED",
+      submittedAt: gradeScore.updatedAt,
+      reviewedAt: gradeScore.updatedAt,
+      student,
+      score: gradeScore.score,
+      feedback: "",
+      files: [],
+    }];
+  });
+  const allSubmissions = [...submissions, ...gradebookOnlySubmissions]
+    .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+
   return NextResponse.json({
     assignment: {
       ...assignment,
       title: assignment.gradeColumn?.title ?? assignment.title,
     },
-    unreceivedStudents: students.filter((student) => !receivedStudentIds.has(student.id)),
-    submissions: submissions.map((item) => ({
+    unreceivedStudents: students.filter((student) =>
+      !receivedStudentIds.has(student.id) && gradeScoreByStudent.get(student.id)?.score == null
+    ),
+    submissions: allSubmissions.map((item) => ({
       id: item.id,
       status: item.status,
       submittedAt: item.submittedAt.toISOString(),
       isLate: Boolean(assignment.dueAt && item.submittedAt > assignment.dueAt),
       score: assignment.gradeColumn
-        ? (gradeScoreByStudent.has(item.studentId) ? gradeScoreByStudent.get(item.studentId) ?? null : null)
+        ? (gradeScoreByStudent.get(item.student.id)?.score ?? null)
         : item.score,
       feedback: item.feedback,
       reviewedAt: item.reviewedAt?.toISOString() ?? null,
