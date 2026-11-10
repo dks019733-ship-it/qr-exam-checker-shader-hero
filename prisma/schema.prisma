@@ -49,6 +49,7 @@ model Account {
   session_state        String?
   user                 User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@id([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -56,6 +57,7 @@ model Session {
   userId       String
   expires      DateTime
   user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -123,6 +125,7 @@ model Exam {
   updatedAt   DateTime     @updatedAt
   @@index([ownerId])
   @@index([teachingAssignmentId])
+  @@index([classId])
 }
 
 model Subject {
@@ -156,6 +159,7 @@ model TeachingAssignment {
   @@unique([subjectId, classId])
   @@index([ownerId, classId])
   @@index([ownerId, subjectId])
+  @@index([classId])
 }
 
 model CourseEnrollment {
@@ -359,6 +363,7 @@ model GradeColumn {
   updatedAt    DateTime     @updatedAt
   @@index([ownerId, classId, period])
   @@index([teachingAssignmentId])
+  @@index([classId])
   @@unique([sourceColumnId, classId])
 }
 
@@ -581,6 +586,7 @@ model AttendanceSession {
   updatedAt            DateTime @updatedAt
   @@unique([teachingAssignmentId, date])
   @@index([ownerId, classId, date])
+  @@index([classId])
 }
 
 model AttendanceRecord {
@@ -623,6 +629,8 @@ model Assignment {
   updatedAt            DateTime         @updatedAt
   @@index([ownerId, classId, status, dueAt])
   @@index([teachingAssignmentId, createdAt])
+  @@index([classId])
+  @@index([attendanceSessionId])
   @@unique([groupId, classId])
 }
 
