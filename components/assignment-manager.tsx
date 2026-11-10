@@ -230,7 +230,7 @@ export function AssignmentManager() {
           throw new Error("ตรวจสอบไฟล์ที่อัปโหลดไปแล้วไม่สำเร็จ กรุณาลองใหม่");
         }
         const filesByAssignment = new Map<string, { fileName: string; contentType: string; sizeBytes: number }[]>(
-          currentAssignments.map((item: AssignmentRow) => [item.id, item.files || []]),
+          currentAssignments.map((item: AssignmentRow) => [item.id, item.files || []] as const),
         );
         for (const target of recoveryGroup.assignments) {
           const existingFiles = filesByAssignment.get(target.id);
@@ -372,7 +372,7 @@ export function AssignmentManager() {
 
               <label className="block">
                 <span className={labelClass}>ชื่องานจากสมุดออนไลน์</span>
-                <select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className={fieldClass}>
+                <select required={!pendingGroup} value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={Boolean(pendingGroup) || gradeColumnsLoading || gradeColumns.length === 0} className={fieldClass}>
                   <option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>
                   {gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}
                 </select>
