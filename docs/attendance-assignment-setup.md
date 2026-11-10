@@ -37,7 +37,7 @@ Configure these server-only environment variables in Vercel for Production and P
 
 Never prefix these variables with `NEXT_PUBLIC_`. The service-role key bypasses Storage RLS and must remain server-side. All upload, completion, and download routes must continue to enforce application-level teacher/student authorization before using it. The browser receives only a one-object signed upload URL; it never receives the service-role key. Signed upload URLs are valid for 2 hours per Supabase Storage's API. Signed download URLs expire after 3 minutes.
 
-The Free plan currently includes 1 GB of Storage and 5 GB of egress at no monthly subscription cost. Free-plan quotas are limits, not unlimited storage; monitor usage and remove unneeded files through the application when appropriate. Do not upgrade the organization or enable paid add-ons under this project's no-cost requirement.
+The Free plan currently includes 1 GB of Storage, 5 GB of egress and 5 GB of cached egress at no monthly subscription cost. These quotas are shared at the organization level. Free-plan quotas are limits, not unlimited storage; monitor usage and remove unneeded files through the application when appropriate. Do not upgrade the organization or enable paid add-ons under this project's no-cost requirement.
 
 ## Accepted files and optimization
 
@@ -58,4 +58,4 @@ The server checks declared MIME type, file extension, actual object size, stored
 - Teachers can return a submission for revision only with feedback. Students see the returned status and feedback. SYSTEM_UPLOAD students can upload corrected files; TEACHER_CHECK students bring corrected physical work back to the teacher. The next successful resubmission/receipt returns the state to SUBMITTED and clears the previous score and review feedback.
 - Automatic attendance is supported only for SYSTEM_UPLOAD assignments because the server can verify successful file completion. The UI hides this option for TEACHER_CHECK and Google Forms, and the API rejects unsupported modes.
 - If automatic attendance is enabled and the attendance feature is available, successful submission creates a PRESENT record only when no record exists for the linked session. Existing teacher decisions (PRESENT, ABSENT, LATE or LEAVE) are preserved.
-- Missing R2 environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
+- Missing Supabase Storage environment variables or a missing bucket cause upload endpoints to return HTTP 503; the rest of the application remains available.
