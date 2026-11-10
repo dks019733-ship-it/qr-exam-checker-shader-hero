@@ -603,6 +603,7 @@ model Assignment {
   classId              String
   teachingAssignmentId String
   attendanceSessionId  String?
+  groupId              String?
   title                String
   description          String           @default("") @db.Text
   mode                 AssignmentMode
@@ -622,6 +623,7 @@ model Assignment {
   updatedAt            DateTime         @updatedAt
   @@index([ownerId, classId, status, dueAt])
   @@index([teachingAssignmentId, createdAt])
+  @@unique([groupId, classId])
 }
 
 model AssignmentFile {
