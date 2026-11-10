@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 
   const teachingAssignments = await prisma.teachingAssignment.findMany({
     where: { id: { in: targetIds }, ownerId },
-    select: { id: true, ownerId: true, classId: true },
+    select: { id: true, ownerId: true, classId: true, subjectId: true },
   });
   if (teachingAssignments.length !== targetIds.length) {
     return NextResponse.json({ error: "มีรายวิชาหรือห้องเรียนที่ไม่พบหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
@@ -101,6 +101,9 @@ export async function POST(request: Request) {
   const primaryTeachingAssignment = teachingAssignments.find((item) => item.id === teachingAssignmentId);
   if (!primaryTeachingAssignment) {
     return NextResponse.json({ error: "ไม่พบรายวิชาหลักที่เลือก" }, { status: 404 });
+  }
+  if (teachingAssignments.some((item) => item.subjectId !== primaryTeachingAssignment.subjectId)) {
+    return NextResponse.json({ error: "งานชุดเดียวกันต้องอยู่ในรายวิชาเดียวกัน แม้จะมอบหมายให้หลายห้องเรียนได้" }, { status: 400 });
   }
 
   const primaryGradeColumn = await prisma.gradeColumn.findFirst({
