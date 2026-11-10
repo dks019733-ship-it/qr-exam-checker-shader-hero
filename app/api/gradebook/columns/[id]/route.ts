@@ -11,6 +11,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerId = ownerId;
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
@@ -26,14 +27,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     : null;
 
   const column = await prisma.gradeColumn.findFirst({
-    where: { id, ownerId: session.user.id },
+    where: { id, ownerId: ownerId },
     select: { id: true, classId: true, assignmentId: true, teachingAssignmentId: true },
   });
   if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนนหรือไม่มีสิทธิ์" }, { status: 404 });
 
   const targetTeachingAssignment = teachingAssignmentId
     ? await prisma.teachingAssignment.findFirst({
-        where: { id: teachingAssignmentId, ownerId: session.user.id, classId: column.classId },
+        where: { id: teachingAssignmentId, ownerId: ownerId, classId: column.classId },
         select: { id: true, subjectId: true },
       })
     : null;
@@ -43,7 +44,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const linkedAssignment = column.assignmentId
     ? await prisma.assignment.findFirst({
-        where: { id: column.assignmentId, ownerId: session.user.id, classId: column.classId },
+        where: { id: column.assignmentId, ownerId: ownerId, classId: column.classId },
         select: { id: true, groupId: true },
       })
     : null;
@@ -56,7 +57,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (linkedAssignment?.groupId && targetTeachingAssignment) {
     const groupMembers = await prisma.assignment.findMany({
-      where: { groupId: linkedAssignment.groupId, ownerId: session.user.id },
+      where: { groupId: linkedAssignment.groupId, ownerId: ownerId },
       select: { id: true, teachingAssignment: { select: { subjectId: true } } },
     });
     if (groupMembers.some((member) =>
@@ -76,7 +77,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
       if (linkedAssignment) {
         const synced = await tx.assignment.updateMany({
-          where: { id: linkedAssignment.id, ownerId: session.user.id },
+          where: { id: linkedAssignment.id, ownerId: ownerId },
           data: { teachingAssignmentId: teachingAssignmentId! },
         });
         if (synced.count !== 1) throw new Error("LINKED_ASSIGNMENT_NOT_UPDATED");
