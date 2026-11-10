@@ -325,13 +325,13 @@ export function AssignmentManager() {
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="block">
                   <span className={labelClass}>รายวิชา / ห้องเรียน</span>
-                  <select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setTargetTeachingAssignmentIds([event.target.value]); setGradeColumnId(""); }} className={fieldClass}>
+                  <select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setTargetTeachingAssignmentIds([event.target.value]); setGradeColumnId(""); }} disabled={Boolean(pendingGroup) || saving} className={fieldClass}>
                     {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}
                   </select>
                 </label>
                 <label className="block">
                   <span className={labelClass}>รูปแบบการส่งงาน</span>
-                  <select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className={fieldClass}>
+                  <select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} disabled={Boolean(pendingGroup) || saving} className={fieldClass}>
                     <option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option>
                     <option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option>
                     <option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option>
@@ -352,7 +352,7 @@ export function AssignmentManager() {
                         <input
                           type="checkbox"
                           checked={checked}
-                          disabled={course.id === teachingAssignmentId || saving}
+                          disabled={course.id === teachingAssignmentId || saving || Boolean(pendingGroup)}
                           onChange={(event) => setTargetTeachingAssignmentIds((current) =>
                             event.target.checked
                               ? Array.from(new Set([...current, course.id]))
