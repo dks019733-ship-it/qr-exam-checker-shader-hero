@@ -31,7 +31,7 @@ function getConfig(): StorageConfig {
   } catch {
     throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
   }
-  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && parsed.hostname === "localhost")) {
     throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
   }
   return { baseUrl: supabaseUrl + "/storage/v1", bucket, serviceKey };
@@ -102,6 +102,7 @@ export function validateUploadInput(contentType: string, sizeBytes: number) {
 }
 
 export async function createUploadUrl(objectKey: string, contentType: string) {
+  if (!ALLOWED_TYPES.has(contentType)) throw new Error("OBJECT_STORAGE_CONTENT_TYPE_NOT_ALLOWED");
   const config = getConfig();
   const path = safeObjectPath(objectKey);
   const response = await storageRequest(
@@ -113,7 +114,6 @@ export async function createUploadUrl(objectKey: string, contentType: string) {
   // Supabase signed upload URLs are one-time, path-scoped tokens and expire after two hours.
   // The browser uploads directly to Storage; the service-role key never leaves this module.
   const uploadUrl = new URL(config.baseUrl + data.url).toString();
-  void contentType; // The client sends the validated Content-Type on the upload request.
   return uploadUrl;
 }
 
