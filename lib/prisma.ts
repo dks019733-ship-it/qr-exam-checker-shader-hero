@@ -5,9 +5,29 @@ const globalForPrisma = globalThis as unknown as {
   dbBootstrapped?: boolean;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+function getRuntimeDatabaseUrl() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl || process.env.VERCEL !== "1") return databaseUrl;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+  try {
+    const url = new URL(databaseUrl);
+    // Serverless instances must not each open Prisma's default five-connection pool.
+    // Supabase's transaction pooler multiplexes these short-lived application connections.
+    url.searchParams.set("connection_limit", process.env.PRISMA_CONNECTION_LIMIT || "1");
+    return url.toString();
+  } catch {
+    // Let Prisma report malformed connection strings without logging credentials.
+    return databaseUrl;
+  }
+}
+
+const runtimeDatabaseUrl = getRuntimeDatabaseUrl();
+export const prisma = globalForPrisma.prisma ?? new PrismaClient(
+  runtimeDatabaseUrl ? { datasources: { db: { url: runtimeDatabaseUrl } } } : undefined,
+);
+
+// Reuse a single Prisma client within each warm serverless runtime as well as in development.
+globalForPrisma.prisma = prisma;
 
 async function safeExecute(sql: string, description: string) {
   try {
@@ -24,6 +44,9 @@ let bootstrapPromise: Promise<void> | null = null;
  * Uses IF NOT EXISTS and safe execution so it is 100% idempotent and non-destructive.
  */
 export async function ensureDatabaseSchema() {
+  // Production schema changes are applied through reviewed migrations, never on request paths.
+  // Running DDL from every cold serverless instance caused connection spikes and lock contention.
+  if (process.env.NODE_ENV === "production") return;
   if (globalForPrisma.dbBootstrapped) return;
   if (bootstrapPromise) return bootstrapPromise;
 
