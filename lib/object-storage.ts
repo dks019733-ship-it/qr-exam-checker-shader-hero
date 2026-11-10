@@ -1,4 +1,4 @@
-import { createHash, createHmac } from "crypto";
+
 
 const configuredUploadLimit = Number(process.env.UPLOAD_MAX_BYTES);
 const MAX_UPLOAD_BYTES = Number.isSafeInteger(configuredUploadLimit) && configuredUploadLimit > 0
@@ -84,10 +84,6 @@ function signedStorageUrl(path: unknown, expectedPrefix: string) {
   }
   const config = getConfig();
   return config.baseUrl + storagePath(path);
-}
-
-function sha256(value: string) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function startsWithBytes(bytes: Uint8Array, ...values: number[]) {
