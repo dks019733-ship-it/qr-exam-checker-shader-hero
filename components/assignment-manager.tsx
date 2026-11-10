@@ -42,7 +42,7 @@ type AssignmentRow = {
   teachingAssignment: { subject: { code: string; name: string } };
   files?: { fileName: string; contentType: string; sizeBytes: number }[];
   _count: { submissions: number };
-  gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
+  gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number; _count?: { scores: number } } | null;
 };
 type PendingAssignmentGroup = {
   groupId: string;
@@ -465,7 +465,7 @@ export function AssignmentManager() {
             <div className="grid gap-4">
               {assignmentGroups.map((group) => {
                 const item = group[0];
-                const submissionCount = group.reduce((total, entry) => total + entry._count.submissions, 0);
+                const submissionCount = group.reduce((total, entry) => total + (entry.mode === "TEACHER_CHECK" ? Math.max(entry._count.submissions, entry.gradeColumn?._count?.scores ?? 0) : entry._count.submissions), 0);
                 const groupStatus = group.every((entry) => entry.status === item.status)
                   ? statusLabel(item.status)
                   : "สถานะไม่ตรงกัน";
