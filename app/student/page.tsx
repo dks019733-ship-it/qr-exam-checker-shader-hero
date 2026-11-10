@@ -43,6 +43,7 @@ interface StudentProfile {
 
 interface AssignmentItem {
   id: string;
+  groupId?: string | null;
   subject: string;
   teacher: string;
   title: string;
@@ -143,6 +144,7 @@ export default function StudentPortalPage() {
           const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
           return {
             id: "assignment:" + task.id,
+            groupId: task.groupId || null,
             assignmentId: task.id,
             gradeColumnId: task.gradeColumnId,
             mode: task.mode,
@@ -165,15 +167,18 @@ export default function StudentPortalPage() {
             submission: task.submission || null,
           } as AssignmentItem;
         });
-        // A linked gradebook column is the same coursework item as its managed assignment.
-        // Keep the managed assignment card (submission state, due date and action), not a duplicate gradebook card.
+        // One group is one logical task. The database also enforces one group member per classroom.
+        // Keep the linked managed task and its submission state rather than rendering duplicate cards.
+        const uniqueManagedTasks = Array.from(
+          new Map(managedTasks.map((task) => [task.groupId || task.assignmentId || task.id, task])).values(),
+        );
         const linkedGradeColumnIds = new Set(
-          managedTasks.map((task) => task.gradeColumnId).filter((id): id is string => Boolean(id)),
+          uniqueManagedTasks.map((task) => task.gradeColumnId).filter((id): id is string => Boolean(id)),
         );
         const standaloneGradebookTasks = (data.assignments || []).filter(
           (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
         );
-        setAssignments([...standaloneGradebookTasks, ...managedTasks]);
+        setAssignments([...standaloneGradebookTasks, ...uniqueManagedTasks]);
         setScores(data.scores || []);
         setAnnouncements(data.announcements || []);
         if (data.subjects && Array.isArray(data.subjects)) {
