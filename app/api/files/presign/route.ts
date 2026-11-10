@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       fileName,
       contentType,
       sizeBytes,
-      expiresIn: 300,
+      expiresIn: 7200,
       maxBytes: getUploadPolicy().maxBytes,
     });
   } catch (error) {
