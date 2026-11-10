@@ -19,7 +19,7 @@ type StorageConfig = {
 };
 
 function getConfig(): StorageConfig {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\\/+$/, "");
+  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || "assignment-files";
   if (!supabaseUrl || !serviceKey || !bucket) {
@@ -90,7 +90,7 @@ export function getUploadPolicy() {
 
 export function sanitizeUploadName(value: string) {
   const leaf = value.split(/[\\\\/]/).pop() || "upload";
-  return leaf.normalize("NFKC").replace(/[^\\p{L}\\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
+  return leaf.normalize("NFKC").replace(/[^\p{L}\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
 }
 
 export function validateUploadInput(contentType: string, sizeBytes: number) {
