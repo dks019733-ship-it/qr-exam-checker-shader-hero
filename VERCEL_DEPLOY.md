@@ -11,8 +11,10 @@
    - เพิ่ม `GEMINI_API_KEY` และ `GEMINI_MODEL=gemini-3.5-flash-lite` สำหรับผู้ช่วย AI
    - ถ้าใช้ Supabase ให้ตั้ง `DATABASE_URL` เป็น Transaction pooler (port 6543, `pgbouncer=true`, `connection_limit=1`) และ `DIRECT_URL` เป็น Session pooler (port 5432)
    - ตั้งค่า Cloudflare R2 ให้ครบ `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` หากต้องการเปิดใช้งานไฟล์แนบ/ไฟล์ส่งงาน
-6. ก่อน Deploy ให้ใช้ `npx prisma db push` กับฐานข้อมูล production ผ่าน `DIRECT_URL` เพื่อให้ Schema ตรงกับ `prisma/schema.prisma` (ห้ามใช้ `--accept-data-loss` โดยไม่ตรวจสอบผลกระทบก่อน) รวมถึง migrations ใน `prisma/migrations`
-7. Deploy หลังจากฐานข้อมูลพร้อมแล้วเท่านั้น ระบบจะไม่รัน DDL/แก้ Schema อัตโนมัติบน Request ของ Production เพื่อป้องกัน Cold-start connection spikes และ lock contention
+6. ก่อน Deploy ให้ตรวจ Schema diff แล้วใช้ `npx prisma db push` กับฐานข้อมูล production ผ่าน `DIRECT_URL` เพื่อให้ Schema ตรงกับ `prisma/schema.prisma` (ห้ามใช้ `--accept-data-loss` โดยไม่ตรวจสอบผลกระทบก่อน)
+7. SQL hardening migrations ใน `prisma/migrations` ต้อง Apply ผ่าน Supabase migration workflow แยกจาก `prisma db push` เพราะ `db push` ไม่ได้รันไฟล์ migration SQL
+8. ฐานข้อมูลปัจจุบันยังไม่มี Prisma migration history table (`_prisma_migrations`) จึงห้ามสั่ง `prisma migrate deploy` จนกว่าจะทำ baseline migration history อย่างถูกต้อง
+9. Deploy หลังจากฐานข้อมูลพร้อมแล้วเท่านั้น ระบบจะไม่รัน DDL/แก้ Schema อัตโนมัติบน Request ของ Production เพื่อป้องกัน Cold-start connection spikes และ lock contention
 8. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
 9. ทดสอบ Google Login
 10. ทดสอบสร้างห้องเรียน/นักเรียน, บันทึกกระดาษคำตอบ และทดสอบอัปโหลดไฟล์จริง
