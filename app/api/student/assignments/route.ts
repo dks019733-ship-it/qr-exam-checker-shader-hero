@@ -75,6 +75,7 @@ export async function GET() {
       );
       return {
         id: assignment.id,
+        groupId: assignment.groupId,
         gradeColumnId: assignment.gradeColumn?.id ?? null,
         title: assignment.gradeColumn?.title ?? assignment.title,
         description: assignment.description,
