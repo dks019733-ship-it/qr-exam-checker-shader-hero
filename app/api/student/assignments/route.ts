@@ -67,7 +67,7 @@ export async function GET() {
         hasGradebookScore
           ? {
               id: null,
-              status: (assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" : "REVIEWED") as const,
+              status: assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" as const : "REVIEWED" as const,
               submittedAt: gradeScore.updatedAt,
               score: gradeScore.score,
               feedback: "",
