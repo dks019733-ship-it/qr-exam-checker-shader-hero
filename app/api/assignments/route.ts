@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "ไม่พบช่องคะแนนที่ยังไม่ถูกเชื่อมในรายวิชาและห้องเรียนนี้ กรุณาโหลดรายการใหม่" }, { status: 409 });
   }
 
-  const targets: { teachingAssignmentId: string; classId: string; attendanceSessionId: string | null; gradeColumn: typeof primaryGradeColumn }[] = [];
+  const targets: { teachingAssignmentId: string; classId: string; attendanceSessionId: string | null; gradeColumn: NonNullable<typeof primaryGradeColumn> }[] = [];
   for (const target of teachingAssignments) {
     let targetColumn = primaryGradeColumn;
     if (target.id !== teachingAssignmentId) {
