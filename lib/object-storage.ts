@@ -107,7 +107,9 @@ export async function createUploadUrl(objectKey: string, contentType: string) {
   const path = safeObjectPath(objectKey);
   const response = await storageRequest(
     "/object/upload/sign/" + encodeURIComponent(config.bucket) + "/" + path,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) },
+    // Supabase binds the declared MIME type into the signed upload metadata.
+    // It must match the browser's subsequent PUT Content-Type.
+    { method: "POST", headers: { "Content-Type": contentType } },
   );
   const data = await response.json() as { url?: string };
   if (typeof data.url !== "string" || !data.url) throw new Error("SUPABASE_STORAGE_SIGNED_UPLOAD_URL_MISSING");
