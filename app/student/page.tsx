@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -115,28 +115,56 @@ export default function StudentPortalPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const sessionCheckInFlight = useRef(false);
 
-  // Check existing session on load
+  // Check existing session on load.
   useEffect(() => {
-    checkCurrentSession();
+    void checkCurrentSession();
   }, []);
 
-  async function checkCurrentSession() {
-    setInitialChecking(true);
+  // Refresh in the background while the student portal is open. Focus/visibility
+  // refreshes make new teacher tasks appear immediately when students return to the tab.
+  useEffect(() => {
+    if (!student?.id) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void checkCurrentSession(false);
+    };
+    const intervalId = window.setInterval(refreshIfVisible, 30000);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [student?.id]);
+
+  async function checkCurrentSession(showInitialLoading = true) {
+    if (sessionCheckInFlight.current) return;
+    sessionCheckInFlight.current = true;
+    if (showInitialLoading) setInitialChecking(true);
+
     try {
-      const res = await fetch("/api/student/portal");
-      if (res.ok) {
-        const data = await res.json();
-        setStudent(data.student);
-        const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
-        const taskData = taskResponse.ok ? await taskResponse.json() : null;
-        if (taskResponse.ok) {
-          setAssignmentLoadError("");
-        } else {
-          const failure = await taskResponse.json().catch(() => null);
-          setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
-        }
-        const managedTasks: AssignmentItem[] = (taskData?.assignments || []).map((task: any) => {
+      const res = await fetch("/api/student/portal", { cache: "no-store" });
+      if (res.status === 401) {
+        setStudent(null);
+        return;
+      }
+      if (!res.ok) {
+        if (showInitialLoading) setStudent(null);
+        return;
+      }
+
+      const data = await res.json();
+      setStudent(data.student);
+
+      const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
+      if (taskResponse.ok) {
+        const taskData = await taskResponse.json();
+        setAssignmentLoadError("");
+        const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
           const submitted = Boolean(task.submission);
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
@@ -179,18 +207,22 @@ export default function StudentPortalPage() {
           (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
         );
         setAssignments([...standaloneGradebookTasks, ...uniqueManagedTasks]);
-        setScores(data.scores || []);
-        setAnnouncements(data.announcements || []);
-        if (data.subjects && Array.isArray(data.subjects)) {
-          setAvailableSubjects(data.subjects);
-        }
       } else {
-        setStudent(null);
+        const failure = await taskResponse.json().catch(() => null);
+        setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
+      }
+
+      setScores(data.scores || []);
+      setAnnouncements(data.announcements || []);
+      if (data.subjects && Array.isArray(data.subjects)) {
+        setAvailableSubjects(data.subjects);
       }
     } catch {
-      setStudent(null);
+      // Keep an existing session and the last successful task list during transient network errors.
+      if (showInitialLoading) setStudent(null);
     } finally {
-      setInitialChecking(false);
+      sessionCheckInFlight.current = false;
+      if (showInitialLoading) setInitialChecking(false);
     }
   }
 
@@ -294,7 +326,7 @@ export default function StudentPortalPage() {
         {student && (
           <div className="flex items-center gap-2">
             <button
-              onClick={checkCurrentSession}
+              onClick={() => void checkCurrentSession()}
               title="รีเฟรชข้อมูลล่าสุด"
               className="p-2 rounded-2xl border border-[#ADC2A9]/40 bg-white/80 text-[#5e6e5e] hover:bg-white transition cursor-pointer"
             >
