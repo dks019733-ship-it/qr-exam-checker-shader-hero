@@ -8,13 +8,7 @@ The feature adds these tables and enums:
 - Submission / SubmissionFile
 - FeatureAvailability / FeatureAvailabilityStatus
 
-After the pull request is approved, apply the migration to the production PostgreSQL database using the project's production database environment:
-
-```bash
-npx prisma migrate deploy
-```
-
-Do not run `prisma db push` against production as a substitute for the reviewed migration.
+After the pull request is approved, apply the reviewed SQL migration files through the connected Supabase migration workflow. This project does not use Prisma's `_prisma_migrations` history table, so do not run `npx prisma migrate deploy` against Production. Apply schema changes before deploying the application code, then verify the resulting columns, indexes and backfilled rows with read-only SQL queries.
 
 Feature availability controls are managed by the LINE owner account. See [LINE feature availability commands](./feature-availability-line-commands.md). The answer-sheet feature is seeded as unavailable until it is explicitly enabled.
 
