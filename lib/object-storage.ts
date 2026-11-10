@@ -1,9 +1,7 @@
-import { createHash, createHmac } from "crypto";
-
 const configuredUploadLimit = Number(process.env.UPLOAD_MAX_BYTES);
 const MAX_UPLOAD_BYTES = Number.isSafeInteger(configuredUploadLimit) && configuredUploadLimit > 0
-  ? configuredUploadLimit
-  : 20 * 1024 * 1024;
+  ? Math.min(configuredUploadLimit, 10 * 1024 * 1024)
+  : 10 * 1024 * 1024;
 
 const ALLOWED_TYPES = new Set([
   "application/pdf",
@@ -14,87 +12,76 @@ const ALLOWED_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
-function rfc3986(value: string) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
-    "%" + character.charCodeAt(0).toString(16).toUpperCase(),
-  );
-}
+type StorageConfig = {
+  baseUrl: string;
+  bucket: string;
+  serviceKey: string;
+};
 
-function sha256(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+function getConfig(): StorageConfig {
+  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\\/+$/, "");
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || "assignment-files";
+  if (!supabaseUrl || !serviceKey || !bucket) {
+    throw new Error("OBJECT_STORAGE_NOT_CONFIGURED");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(supabaseUrl);
+  } catch {
+    throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
+  }
+  if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") {
+    throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
+  }
+  return { baseUrl: supabaseUrl + "/storage/v1", bucket, serviceKey };
 }
-
-function hmac(key: Buffer | string, value: string) {
-  return createHmac("sha256", key).update(value).digest();
-}
-
-let cachedConfig: { endpoint: string; bucket: string; accessKey: string; secretKey: string } | null = null;
 
 export function isObjectStorageConfigured() {
-  return Boolean(
-    process.env.R2_ACCOUNT_ID &&
-    process.env.R2_ACCESS_KEY_ID &&
-    process.env.R2_SECRET_ACCESS_KEY &&
-    process.env.R2_BUCKET_NAME,
-  );
-}
-
-function getConfig() {
-  if (!isObjectStorageConfigured()) throw new Error("OBJECT_STORAGE_NOT_CONFIGURED");
-  if (!cachedConfig) {
-    cachedConfig = {
-      endpoint: "https://" + process.env.R2_ACCOUNT_ID + ".r2.cloudflarestorage.com",
-      bucket: process.env.R2_BUCKET_NAME!,
-      accessKey: process.env.R2_ACCESS_KEY_ID!,
-      secretKey: process.env.R2_SECRET_ACCESS_KEY!,
-    };
+  try {
+    getConfig();
+    return true;
+  } catch {
+    return false;
   }
-  return cachedConfig;
 }
 
-function signedUrl(
-  method: "PUT" | "GET" | "HEAD" | "DELETE",
-  objectKey: string,
-  expiresIn: number,
-  extraHeaders: Record<string, string> = {},
+function safeObjectPath(objectKey: string) {
+  const segments = objectKey.split("/");
+  if (
+    !objectKey ||
+    objectKey.startsWith("/") ||
+    segments.some((segment) => !segment || segment === "." || segment === "..") ||
+    !["assignment-files", "submission-files"].includes(segments[0])
+  ) {
+    throw new Error("OBJECT_STORAGE_PATH_INVALID");
+  }
+  return segments.map(encodeURIComponent).join("/");
+}
+
+function storageHeaders(config: StorageConfig, extra: Record<string, string> = {}) {
+  return {
+    apikey: config.serviceKey,
+    Authorization: "Bearer " + config.serviceKey,
+    ...extra,
+  };
+}
+
+async function storageRequest(
+  path: string,
+  init: RequestInit = {},
 ) {
   const config = getConfig();
-  const url = new URL(config.endpoint);
-  const canonicalUri = "/" + rfc3986(config.bucket) + "/" + objectKey.split("/").map(rfc3986).join("/");
-  const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
-  const dateStamp = amzDate.slice(0, 8);
-  const region = "auto";
-  const service = "s3";
-  const credentialScope = dateStamp + "/" + region + "/" + service + "/aws4_request";
-
-  const normalizedHeaders: Record<string, string> = { host: url.host };
-  for (const [name, value] of Object.entries(extraHeaders)) normalizedHeaders[name.toLowerCase()] = value.trim();
-  const signedHeaderNames = Object.keys(normalizedHeaders).sort();
-  const signedHeaders = signedHeaderNames.join(";");
-  const canonicalHeaders = signedHeaderNames.map((name) => name + ":" + normalizedHeaders[name] + "\n").join("");
-
-  const parameters: [string, string][] = [
-    ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
-    ["X-Amz-Credential", config.accessKey + "/" + credentialScope],
-    ["X-Amz-Date", amzDate],
-    ["X-Amz-Expires", String(expiresIn)],
-    ["X-Amz-SignedHeaders", signedHeaders],
-  ];
-  const canonicalQuery = parameters
-    .map(([key, value]) => [rfc3986(key), rfc3986(value)] as const)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => key + "=" + value)
-    .join("&");
-  const canonicalRequest = [method, canonicalUri, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256(canonicalRequest)].join("\n");
-
-  const dateKey = hmac("AWS4" + config.secretKey, dateStamp);
-  const regionKey = hmac(dateKey, region);
-  const serviceKey = hmac(regionKey, service);
-  const signingKey = hmac(serviceKey, "aws4_request");
-  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
-  return config.endpoint + canonicalUri + "?" + canonicalQuery + "&X-Amz-Signature=" + signature;
+  const response = await fetch(config.baseUrl + path, {
+    ...init,
+    headers: storageHeaders(config, init.headers as Record<string, string> | undefined),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error("SUPABASE_STORAGE_REQUEST_FAILED_" + response.status);
+  }
+  return response;
 }
 
 export function getUploadPolicy() {
@@ -102,8 +89,8 @@ export function getUploadPolicy() {
 }
 
 export function sanitizeUploadName(value: string) {
-  const leaf = value.split(/[\\/]/).pop() || "upload";
-  return leaf.normalize("NFKC").replace(/[^\p{L}\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
+  const leaf = value.split(/[\\\\/]/).pop() || "upload";
+  return leaf.normalize("NFKC").replace(/[^\\p{L}\\p{N}._() -]/gu, "_").slice(0, 160) || "upload";
 }
 
 export function validateUploadInput(contentType: string, sizeBytes: number) {
@@ -115,33 +102,64 @@ export function validateUploadInput(contentType: string, sizeBytes: number) {
 }
 
 export async function createUploadUrl(objectKey: string, contentType: string) {
-  return signedUrl("PUT", objectKey, 300, {
-    "content-type": contentType,
-    "if-none-match": "*",
-  });
+  const config = getConfig();
+  const path = safeObjectPath(objectKey);
+  const response = await storageRequest(
+    "/object/upload/sign/" + encodeURIComponent(config.bucket) + "/" + path,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) },
+  );
+  const data = await response.json() as { url?: string };
+  if (typeof data.url !== "string" || !data.url) throw new Error("SUPABASE_STORAGE_SIGNED_UPLOAD_URL_MISSING");
+  // Supabase signed upload URLs are one-time, path-scoped tokens and expire after two hours.
+  // The browser uploads directly to Storage; the service-role key never leaves this module.
+  const uploadUrl = new URL(config.baseUrl + data.url).toString();
+  void contentType; // The client sends the validated Content-Type on the upload request.
+  return uploadUrl;
 }
 
 export async function deleteStoredObject(objectKey: string) {
-  const response = await fetch(signedUrl("DELETE", objectKey, 60), { method: "DELETE", cache: "no-store" });
-  if (!response.ok && response.status !== 404) throw new Error("OBJECT_STORAGE_DELETE_FAILED_" + response.status);
+  const config = getConfig();
+  const path = safeObjectPath(objectKey);
+  await storageRequest("/object/" + encodeURIComponent(config.bucket), {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prefixes: [decodeURIComponent(path)] }),
+  });
 }
 
 export async function createDownloadUrl(objectKey: string) {
-  return signedUrl("GET", objectKey, 180);
+  const config = getConfig();
+  const path = safeObjectPath(objectKey);
+  const response = await storageRequest(
+    "/object/sign/" + encodeURIComponent(config.bucket) + "/" + path,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn: 180 }) },
+  );
+  const data = await response.json() as { signedURL?: string };
+  if (typeof data.signedURL !== "string" || !data.signedURL) {
+    throw new Error("SUPABASE_STORAGE_SIGNED_DOWNLOAD_URL_MISSING");
+  }
+  return new URL(config.baseUrl + data.signedURL).toString();
 }
 
 export async function verifyStoredObject(objectKey: string, expectedContentType: string) {
-  const response = await fetch(signedUrl("HEAD", objectKey, 60), { method: "HEAD", cache: "no-store" });
-  if (!response.ok) throw new Error("OBJECT_STORAGE_HEAD_FAILED_" + response.status);
+  const config = getConfig();
+  const path = safeObjectPath(objectKey);
+  const objectPath = "/object/authenticated/" + encodeURIComponent(config.bucket) + "/" + path;
+  const response = await storageRequest(objectPath, { method: "HEAD" });
   const sizeBytes = Number(response.headers.get("content-length") || 0);
   const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_UPLOAD_BYTES) {
+    throw new Error("OBJECT_STORAGE_SIZE_INVALID");
+  }
   if (contentType !== expectedContentType) throw new Error("OBJECT_STORAGE_CONTENT_TYPE_MISMATCH");
 
-  const sampleResponse = await fetch(signedUrl("GET", objectKey, 60), {
+  const sampleResponse = await storageRequest(objectPath, {
     headers: { Range: "bytes=0-15" },
-    cache: "no-store",
   });
-  if (sampleResponse.status !== 206) { await sampleResponse.body?.cancel(); throw new Error("OBJECT_STORAGE_RANGE_NOT_SUPPORTED"); }
+  if (sampleResponse.status !== 206) {
+    await sampleResponse.body?.cancel();
+    throw new Error("OBJECT_STORAGE_RANGE_NOT_SUPPORTED");
+  }
   const bytes = new Uint8Array(await sampleResponse.arrayBuffer());
   const starts = (...values: number[]) => values.every((value, index) => bytes[index] === value);
   let signatureValid = false;
