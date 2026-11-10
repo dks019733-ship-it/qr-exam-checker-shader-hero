@@ -85,7 +85,7 @@ jobs:
           done
           # Supabase-managed roles are absent from the disposable PostgreSQL service.
           # Create the role names so the public-schema hardening migrations are validated too.
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;'
+          PGPASSWORD=postgres psql -h localhost -U postgres -d qr_exam_checker -v ON_ERROR_STOP=1 -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;'
           npx prisma migrate deploy
 
       - name: Validate current Prisma schema against disposable PostgreSQL
