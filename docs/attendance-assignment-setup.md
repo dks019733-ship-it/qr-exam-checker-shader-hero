@@ -20,19 +20,24 @@ Feature availability controls are managed by the LINE owner account. See [LINE f
 
 ## Private file storage
 
-Assignment attachments and student submissions use a private Cloudflare R2 bucket through short-lived S3-compatible signed URLs. The bucket must not be public.
+Assignment attachments and student submissions use a private Supabase Storage bucket. The application accesses Storage only from authenticated server routes using a server-side service-role key. The bucket must remain private; never expose the service-role key to the browser or commit it to Git.
 
-Configure these server-side environment variables in Vercel for the Production and Preview environments as appropriate:
+Create a bucket in the existing Supabase project:
+1. Open **Storage** in the Supabase Dashboard and create a bucket named `assignment-files`.
+2. Keep **Public bucket** disabled.
+3. Set the bucket file-size limit to 20 MiB (20,971,520 bytes).
+4. Restrict allowed MIME types to PDF, JPEG, PNG, WebP, DOC and DOCX.
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
+Configure these server-only environment variables in Vercel for Production and Preview as appropriate:
+
+- `SUPABASE_URL` — the project's API URL (for this project: `https://ihdlafuxdhynxrhlxplg.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY` — the project's service-role secret from Supabase Project Settings → API Keys
+- `SUPABASE_STORAGE_BUCKET` — `assignment-files`
 - `UPLOAD_MAX_BYTES` (optional; defaults to 20 MiB)
 
-Never add these credentials to client-side variables or commit real values to Git.
+Never prefix these variables with `NEXT_PUBLIC_`. The service-role key bypasses Storage RLS and must remain server-side. All upload, completion, and download routes must continue to enforce application-level teacher/student authorization before using it. The browser receives only a one-object signed upload URL; it never receives the service-role key. Signed upload URLs are valid for 2 hours per Supabase Storage's API. Signed download URLs expire after 3 minutes.
 
-Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Configure bucket CORS to allow `PUT` from the production app origin (`https://ngankhongkhru.vercel.app`) and any explicitly approved Preview origin, with the `Content-Type` and `If-None-Match` request headers. Upload signatures bind both headers and use `If-None-Match: *`, preventing a valid upload URL from overwriting an object that has already been created. Ensure the R2 API token can read, write and delete objects; rejected or uncommitted objects are deleted by the server-side completion endpoint. Do not enable public bucket access. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
+The Free plan currently includes 1 GB of Storage, 5 GB of egress and 5 GB of cached egress at no monthly subscription cost. These quotas are shared at the organization level. Free-plan quotas are limits, not unlimited storage; monitor usage and remove unneeded files through the application when appropriate. Do not upgrade the organization or enable paid add-ons under this project's no-cost requirement.
 
 ## Accepted files and optimization
 
@@ -53,4 +58,4 @@ The server checks declared MIME type, file extension, actual object size, stored
 - Teachers can return a submission for revision only with feedback. Students see the returned status and feedback. SYSTEM_UPLOAD students can upload corrected files; TEACHER_CHECK students bring corrected physical work back to the teacher. The next successful resubmission/receipt returns the state to SUBMITTED and clears the previous score and review feedback.
 - Automatic attendance is supported only for SYSTEM_UPLOAD assignments because the server can verify successful file completion. The UI hides this option for TEACHER_CHECK and Google Forms, and the API rejects unsupported modes.
 - If automatic attendance is enabled and the attendance feature is available, successful submission creates a PRESENT record only when no record exists for the linked session. Existing teacher decisions (PRESENT, ABSENT, LATE or LEAVE) are preserved.
-- Missing R2 environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
+- Missing Supabase Storage environment variables cause upload endpoints to return HTTP 503; a missing bucket or invalid service-role key is reported as a generic upload error and must be corrected in the Supabase setup. The rest of the application remains available.
