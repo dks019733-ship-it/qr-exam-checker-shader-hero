@@ -64,8 +64,19 @@ export async function GET() {
       // Gradebook scores are authoritative for completion: a teacher-entered score
       // completes a TEACHER_CHECK task, while Google Forms responses remain submitted.
       const hasGradebookScore = gradeScore !== null && gradeScore.score !== null;
-      const submission = storedSubmission ?? (
-        hasGradebookScore
+      const submission = storedSubmission
+        ? {
+            ...storedSubmission,
+            // Gradebook scores are authoritative for teacher-checked coursework,
+            // including submissions that were already recorded before grading.
+            // Preserve an explicit RETURNED state until the student resubmits.
+            status: assignment.mode === "TEACHER_CHECK" &&
+              storedSubmission.status === "SUBMITTED" &&
+              hasGradebookScore
+              ? "REVIEWED" as const
+              : storedSubmission.status,
+          }
+        : hasGradebookScore
           ? {
               id: null,
               status: assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" as const : "REVIEWED" as const,
@@ -74,8 +85,7 @@ export async function GET() {
               feedback: "",
               files: [],
             }
-          : null
-      );
+          : null;
       return {
         id: assignment.id,
         groupId: assignment.groupId,
