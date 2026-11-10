@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ช่องคะแนนนี้ไม่ได้เชื่อมกับ Google Form" }, { status: 404 });
   try {
-    const token = await getGoogleFormsAccessToken(session.user.id, "responses");
+    const token = await getGoogleFormsAccessToken(ownerId, "responses");
     const form = await googleFormsRequest<FormInfo>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}`);
     const items = form.items || [];
     // Forms API answers are keyed by questionId, while each form item has a separate itemId.
