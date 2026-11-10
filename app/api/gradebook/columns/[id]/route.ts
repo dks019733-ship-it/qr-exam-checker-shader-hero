@@ -28,7 +28,17 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const column = await prisma.gradeColumn.findFirst({
     where: { id, ownerId: ownerId },
-    select: { id: true, classId: true, assignmentId: true, teachingAssignmentId: true },
+    select: {
+      id: true,
+      ownerId: true,
+      classId: true,
+      assignmentId: true,
+      teachingAssignmentId: true,
+      examId: true,
+      googleFormId: true,
+      title: true,
+      maxScore: true,
+    },
   });
   if (!column) return NextResponse.json({ error: "ไม่พบช่องคะแนนหรือไม่มีสิทธิ์" }, { status: 404 });
 
@@ -69,24 +79,77 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
-      const savedColumn = await tx.gradeColumn.update({
-        where: { id: column.id },
-        data: { teachingAssignmentId },
-        select: { id: true, teachingAssignmentId: true },
-      });
-
       if (linkedAssignment) {
+        const savedColumn = await tx.gradeColumn.update({
+          where: { id: column.id },
+          data: { teachingAssignmentId },
+          select: { id: true, teachingAssignmentId: true, assignmentId: true },
+        });
         const synced = await tx.assignment.updateMany({
           where: { id: linkedAssignment.id, ownerId: ownerId },
           data: { teachingAssignmentId: teachingAssignmentId! },
         });
         if (synced.count !== 1) throw new Error("LINKED_ASSIGNMENT_NOT_UPDATED");
+        return savedColumn;
       }
 
-      return savedColumn;
+      // A legacy coursework column may have been created before it had a subject.
+      // When a teacher assigns its subject later, create and link the published task
+      // atomically instead of leaving the gradebook and assignment list out of sync.
+      if (!column.examId && teachingAssignmentId) {
+        const form = column.googleFormId
+          ? await tx.googleForm.findFirst({
+              where: { id: column.googleFormId, ownerId },
+              select: { responderUrl: true },
+            })
+          : null;
+        if (column.googleFormId && !form?.responderUrl) {
+          throw new Error("GOOGLE_FORM_RESPONDER_URL_MISSING");
+        }
+
+        const createdAssignment = await tx.assignment.create({
+          data: {
+            ownerId,
+            classId: column.classId,
+            teachingAssignmentId,
+            title: column.title,
+            description: column.googleFormId
+              ? "ทำแบบฝึกหัด/แบบทดสอบออนไลน์ผ่าน Google Forms"
+              : "งานเก็บคะแนนในชั้นเรียน",
+            mode: column.googleFormId ? "GOOGLE_FORM" : "TEACHER_CHECK",
+            status: "PUBLISHED",
+            googleFormUrl: column.googleFormId ? form!.responderUrl : null,
+            maxScore: column.maxScore,
+          },
+          select: { id: true },
+        });
+        const linked = await tx.gradeColumn.updateMany({
+          where: {
+            id: column.id,
+            ownerId,
+            assignmentId: null,
+            examId: null,
+          },
+          data: { teachingAssignmentId, assignmentId: createdAssignment.id },
+        });
+        if (linked.count !== 1) throw new Error("GRADE_COLUMN_LINK_CONFLICT");
+        return { id: column.id, teachingAssignmentId, assignmentId: createdAssignment.id };
+      }
+
+      return tx.gradeColumn.update({
+        where: { id: column.id },
+        data: { teachingAssignmentId },
+        select: { id: true, teachingAssignmentId: true, assignmentId: true },
+      });
     });
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof Error && error.message === "GOOGLE_FORM_RESPONDER_URL_MISSING") {
+      return NextResponse.json({ error: "ไม่พบลิงก์ Google Forms สำหรับสร้างงานให้นักเรียน" }, { status: 409 });
+    }
+    if (error instanceof Error && error.message === "GRADE_COLUMN_LINK_CONFLICT") {
+      return NextResponse.json({ error: "ช่องคะแนนนี้ถูกเชื่อมกับงานอื่นแล้ว กรุณาโหลดข้อมูลใหม่" }, { status: 409 });
+    }
     console.error("[Gradebook] update teaching assignment and linked task failed", error);
     return NextResponse.json({ error: "เปลี่ยนรายวิชาในสมุดออนไลน์และหน้ามอบหมายไม่สำเร็จ" }, { status: 500 });
   }
