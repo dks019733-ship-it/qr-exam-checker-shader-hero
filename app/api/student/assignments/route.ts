@@ -60,12 +60,14 @@ export async function GET() {
     assignments: assignments.map((assignment) => {
       const storedSubmission = assignment.submissions[0] ?? null;
       const gradeScore = assignment.gradeColumn?.scores[0] ?? null;
-      // Older Google Forms responses may already have a gradebook score but no Assignment submission row.
+      // Gradebook scores are authoritative for completion: a teacher-entered score
+      // completes a TEACHER_CHECK task, while Google Forms responses remain submitted.
+      const hasGradebookScore = gradeScore !== null && gradeScore.score !== null;
       const submission = storedSubmission ?? (
-        assignment.mode === "GOOGLE_FORM" && gradeScore
+        hasGradebookScore
           ? {
               id: null,
-              status: "SUBMITTED" as const,
+              status: (assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" : "REVIEWED") as const,
               submittedAt: gradeScore.updatedAt,
               score: gradeScore.score,
               feedback: "",
