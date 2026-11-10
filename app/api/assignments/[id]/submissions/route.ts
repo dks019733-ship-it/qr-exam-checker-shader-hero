@@ -69,19 +69,29 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     unreceivedStudents: students.filter((student) =>
       !receivedStudentIds.has(student.id) && gradeScoreByStudent.get(student.id)?.score == null
     ),
-    submissions: allSubmissions.map((item) => ({
-      id: item.id,
-      status: item.status,
-      submittedAt: item.submittedAt.toISOString(),
-      isLate: Boolean(assignment.dueAt && item.submittedAt > assignment.dueAt),
-      score: assignment.gradeColumn
-        ? (gradeScoreByStudent.get(item.student.id)?.score ?? null)
-        : item.score,
-      feedback: item.feedback,
-      reviewedAt: item.reviewedAt?.toISOString() ?? null,
-      student: item.student,
-      files: item.files,
-    })),
+    submissions: allSubmissions.map((item) => {
+      const gradeScore = gradeScoreByStudent.get(item.student.id);
+      // A grade entered in the authoritative gradebook completes a teacher-check
+      // task even when a submission row already existed before the score was entered.
+      // Explicitly returned work remains returned until the student resubmits.
+      const status = assignment.mode === "TEACHER_CHECK" &&
+        item.status === "SUBMITTED" &&
+        gradeScore?.score !== null &&
+        gradeScore?.score !== undefined
+        ? "REVIEWED"
+        : item.status;
+      return {
+        id: item.id,
+        status,
+        submittedAt: item.submittedAt.toISOString(),
+        isLate: Boolean(assignment.dueAt && item.submittedAt > assignment.dueAt),
+        score: assignment.gradeColumn ? (gradeScore?.score ?? null) : item.score,
+        feedback: item.feedback,
+        reviewedAt: item.reviewedAt?.toISOString() ?? null,
+        student: item.student,
+        files: item.files,
+      };
+    }),
   });
 }
 
