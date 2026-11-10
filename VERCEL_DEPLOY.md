@@ -15,9 +15,9 @@
 7. SQL hardening migrations ใน `prisma/migrations` ต้อง Apply ผ่าน Supabase migration workflow แยกจาก `prisma db push` เพราะ `db push` ไม่ได้รันไฟล์ migration SQL
 8. ฐานข้อมูลปัจจุบันยังไม่มี Prisma migration history table (`_prisma_migrations`) จึงห้ามสั่ง `prisma migrate deploy` จนกว่าจะทำ baseline migration history อย่างถูกต้อง
 9. Deploy หลังจากฐานข้อมูลพร้อมแล้วเท่านั้น ระบบจะไม่รัน DDL/แก้ Schema อัตโนมัติบน Request ของ Production เพื่อป้องกัน Cold-start connection spikes และ lock contention
-8. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
-9. ทดสอบ Google Login
-10. ทดสอบสร้างห้องเรียน/นักเรียน, บันทึกกระดาษคำตอบ และทดสอบอัปโหลดไฟล์จริง
+10. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
+11. ทดสอบ Google Login
+12. ทดสอบสร้างห้องเรียน/นักเรียน, บันทึกกระดาษคำตอบ และทดสอบอัปโหลดไฟล์จริง
 
 ## ห้ามทำ
 
@@ -33,4 +33,4 @@
 - Manual Review และการยืนยันคะแนน
 - Excel/PDF report export
 - Backup และ recovery workflow
-- Security hardening และ production test suite
+- End-to-end production test suite สำหรับครู/นักเรียน, upload, Google Forms และ recovery
