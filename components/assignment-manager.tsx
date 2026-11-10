@@ -40,8 +40,14 @@ type AssignmentRow = {
   status: "DRAFT" | "PUBLISHED" | "CLOSED";
   classroom: { name: string };
   teachingAssignment: { subject: { code: string; name: string } };
+  files?: { fileName: string; contentType: string; sizeBytes: number }[];
   _count: { submissions: number };
   gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
+};
+type PendingAssignmentGroup = {
+  groupId: string;
+  mode: AssignmentRow["mode"];
+  assignments: { id: string }[];
 };
 
 const fieldClass =
@@ -51,6 +57,7 @@ const labelClass = "mb-2.5 block pl-1 text-[10px] font-black uppercase tracking-
 export function AssignmentManager() {
   const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [pendingGroup, setPendingGroup] = useState<PendingAssignmentGroup | null>(null);
   const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
   const [targetTeachingAssignmentIds, setTargetTeachingAssignmentIds] = useState<string[]>([]);
   const [gradeColumns, setGradeColumns] = useState<GradeColumnOption[]>([]);
@@ -141,9 +148,16 @@ export function AssignmentManager() {
     return data.session.id as string;
   }
 
-  async function uploadTeacherFiles(assignmentId: string) {
+  async function uploadTeacherFiles(
+    assignmentId: string,
+    existingFiles: { fileName: string; contentType: string; sizeBytes: number }[] = [],
+  ) {
+    const uploaded = new Set(existingFiles.map((file) => [file.fileName, file.contentType, file.sizeBytes].join(":")));
     for (const originalFile of files) {
       const file = await compressImageBalanced(originalFile);
+      const signature = [file.name, file.type, file.size].join(":");
+      if (uploaded.has(signature)) continue;
+
       const presignResponse = await fetch("/api/files/presign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,6 +174,7 @@ export function AssignmentManager() {
       });
       const complete = await completeResponse.json();
       if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์แนบไม่สำเร็จ");
+      uploaded.add(signature);
     }
   }
 
@@ -168,48 +183,71 @@ export function AssignmentManager() {
     setSaving(true);
     setError("");
     setNotice("");
+    let recoveryGroup = pendingGroup;
     try {
-      if (!teachingAssignmentId) throw new Error("ยังไม่มีรายวิชาที่ผูกกับห้องเรียน");
-      if (!gradeColumnId || !selectedGradeColumn) throw new Error("กรุณาเลือกชื่องานจากสมุดออนไลน์ก่อน");
-      if (mode === "SYSTEM_UPLOAD" && files.length === 0) throw new Error("งานแบบส่งในระบบต้องแนบไฟล์คำสั่งงานอย่างน้อย 1 ไฟล์");
-      const targetIds = Array.from(new Set([teachingAssignmentId, ...targetTeachingAssignmentIds]));
-      const linkedSessionId = await resolveAttendanceSession();
-      const response = await fetch("/api/assignments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teachingAssignmentId,
-          targetTeachingAssignmentIds: targetIds,
-          gradeColumnId,
-          description,
+      if (!recoveryGroup) {
+        if (!teachingAssignmentId) throw new Error("ยังไม่มีรายวิชาที่ผูกกับห้องเรียน");
+        if (!gradeColumnId || !selectedGradeColumn) throw new Error("กรุณาเลือกชื่องานจากสมุดออนไลน์ก่อน");
+        if (mode === "SYSTEM_UPLOAD" && files.length === 0) throw new Error("งานแบบส่งในระบบต้องแนบไฟล์คำสั่งงานอย่างน้อย 1 ไฟล์");
+
+        const targetIds = Array.from(new Set([teachingAssignmentId, ...targetTeachingAssignmentIds]));
+        const linkedSessionId = await resolveAttendanceSession();
+        const response = await fetch("/api/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teachingAssignmentId,
+            targetTeachingAssignmentIds: targetIds,
+            gradeColumnId,
+            description,
+            mode,
+            status: "DRAFT",
+            googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
+            dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+            autoMarkAttendance,
+            attendanceSessionId: linkedSessionId,
+            attendanceDate: autoMarkAttendance ? attendanceDate : "",
+          }),
+        });
+        const created = await response.json();
+        if (!response.ok) throw new Error(created.error || "สร้างงานไม่สำเร็จ");
+        if (!created.groupId || !Array.isArray(created.assignments) || created.assignments.length !== targetIds.length) {
+          throw new Error("ระบบสร้างกลุ่มงานไม่สมบูรณ์ กรุณารีเฟรชก่อนลองใหม่");
+        }
+        recoveryGroup = {
+          groupId: created.groupId,
           mode,
-          status: "DRAFT",
-          googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
-          dueAt: dueAt ? new Date(dueAt).toISOString() : null,
-          autoMarkAttendance,
-          attendanceSessionId: linkedSessionId,
-          attendanceDate: autoMarkAttendance ? attendanceDate : "",
-        }),
-      });
-      const created = await response.json();
-      if (!response.ok) throw new Error(created.error || "สร้างงานไม่สำเร็จ");
-      if (!created.groupId || !Array.isArray(created.assignments) || created.assignments.length !== targetIds.length) {
-        throw new Error("ระบบสร้างกลุ่มงานไม่สมบูรณ์ กรุณารีเฟรชก่อนลองใหม่");
+          assignments: created.assignments.map((target: { id: string }) => ({ id: target.id })),
+        };
+        setPendingGroup(recoveryGroup);
       }
 
-      if (files.length) {
-        for (const target of created.assignments) {
-          await uploadTeacherFiles(target.id);
+      if (recoveryGroup.mode === "SYSTEM_UPLOAD") {
+        if (files.length === 0) throw new Error("เลือกไฟล์คำสั่งงานเดิมอีกครั้งเพื่อทำรายการที่ค้างต่อ");
+        const assignmentResponse = await fetch("/api/assignments", { cache: "no-store" });
+        const currentAssignments = await assignmentResponse.json();
+        if (!assignmentResponse.ok || !Array.isArray(currentAssignments)) {
+          throw new Error("ตรวจสอบไฟล์ที่อัปโหลดไปแล้วไม่สำเร็จ กรุณาลองใหม่");
+        }
+        const filesByAssignment = new Map<string, { fileName: string; contentType: string; sizeBytes: number }[]>(
+          currentAssignments.map((item: AssignmentRow) => [item.id, item.files || []]),
+        );
+        for (const target of recoveryGroup.assignments) {
+          const existingFiles = filesByAssignment.get(target.id);
+          if (!existingFiles) throw new Error("ไม่พบงานฉบับร่างที่กำลังทำต่อ กรุณารีเฟรชรายการงาน");
+          await uploadTeacherFiles(target.id, existingFiles);
         }
       }
+
       const publishResponse = await fetch("/api/assignments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId: created.groupId, status: "PUBLISHED" }),
+        body: JSON.stringify({ groupId: recoveryGroup.groupId, status: "PUBLISHED" }),
       });
       const published = await publishResponse.json();
       if (!publishResponse.ok) throw new Error(published.error || "สร้างงานแล้ว แต่เผยแพร่ทั้งชุดไม่สำเร็จ งานยังเป็นฉบับร่าง");
 
+      setPendingGroup(null);
       setGradeColumnId("");
       setTargetTeachingAssignmentIds([teachingAssignmentId]);
       setDescription("");
@@ -219,10 +257,14 @@ export function AssignmentManager() {
       setAutoMarkAttendance(false);
       setAttendanceDate("");
       setAttendanceSessionId("");
-      setNotice(`เผยแพร่งานชุดเดียวให้นักเรียน ${created.assignments.length} ห้องเรียนเรียบร้อยแล้ว`);
+      setNotice("เผยแพร่งานชุดเดียวให้นักเรียน " + recoveryGroup.assignments.length + " ห้องเรียนเรียบร้อยแล้ว");
       await refresh();
       setGradeColumnsVersion((current) => current + 1);
     } catch (err) {
+      if (recoveryGroup) {
+        setPendingGroup(recoveryGroup);
+        await refresh();
+      }
       setError(err instanceof Error ? err.message : "สร้างงานไม่สำเร็จ");
     } finally {
       setSaving(false);
@@ -300,10 +342,10 @@ export function AssignmentManager() {
               <div className="space-y-3 rounded-[1.5rem] border border-[#EAE8E3] bg-[#F9F9F8] p-4 sm:p-5">
                 <div>
                   <span className={labelClass}>ห้องเรียนที่ได้รับมอบหมาย</span>
-                  <p className="text-xs leading-5 text-[#666666]">เลือกหลายห้องได้ งานจะแสดงเป็นรายการเดียวในหน้าครู โดยแต่ละห้องยังมีคะแนนและการส่งงานแยกกัน ห้องอื่นต้องมีช่องคะแนนที่ชื่อ ช่วงคะแนน และคะแนนเต็มตรงกับงานที่เลือก</p>
+                  <p className="text-xs leading-5 text-[#666666]">เลือกหลายห้องในรายวิชาเดียวกันได้ งานจะแสดงเป็นรายการเดียวในหน้าครู โดยแต่ละห้องยังมีคะแนนและการส่งงานแยกกัน ห้องอื่นต้องมีช่องคะแนนที่ชื่อ ช่วงคะแนน และคะแนนเต็มตรงกับงานที่เลือก</p>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {teachingAssignments.map((course) => {
+                  {teachingAssignments.filter((course) => !selectedCourse || course.subject.id === selectedCourse.subject.id).map((course) => {
                     const checked = course.id === teachingAssignmentId || targetTeachingAssignmentIds.includes(course.id);
                     return (
                       <label key={course.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition ${checked ? "border-[#A7F3D0] bg-[#F0FDF4]" : "border-[#EAE8E3] bg-white hover:border-[#D1CDC4]"}`}>
@@ -390,12 +432,13 @@ export function AssignmentManager() {
                 </div>
               )}
 
+              {pendingGroup && <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold leading-5 text-amber-900">กำลังทำงานฉบับร่างที่สร้างไว้ต่อ ระบบจะไม่สร้างงานหรือเชื่อมช่องคะแนนซ้ำ หากเป็นงานส่งไฟล์ ให้เลือกไฟล์คำสั่งงานชุดเดิมอีกครั้งเพื่อข้ามไฟล์ที่บันทึกแล้วและทำต่อ</p>}
               {error && <div role="alert" className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
               {notice && <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800">{notice}</p>}
 
               <div className="border-t border-[#EAE8E3] pt-5">
-                <button type="submit" disabled={saving || !selectedCourse || !selectedGradeColumn || gradeColumnsLoading} className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[1.25rem] border border-[#A7F3D0] bg-[#E5F3EB] px-5 py-4 text-sm font-black tracking-wide text-[#166534] transition hover:border-[#86EFAC] hover:bg-[#D1FAE5] hover:shadow-[0_15px_40px_rgba(22,101,52,0.12)] disabled:cursor-not-allowed disabled:opacity-50">
-                  <Sparkles className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "มอบหมายงานให้นักเรียน"}
+                <button type="submit" disabled={saving || (!pendingGroup && (!selectedCourse || !selectedGradeColumn)) || gradeColumnsLoading} className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[1.25rem] border border-[#A7F3D0] bg-[#E5F3EB] px-5 py-4 text-sm font-black tracking-wide text-[#166534] transition hover:border-[#86EFAC] hover:bg-[#D1FAE5] hover:shadow-[0_15px_40px_rgba(22,101,52,0.12)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <Sparkles className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : pendingGroup ? "ดำเนินการต่อและเผยแพร่" : "มอบหมายงานให้นักเรียน"}
                 </button>
               </div>
             </form>
@@ -449,6 +492,21 @@ export function AssignmentManager() {
                               {entry.classroom.name} · ดู/ตรวจงาน
                             </Link>
                           ))}
+                          {item.groupId && group.every((entry) => entry.status === "DRAFT") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingGroup({ groupId: item.groupId!, mode: item.mode, assignments: group.map((entry) => ({ id: entry.id })) });
+                                setMode(item.mode);
+                                setFiles([]);
+                                setError("");
+                                setNotice(item.mode === "SYSTEM_UPLOAD" ? "เลือกไฟล์คำสั่งงานชุดเดิมเพื่อดำเนินการต่อ" : "กดดำเนินการต่อเพื่อเผยแพร่งานชุดนี้");
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100"
+                            >
+                              {item.mode === "SYSTEM_UPLOAD" ? "แนบไฟล์ต่อ / เผยแพร่" : "เผยแพร่งานต่อ"}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-5 sm:justify-end">
