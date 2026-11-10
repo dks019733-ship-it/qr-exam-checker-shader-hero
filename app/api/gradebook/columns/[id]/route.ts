@@ -11,7 +11,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const ownerId = ownerId;
+  const ownerId = session.user.id;
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
