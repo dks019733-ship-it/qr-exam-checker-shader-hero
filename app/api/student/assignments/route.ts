@@ -33,6 +33,7 @@ export async function GET() {
         select: {
           id: true,
           title: true,
+          period: true,
           maxScore: true,
           scores: {
             where: { studentId: student.id },
@@ -79,6 +80,7 @@ export async function GET() {
         id: assignment.id,
         groupId: assignment.groupId,
         gradeColumnId: assignment.gradeColumn?.id ?? null,
+        period: assignment.gradeColumn?.period ?? null,
         title: assignment.gradeColumn?.title ?? assignment.title,
         description: assignment.description,
         mode: assignment.mode,
