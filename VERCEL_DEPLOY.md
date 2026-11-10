@@ -10,7 +10,7 @@
 5. เพิ่ม Environment Variables ตาม `.env.example`
    - เพิ่ม `GEMINI_API_KEY` และ `GEMINI_MODEL=gemini-3.5-flash-lite` สำหรับผู้ช่วย AI
    - ถ้าใช้ Supabase ให้ตั้ง `DATABASE_URL` เป็น Transaction pooler (port 6543, `pgbouncer=true`, `connection_limit=1`) และ `DIRECT_URL` เป็น Session pooler (port 5432)
-   - ตั้งค่า Supabase Storage ให้ครบ `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` หากต้องการเปิดใช้งานไฟล์แนบ/ไฟล์ส่งงาน
+   - ตั้ง `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Sensitive/Secret) และ `SUPABASE_STORAGE_BUCKET=assignment-files` สำหรับไฟล์แนบ/ไฟล์ส่งงาน โดยใช้ private bucket ที่มีอยู่แล้ว
 6. ก่อน Deploy ให้ตรวจ Schema diff แล้วใช้ `npx prisma db push` กับฐานข้อมูล production ผ่าน `DIRECT_URL` เพื่อให้ Schema ตรงกับ `prisma/schema.prisma` (ห้ามใช้ `--accept-data-loss` โดยไม่ตรวจสอบผลกระทบก่อน)
 7. SQL hardening migrations ใน `prisma/migrations` ต้อง Apply ผ่าน Supabase migration workflow แยกจาก `prisma db push` เพราะ `db push` ไม่ได้รันไฟล์ migration SQL
 8. ฐานข้อมูลปัจจุบันยังไม่มี Prisma migration history table (`_prisma_migrations`) จึงห้ามสั่ง `prisma migrate deploy` จนกว่าจะทำ baseline migration history อย่างถูกต้อง
