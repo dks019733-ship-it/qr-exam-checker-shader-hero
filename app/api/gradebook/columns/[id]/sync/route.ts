@@ -65,8 +65,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       const question = item.questionItem?.question;
       return question?.questionId && Number(question.grading?.pointValue || 0) > 0 ? [question.questionId] : [];
     });
-    // Keep the displayed full score aligned with the actual quiz before storing raw responses.
-    if (maxFormScore > 0) await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+    // The gradebook owns the full score. Keep the linked assignment's denormalized
+    // maxScore aligned in the same transaction so no view can read a stale limit.
+    if (maxFormScore > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+        if (column.assignment?.id) {
+          await tx.assignment.updateMany({
+            where: { id: column.assignment.id, ownerId: session.user.id },
+            data: { maxScore: maxFormScore },
+          });
+        }
+      });
+    }
     const [students, classrooms, savedReviews] = await Promise.all([
       prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
       prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true } }),
