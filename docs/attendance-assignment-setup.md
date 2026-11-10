@@ -20,19 +20,24 @@ Feature availability controls are managed by the LINE owner account. See [LINE f
 
 ## Private file storage
 
-Assignment attachments and student submissions use a private Cloudflare R2 bucket through short-lived S3-compatible signed URLs. The bucket must not be public.
+Assignment attachments and student submissions use a private Supabase Storage bucket. The application accesses Storage only from authenticated server routes using a server-side service-role key. The bucket must remain private; never expose the service-role key to the browser or commit it to Git.
 
-Configure these server-side environment variables in Vercel for the Production and Preview environments as appropriate:
+Create a bucket in the existing Supabase project:
+1. Open **Storage** in the Supabase Dashboard and create a bucket named `assignment-files`.
+2. Keep **Public bucket** disabled.
+3. Set the bucket file-size limit to 20 MiB (20,971,520 bytes).
+4. Restrict allowed MIME types to PDF, JPEG, PNG, WebP, DOC and DOCX.
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
+Configure these server-only environment variables in Vercel for Production and Preview as appropriate:
+
+- `SUPABASE_URL` — the project's API URL (for this project: `https://ihdlafuxdhynxrhlxplg.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY` — the project's service-role secret from Supabase Project Settings → API Keys
+- `SUPABASE_STORAGE_BUCKET` — `assignment-files`
 - `UPLOAD_MAX_BYTES` (optional; defaults to 20 MiB)
 
-Never add these credentials to client-side variables or commit real values to Git.
+Never prefix these variables with `NEXT_PUBLIC_`. The service-role key bypasses Storage RLS and must remain server-side. All upload, completion, and download routes must continue to enforce application-level teacher/student authorization before using it. The browser receives only a one-object signed upload URL; it never receives the service-role key. Signed upload URLs are valid for 2 hours per Supabase Storage's API. Signed download URLs expire after 3 minutes.
 
-Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Configure bucket CORS to allow `PUT` from the production app origin (`https://ngankhongkhru.vercel.app`) and any explicitly approved Preview origin, with the `Content-Type` and `If-None-Match` request headers. Upload signatures bind both headers and use `If-None-Match: *`, preventing a valid upload URL from overwriting an object that has already been created. Ensure the R2 API token can read, write and delete objects; rejected or uncommitted objects are deleted by the server-side completion endpoint. Do not enable public bucket access. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
+The Free plan currently includes 1 GB of Storage and 5 GB of egress at no monthly subscription cost. Free-plan quotas are limits, not unlimited storage; monitor usage and remove unneeded files through the application when appropriate. Do not upgrade the organization or enable paid add-ons under this project's no-cost requirement.
 
 ## Accepted files and optimization
 
