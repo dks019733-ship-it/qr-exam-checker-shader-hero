@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await prisma.$queryRaw\`SELECT 1\`;
+    await prisma.$queryRawUnsafe("SELECT 1");
     return NextResponse.json(
       {
         ok: true,
