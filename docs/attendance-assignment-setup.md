@@ -20,19 +20,16 @@ Feature availability controls are managed by the LINE owner account. See [LINE f
 
 ## Private file storage
 
-Assignment attachments and student submissions use a private Cloudflare R2 bucket through short-lived S3-compatible signed URLs. The bucket must not be public.
+Assignment attachments and student submissions use the existing private Supabase Storage bucket named `assignment-files`. The application creates short-lived signed upload URLs and signed download URLs on the server. The service-role key is never sent to the browser; all teacher/student authorization checks remain in the application API.
 
-Configure these server-side environment variables in Vercel for the Production and Preview environments as appropriate:
+Configure these server-side Vercel environment variables for Preview and Production:
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-- `UPLOAD_MAX_BYTES` (optional; defaults to 20 MiB)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (sensitive/secret; server-only)
+- `SUPABASE_STORAGE_BUCKET=assignment-files`
+- `UPLOAD_MAX_BYTES=10485760` (10 MiB; must not exceed the bucket's configured limit)
 
-Never add these credentials to client-side variables or commit real values to Git.
-
-Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Configure bucket CORS to allow `PUT` from the production app origin (`https://ngankhongkhru.vercel.app`) and any explicitly approved Preview origin, with the `Content-Type` and `If-None-Match` request headers. Upload signatures bind both headers and use `If-None-Match: *`, preventing a valid upload URL from overwriting an object that has already been created. Ensure the R2 API token can read, write and delete objects; rejected or uncommitted objects are deleted by the server-side completion endpoint. Do not enable public bucket access. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
+The bucket must remain private. Do not expose the service-role key through a `NEXT_PUBLIC_` variable, client code, logs, or API responses. Upload URLs are issued for a unique object path and are valid for up to two hours; download URLs expire after three minutes. The server verifies object size, content type and file signature before writing file metadata to PostgreSQL. Rejected or uncommitted objects are deleted server-side.
 
 ## Accepted files and optimization
 
