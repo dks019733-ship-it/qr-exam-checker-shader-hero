@@ -97,7 +97,7 @@ export function Gradebook() {
       if (!response.ok) throw new Error(body?.error || "เพิ่มช่องคะแนนไม่สำเร็จ");
       setShowAdd(false); setTitle(""); setSourceId("");
       setSubjectFilter(teachingAssignmentId || "all");
-      let notice = "เพิ่มช่องคะแนนแล้ว";
+      let notice = body.taskSynced ? "เพิ่มงานในสมุดออนไลน์และซิงก์ไปหน้ามอบหมาย/นักเรียนแล้ว" : sourceType === "exam" ? "บันทึกช่องคะแนนข้อสอบแล้ว (ข้อสอบไม่แสดงเป็นงานค้าง)" : "เพิ่มช่องคะแนนแล้ว";
       if (sourceType === "google_form") {
         const sync = await fetch(`/api/gradebook/columns/${body.id}/sync`, { method: "POST" });
         const result = await sync.json().catch(() => null);
