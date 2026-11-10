@@ -3,6 +3,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isObjectStorageConfigured } from "@/lib/object-storage";
 
 const MODES = new Set(["TEACHER_CHECK", "SYSTEM_UPLOAD", "GOOGLE_FORM"]);
 
@@ -79,6 +80,12 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "งานแบบส่งไฟล์ต้องสร้างเป็นฉบับร่าง แนบไฟล์คำสั่งงาน แล้วจึงเผยแพร่" },
       { status: 400 },
+    );
+  }
+  if (mode === "SYSTEM_UPLOAD" && !isObjectStorageConfigured()) {
+    return NextResponse.json(
+      { error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแลระบบก่อนสร้างงานแบบส่งไฟล์" },
+      { status: 503 },
     );
   }
   if (mode === "GOOGLE_FORM" && !isAllowedGoogleFormUrl(googleFormUrl)) {
