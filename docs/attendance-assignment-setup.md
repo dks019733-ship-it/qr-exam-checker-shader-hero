@@ -36,7 +36,7 @@ Create an R2 API token scoped to the required bucket with object read/write acce
 
 ## Accepted files and optimization
 
-Accepted formats: PDF, JPEG, PNG, WebP, DOC and DOCX. The default maximum is 20 MiB per file and can be adjusted with `UPLOAD_MAX_BYTES`.
+Accepted formats: PDF, JPEG, PNG, WebP, DOC and DOCX. The maximum is 10 MiB per file, matching the existing bucket limit. `UPLOAD_MAX_BYTES` may lower this limit but cannot raise it above 10 MiB.
 
 Images are resized to a maximum edge of 2200 px and encoded as WebP at balanced quality when the result is smaller. The original file is retained when compression fails or would increase file size. PDF and Office documents are uploaded unchanged to avoid corrupting or altering source documents.
 
@@ -53,4 +53,4 @@ The server checks declared MIME type, file extension, actual object size, stored
 - Teachers can return a submission for revision only with feedback. Students see the returned status and feedback. SYSTEM_UPLOAD students can upload corrected files; TEACHER_CHECK students bring corrected physical work back to the teacher. The next successful resubmission/receipt returns the state to SUBMITTED and clears the previous score and review feedback.
 - Automatic attendance is supported only for SYSTEM_UPLOAD assignments because the server can verify successful file completion. The UI hides this option for TEACHER_CHECK and Google Forms, and the API rejects unsupported modes.
 - If automatic attendance is enabled and the attendance feature is available, successful submission creates a PRESENT record only when no record exists for the linked session. Existing teacher decisions (PRESENT, ABSENT, LATE or LEAVE) are preserved.
-- Missing R2 environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
+- Missing Supabase Storage environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
