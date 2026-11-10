@@ -33,6 +33,33 @@ export async function PATCH(
     }
   }
 
+  if (status === "PUBLISHED" && assignment.groupId) {
+    const group = await prisma.assignment.findMany({
+      where: { groupId: assignment.groupId, ownerId: session.user.id },
+      include: { _count: { select: { files: true } } },
+    });
+    const invalid = group.find((item) =>
+      (item.mode === "GOOGLE_FORM" && !item.googleFormUrl) ||
+      (item.mode === "SYSTEM_UPLOAD" && item._count.files === 0)
+    );
+    if (invalid) {
+      return NextResponse.json({ error: `งานในห้อง ${invalid.classId} ยังตั้งค่าไม่ครบ จึงเผยแพร่ทั้งชุดไม่ได้` }, { status: 400 });
+    }
+    await prisma.assignment.updateMany({
+      where: { groupId: assignment.groupId, ownerId: session.user.id },
+      data: { status },
+    });
+    return NextResponse.json({ id: assignment.id, groupId: assignment.groupId, status });
+  }
+
+  if (assignment.groupId) {
+    await prisma.assignment.updateMany({
+      where: { groupId: assignment.groupId, ownerId: session.user.id },
+      data: { status },
+    });
+    return NextResponse.json({ id: assignment.id, groupId: assignment.groupId, status });
+  }
+
   const updated = await prisma.assignment.update({
     where: { id: assignment.id },
     data: { status },
