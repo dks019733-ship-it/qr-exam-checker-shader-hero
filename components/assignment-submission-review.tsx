@@ -32,6 +32,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
   const [unreceived, setUnreceived] = useState<UnreceivedStudent[]>([]);
   const [mode, setMode] = useState("");
   const [drafts, setDrafts] = useState<Record<string, { feedback: string }>>({});
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
@@ -54,6 +55,10 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       setDrafts(Object.fromEntries(data.submissions.map((item: Submission) => [item.id, {
         feedback: item.feedback || "",
       }])));
+      setScoreDrafts(Object.fromEntries(data.submissions.map((item: Submission) => [
+        item.student.id,
+        item.score === null || item.score === undefined ? "" : String(item.score),
+      ])));
 
       const gradebookResponse = await fetch(
         "/api/gradebook?classId=" + encodeURIComponent(data.assignment.classId),
@@ -100,6 +105,36 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  async function saveStudentScore(studentId: string, studentName: string, rawScore: string) {
+    if (!gradebook) {
+      setError("กรุณาเชื่อมงานกับช่องคะแนนในสมุดออนไลน์ก่อน");
+      return;
+    }
+    const score = rawScore.trim() === "" ? null : Number(rawScore);
+    if (score !== null && (!Number.isFinite(score) || score < 0 || score > gradebook.maxScore)) {
+      setError("คะแนนต้องอยู่ระหว่าง 0 ถึง " + gradebook.maxScore);
+      return;
+    }
+    setSavingId("score:" + studentId);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/assignments/" + assignmentId + "/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId, score }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "บันทึกคะแนนไม่สำเร็จ");
+      setNotice("บันทึกคะแนนของ " + studentName + " ลงสมุดออนไลน์แล้ว");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "บันทึกคะแนนไม่สำเร็จ");
     } finally {
       setSavingId("");
     }
@@ -189,15 +224,21 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {unreceived.map((student) => (
                 <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl border border-[#edf0e9] px-3 py-2">
-                  <div className="min-w-0"><p className="truncate text-xs font-semibold">{student.name}</p><p className="text-[11px] text-[#788174]">เลขที่ {student.rollNo || "—"} · {student.studentNo}</p></div>
-                  <button type="button" onClick={async () => {
-                    const response = await fetch("/api/assignments/" + assignmentId + "/submissions", {
-                      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: student.id }),
-                    });
-                    const data = await response.json();
-                    if (!response.ok) setError(data.error || "บันทึกการรับงานไม่สำเร็จ");
-                    else { setNotice("บันทึกการรับงานของ " + student.name + " แล้ว"); await load(); }
-                  }} className="shrink-0 rounded-lg bg-[#4d5f4a] px-3 py-2 text-[11px] font-bold text-white hover:bg-[#374535]">รับงานแล้ว</button>
+                  <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{student.name}</p><p className="text-[11px] text-[#788174]">เลขที่ {student.rollNo || "—"} · {student.studentNo}</p></div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {gradebook && <>
+                      <input aria-label={"คะแนนของ " + student.name} type="number" min="0" max={gradebook.maxScore} step="0.01" value={scoreDrafts[student.id] ?? ""} onChange={(event) => setScoreDrafts((current) => ({ ...current, [student.id]: event.target.value }))} placeholder={"/ " + gradebook.maxScore} className="min-h-9 w-24 rounded-lg border border-[#dfe4d8] px-2 text-center text-xs" />
+                      <button type="button" disabled={savingId === "score:" + student.id || !String(scoreDrafts[student.id] ?? "").trim()} onClick={() => void saveStudentScore(student.id, student.name, scoreDrafts[student.id] ?? "")} className="rounded-lg border border-[#dfe4d8] bg-white px-3 py-2 text-[11px] font-bold text-[#4d5f4a] disabled:opacity-50">{savingId === "score:" + student.id ? "กำลังบันทึก" : "บันทึกคะแนน"}</button>
+                    </>}
+                    <button type="button" onClick={async () => {
+                      const response = await fetch("/api/assignments/" + assignmentId + "/submissions", {
+                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentId: student.id }),
+                      });
+                      const data = await response.json();
+                      if (!response.ok) setError(data.error || "บันทึกการรับงานไม่สำเร็จ");
+                      else { setNotice("บันทึกการรับงานของ " + student.name + " แล้ว"); await load(); }
+                    }} className="rounded-lg bg-[#4d5f4a] px-3 py-2 text-[11px] font-bold text-white hover:bg-[#374535]">รับงานแล้ว</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -207,7 +248,7 @@ export function AssignmentSubmissionReview({ assignmentId }: { assignmentId: str
         <section className="overflow-hidden rounded-2xl border border-[#e6e8df] bg-white shadow-sm">
           {loading ? <p className="p-12 text-center text-sm text-[#788174]">กำลังโหลดรายการส่งงาน...</p> : submissions.length === 0 ? <p className="p-12 text-center text-sm text-[#788174]">ยังไม่มีนักเรียนส่งงาน</p> : <div className="divide-y divide-[#edf0e9]">{submissions.map((item) => <article key={item.id} className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-              <div><p className="text-sm font-bold">{item.student.name}</p><p className="mt-1 text-xs text-[#788174]">เลขที่ {item.student.rollNo || "—"} · รหัส {item.student.studentNo}</p><p className="mt-1 text-xs text-[#788174]">ส่งเมื่อ {new Date(item.submittedAt).toLocaleString("th-TH")} {item.isLate && <span className="font-bold text-rose-700">· ส่งล่าช้า</span>}</p>{gradebook && <p className="mt-2 text-xs font-semibold text-[#4d5f4a]">คะแนนในสมุดออนไลน์: {item.score === null ? "—" : String(item.score) + "/" + String(gradebook.maxScore)}</p>}</div>
+              <div><p className="text-sm font-bold">{item.student.name}</p><p className="mt-1 text-xs text-[#788174]">เลขที่ {item.student.rollNo || "—"} · รหัส {item.student.studentNo}</p><p className="mt-1 text-xs text-[#788174]">ส่งเมื่อ {new Date(item.submittedAt).toLocaleString("th-TH")} {item.isLate && <span className="font-bold text-rose-700">· ส่งล่าช้า</span>}</p>{gradebook && <div className="mt-2 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-[#4d5f4a]">คะแนนในสมุดออนไลน์: {item.score === null ? "ยังไม่มีคะแนน" : String(item.score) + "/" + String(gradebook.maxScore)}</span><input aria-label={"แก้คะแนน " + item.student.name} type="number" min="0" max={gradebook.maxScore} step="0.01" value={scoreDrafts[item.student.id] ?? (item.score === null ? "" : String(item.score))} onChange={(event) => setScoreDrafts((current) => ({ ...current, [item.student.id]: event.target.value }))} placeholder={"/ " + gradebook.maxScore} className="min-h-9 w-24 rounded-lg border border-[#dfe4d8] px-2 text-center text-xs" /><button type="button" disabled={savingId === "score:" + item.student.id} onClick={() => void saveStudentScore(item.student.id, item.student.name, scoreDrafts[item.student.id] ?? (item.score === null ? "" : String(item.score)))} className="rounded-lg border border-[#dfe4d8] bg-white px-3 py-2 text-[11px] font-bold text-[#4d5f4a] disabled:opacity-50">{savingId === "score:" + item.student.id ? "กำลังบันทึก" : "บันทึกคะแนน"}</button></div>}</div>
               <span className="w-fit rounded-lg bg-[#f0f3eb] px-2.5 py-1 text-xs font-semibold text-[#4d5f4a]">{item.status === "REVIEWED" ? "ตรวจแล้ว" : item.status === "RETURNED" ? "ส่งกลับแก้ไข" : "รอตรวจ"}</span>
             </div>
             {item.files.length > 0 && <div className="flex flex-wrap gap-2">{item.files.map((file) => <button key={file.id} type="button" onClick={() => openFile(file.id)} className="inline-flex items-center gap-2 rounded-lg border border-[#dfe4d8] px-3 py-2 text-xs font-semibold text-[#4d5f4a] hover:bg-[#f8f9f6]"><Download className="h-3.5 w-3.5" />{file.fileName}</button>)}</div>}
