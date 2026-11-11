@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const unavailable = await featureAvailabilityResponse("assignments");
@@ -39,10 +40,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         })
       : Promise.resolve([]),
   ]);
-  students.sort((a, b) =>
-    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
-    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true }),
-  );
+  students.sort(compareByRollNo);
   const gradeScoreByStudent = new Map(gradeScores.map((item) => [item.studentId, item]));
   const receivedStudentIds = new Set(submissions.map((item) => item.studentId));
 
