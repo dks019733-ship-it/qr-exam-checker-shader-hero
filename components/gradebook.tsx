@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
+import { compareByRollNo } from "@/lib/student-sort";
 
 type Period = "MIDTERM" | "AFTER_MIDTERM";
 type Classroom = { id: string; name: string };
@@ -78,7 +79,7 @@ export function Gradebook() {
   }, [teachingAssignments, teachingAssignmentId]);
 
   const students = payload?.students || [];
-  const sortedStudents = useMemo(() => [...students].sort((a, b) => (a.rollNo || a.studentNo).localeCompare(b.rollNo || b.studentNo, "th", { numeric: true }) || a.studentNo.localeCompare(b.studentNo, "th", { numeric: true })), [students]);
+  const sortedStudents = useMemo(() => [...students].sort(compareByRollNo), [students]);
   const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
