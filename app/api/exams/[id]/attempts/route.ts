@@ -18,8 +18,11 @@ export async function GET(_request: Request, context: Context) {
   const attempts = await prisma.examAttempt.findMany({
     where: { examId: id },
     include: { student: { select: { id: true, rollNo: true, studentNo: true, name: true } } },
-    orderBy: { updatedAt: "desc" },
   });
+  attempts.sort((a, b) =>
+    (a.student.rollNo || "").localeCompare(b.student.rollNo || "", "th", { numeric: true }) ||
+    a.student.studentNo.localeCompare(b.student.studentNo, "th", { numeric: true }),
+  );
   return NextResponse.json(attempts);
 }
 
