@@ -90,7 +90,7 @@ export async function GET() {
 
     // Map each column to an assignment task
     // Exam-linked grade columns are exam results, not coursework or homework tasks in the student portal.
-    const assignments = columns.filter((col) => !col.examId).map((col) => {
+    const assignments = columns.filter((col) => !col.examId && !col.assignmentId).map((col) => {
       const studentScore = col.scores[0]?.score ?? null;
       const isSubmitted = studentScore !== null;
 

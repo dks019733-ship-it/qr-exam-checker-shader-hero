@@ -33,6 +33,7 @@ export async function GET() {
         select: {
           id: true,
           title: true,
+          period: true,
           maxScore: true,
           scores: {
             where: { studentId: student.id },
@@ -60,22 +61,36 @@ export async function GET() {
     assignments: assignments.map((assignment) => {
       const storedSubmission = assignment.submissions[0] ?? null;
       const gradeScore = assignment.gradeColumn?.scores[0] ?? null;
-      // Older Google Forms responses may already have a gradebook score but no Assignment submission row.
-      const submission = storedSubmission ?? (
-        assignment.mode === "GOOGLE_FORM" && gradeScore
+      // Gradebook scores are authoritative for completion: a teacher-entered score
+      // completes a TEACHER_CHECK task, while Google Forms responses remain submitted.
+      const hasGradebookScore = gradeScore !== null && gradeScore.score !== null;
+      const submission = storedSubmission
+        ? {
+            ...storedSubmission,
+            // Gradebook scores are authoritative for teacher-checked coursework,
+            // including submissions that were already recorded before grading.
+            // Preserve an explicit RETURNED state until the student resubmits.
+            status: assignment.mode === "TEACHER_CHECK" &&
+              storedSubmission.status === "SUBMITTED" &&
+              hasGradebookScore
+              ? "REVIEWED" as const
+              : storedSubmission.status,
+          }
+        : hasGradebookScore
           ? {
               id: null,
-              status: "SUBMITTED" as const,
+              status: assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" as const : "REVIEWED" as const,
               submittedAt: gradeScore.updatedAt,
               score: gradeScore.score,
               feedback: "",
               files: [],
             }
-          : null
-      );
+          : null;
       return {
         id: assignment.id,
+        groupId: assignment.groupId,
         gradeColumnId: assignment.gradeColumn?.id ?? null,
+        period: assignment.gradeColumn?.period ?? null,
         title: assignment.gradeColumn?.title ?? assignment.title,
         description: assignment.description,
         mode: assignment.mode,

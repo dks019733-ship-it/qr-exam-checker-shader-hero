@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { compressImageBalanced } from "@/lib/client-file-compression";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -43,6 +43,7 @@ interface StudentProfile {
 
 interface AssignmentItem {
   id: string;
+  groupId?: string | null;
   subject: string;
   teacher: string;
   title: string;
@@ -114,28 +115,56 @@ export default function StudentPortalPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const sessionCheckInFlight = useRef(false);
 
-  // Check existing session on load
+  // Check existing session on load.
   useEffect(() => {
-    checkCurrentSession();
+    void checkCurrentSession();
   }, []);
 
-  async function checkCurrentSession() {
-    setInitialChecking(true);
+  // Refresh in the background while the student portal is open. Focus/visibility
+  // refreshes make new teacher tasks appear immediately when students return to the tab.
+  useEffect(() => {
+    if (!student?.id) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void checkCurrentSession(false);
+    };
+    const intervalId = window.setInterval(refreshIfVisible, 30000);
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [student?.id]);
+
+  async function checkCurrentSession(showInitialLoading = true) {
+    if (sessionCheckInFlight.current) return;
+    sessionCheckInFlight.current = true;
+    if (showInitialLoading) setInitialChecking(true);
+
     try {
-      const res = await fetch("/api/student/portal");
-      if (res.ok) {
-        const data = await res.json();
-        setStudent(data.student);
-        const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
-        const taskData = taskResponse.ok ? await taskResponse.json() : null;
-        if (taskResponse.ok) {
-          setAssignmentLoadError("");
-        } else {
-          const failure = await taskResponse.json().catch(() => null);
-          setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
-        }
-        const managedTasks: AssignmentItem[] = (taskData?.assignments || []).map((task: any) => {
+      const res = await fetch("/api/student/portal", { cache: "no-store" });
+      if (res.status === 401) {
+        setStudent(null);
+        return;
+      }
+      if (!res.ok) {
+        if (showInitialLoading) setStudent(null);
+        return;
+      }
+
+      const data = await res.json();
+      setStudent(data.student);
+
+      const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
+      if (taskResponse.ok) {
+        const taskData = await taskResponse.json();
+        setAssignmentLoadError("");
+        const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
           const submitted = Boolean(task.submission);
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
@@ -143,14 +172,16 @@ export default function StudentPortalPage() {
           const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
           return {
             id: "assignment:" + task.id,
+            groupId: task.groupId || null,
             assignmentId: task.id,
             gradeColumnId: task.gradeColumnId,
             mode: task.mode,
             subject,
             teacher: task.teacher,
             title: task.title,
-            dueDate: task.dueAt ? new Date(task.dueAt).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "ไม่กำหนด",
+            dueDate: task.dueAt ? new Date(task.dueAt).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : task.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : task.period ? "ก่อนกลางภาค" : "ไม่กำหนด",
             dueAt: task.dueAt,
+            period: task.period || undefined,
             status: submitted ? "submitted" : "pending",
             score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : score !== null && score !== undefined ? (maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
             rawScore: score ?? null,
@@ -165,27 +196,34 @@ export default function StudentPortalPage() {
             submission: task.submission || null,
           } as AssignmentItem;
         });
-        // A linked gradebook column is the same coursework item as its managed assignment.
-        // Keep the managed assignment card (submission state, due date and action), not a duplicate gradebook card.
+        // One group is one logical task. The database also enforces one group member per classroom.
+        // Keep the linked managed task and its submission state rather than rendering duplicate cards.
+        const uniqueManagedTasks = Array.from(
+          new Map(managedTasks.map((task) => [task.groupId || task.assignmentId || task.id, task])).values(),
+        );
         const linkedGradeColumnIds = new Set(
-          managedTasks.map((task) => task.gradeColumnId).filter((id): id is string => Boolean(id)),
+          uniqueManagedTasks.map((task) => task.gradeColumnId).filter((id): id is string => Boolean(id)),
         );
         const standaloneGradebookTasks = (data.assignments || []).filter(
           (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
         );
-        setAssignments([...standaloneGradebookTasks, ...managedTasks]);
-        setScores(data.scores || []);
-        setAnnouncements(data.announcements || []);
-        if (data.subjects && Array.isArray(data.subjects)) {
-          setAvailableSubjects(data.subjects);
-        }
+        setAssignments([...standaloneGradebookTasks, ...uniqueManagedTasks]);
       } else {
-        setStudent(null);
+        const failure = await taskResponse.json().catch(() => null);
+        setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
+      }
+
+      setScores(data.scores || []);
+      setAnnouncements(data.announcements || []);
+      if (data.subjects && Array.isArray(data.subjects)) {
+        setAvailableSubjects(data.subjects);
       }
     } catch {
-      setStudent(null);
+      // Keep an existing session and the last successful task list during transient network errors.
+      if (showInitialLoading) setStudent(null);
     } finally {
-      setInitialChecking(false);
+      sessionCheckInFlight.current = false;
+      if (showInitialLoading) setInitialChecking(false);
     }
   }
 
@@ -289,7 +327,7 @@ export default function StudentPortalPage() {
         {student && (
           <div className="flex items-center gap-2">
             <button
-              onClick={checkCurrentSession}
+              onClick={() => void checkCurrentSession()}
               title="รีเฟรชข้อมูลล่าสุด"
               className="p-2 rounded-2xl border border-[#ADC2A9]/40 bg-white/80 text-[#5e6e5e] hover:bg-white transition cursor-pointer"
             >
@@ -878,7 +916,7 @@ export default function StudentPortalPage() {
                           setSelectedFiles([...pendingFiles]);
                           continue;
                         }
-                        const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type, "If-None-Match": "*" }, body: file });
+                        const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
                         if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
                         const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: safeFileName, contentType: file.type, sizeBytes: file.size }) });
                         const complete = await completeResponse.json();

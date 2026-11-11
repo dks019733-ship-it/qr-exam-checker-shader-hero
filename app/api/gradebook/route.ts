@@ -88,6 +88,7 @@ export async function POST(request: Request) {
 
   let examId: string | undefined;
   let googleFormId: string | undefined;
+  let googleFormResponderUrl = "";
   let importScores: { studentId: string; score: number }[] = [];
   let inheritedAssignmentId = "";
   if (sourceType === "exam") {
@@ -113,15 +114,24 @@ export async function POST(request: Request) {
     examId = exam.id;
     importScores = exam._count.questions > 0 ? exam.attempts.flatMap((attempt) => attempt.score == null ? [] : [{ studentId: attempt.studentId, score: Math.min(maxScore, (attempt.score / exam._count.questions) * maxScore) }]) : [];
   } else if (sourceType === "google_form") {
-    const form = await prisma.googleForm.findFirst({ where: { id: sourceId, ownerId }, select: { id: true, gradeColumn: { select: { id: true } } } });
+    const form = await prisma.googleForm.findFirst({ where: { id: sourceId, ownerId }, select: { id: true, responderUrl: true, gradeColumn: { select: { id: true } } } });
     if (!form) return NextResponse.json({ error: "ไม่พบ Google Form" }, { status: 404 });
     if (form.gradeColumn) return NextResponse.json({ error: "Google Form นี้เชื่อมกับสมุดคะแนนแล้ว" }, { status: 409 });
     googleFormId = form.id;
+    googleFormResponderUrl = form.responderUrl;
   } else if (sourceType !== "manual") {
     return NextResponse.json({ error: "แหล่งคะแนนไม่ถูกต้อง" }, { status: 400 });
   }
 
   const teachingAssignmentId = requestedAssignmentId || inheritedAssignmentId || null;
+  // Every coursework column must have a teaching subject so it can become a managed task.
+  // Exam result columns remain exam-only and are intentionally not published as assignments.
+  if (!examId && !teachingAssignmentId) {
+    return NextResponse.json({ error: "กรุณาเพิ่มและเลือกรายวิชาที่สอนก่อนสร้างงาน เพื่อให้ซิงก์ไปหน้ามอบหมายและหน้านักเรียนได้ครบ" }, { status: 400 });
+  }
+  if (sourceType === "google_form" && !googleFormResponderUrl) {
+    return NextResponse.json({ error: "ไม่พบลิงก์สำหรับให้นักเรียนเปิด Google Forms" }, { status: 409 });
+  }
   const anyAssignmentInClass = await prisma.teachingAssignment.findFirst({
     where: { ownerId, classId },
     select: { id: true },
@@ -137,18 +147,49 @@ export async function POST(request: Request) {
     if (!assignment) return NextResponse.json({ error: "รายวิชาไม่ได้อยู่ในห้องเรียนนี้หรือไม่มีสิทธิ์" }, { status: 404 });
   }
   try {
-    const column = await prisma.gradeColumn.create({
-      data: {
-        ownerId, classId, title, period, maxScore,
-        ...(teachingAssignmentId ? { teachingAssignmentId } : {}),
-        ...(examId ? { examId } : {}),
-        ...(googleFormId ? { googleFormId } : {}),
-        ...(importScores.length ? { scores: { create: importScores } } : {}),
-      },
+    const created = await prisma.$transaction(async (tx) => {
+      // The online gradebook is the source of truth: create the matching published
+      // assignment and link it to the grade column in the same transaction.
+      // Exam-linked columns are assessment results, not student coursework tasks.
+      const assignment = !examId
+        ? await tx.assignment.create({
+            data: {
+              ownerId,
+              classId,
+              teachingAssignmentId: teachingAssignmentId!,
+              title,
+              description: googleFormId
+                ? "ทำแบบฝึกหัด/แบบทดสอบออนไลน์ผ่าน Google Forms"
+                : "งานเก็บคะแนนในชั้นเรียน",
+              mode: googleFormId ? "GOOGLE_FORM" : "TEACHER_CHECK",
+              status: "PUBLISHED",
+              googleFormUrl: googleFormId ? googleFormResponderUrl : null,
+              maxScore,
+            },
+            select: { id: true },
+          })
+        : null;
+
+      const column = await tx.gradeColumn.create({
+        data: {
+          ownerId, classId, title, period, maxScore,
+          ...(teachingAssignmentId ? { teachingAssignmentId } : {}),
+          ...(examId ? { examId } : {}),
+          ...(googleFormId ? { googleFormId } : {}),
+          ...(assignment ? { assignmentId: assignment.id } : {}),
+          ...(importScores.length ? { scores: { create: importScores } } : {}),
+        },
+      });
+      return { column, assignment };
     });
-    return NextResponse.json(column, { status: 201 });
+
+    return NextResponse.json({
+      ...created.column,
+      taskSynced: Boolean(created.assignment),
+      assignmentId: created.assignment?.id ?? null,
+    }, { status: 201 });
   } catch (error) {
-    console.error("[Gradebook] create column failed", error);
-    return NextResponse.json({ error: "สร้างช่องคะแนนไม่สำเร็จ อาจมีการเชื่อมข้อสอบนี้ไว้แล้ว" }, { status: 409 });
+    console.error("[Gradebook] create column and synced task failed", error);
+    return NextResponse.json({ error: "เพิ่มงานในสมุดออนไลน์ไม่สำเร็จ ระบบไม่สามารถซิงก์งานไปหน้ามอบหมายได้" }, { status: 409 });
   }
 }

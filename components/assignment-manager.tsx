@@ -29,18 +29,25 @@ type GradeColumnOption = {
 };
 type TeachingAssignment = {
   id: string;
-  subject: { code: string; name: string };
+  subject: { id: string; code: string; name: string };
   classroom: { id: string; name: string };
 };
 type AssignmentRow = {
   id: string;
+  groupId?: string | null;
   title: string;
   mode: "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM";
   status: "DRAFT" | "PUBLISHED" | "CLOSED";
   classroom: { name: string };
   teachingAssignment: { subject: { code: string; name: string } };
+  files?: { fileName: string; contentType: string; sizeBytes: number }[];
   _count: { submissions: number };
-  gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number } | null;
+  gradeColumn?: { id: string; title: string; period: "BEFORE_MIDTERM" | "MIDTERM" | "AFTER_MIDTERM"; maxScore: number; _count?: { scores: number } } | null;
+};
+type PendingAssignmentGroup = {
+  groupId: string;
+  mode: AssignmentRow["mode"];
+  assignments: { id: string }[];
 };
 
 const fieldClass =
@@ -50,7 +57,9 @@ const labelClass = "mb-2.5 block pl-1 text-[10px] font-black uppercase tracking-
 export function AssignmentManager() {
   const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [pendingGroup, setPendingGroup] = useState<PendingAssignmentGroup | null>(null);
   const [teachingAssignmentId, setTeachingAssignmentId] = useState("");
+  const [targetTeachingAssignmentIds, setTargetTeachingAssignmentIds] = useState<string[]>([]);
   const [gradeColumns, setGradeColumns] = useState<GradeColumnOption[]>([]);
   const [gradeColumnId, setGradeColumnId] = useState("");
   const [gradeColumnsLoading, setGradeColumnsLoading] = useState(false);
@@ -81,7 +90,10 @@ export function AssignmentManager() {
       if (!assignmentResponse.ok) throw new Error(tasks.error || "โหลดงานไม่สำเร็จ");
       setTeachingAssignments(courses);
       setAssignments(tasks);
-      if (!teachingAssignmentId && courses.length) setTeachingAssignmentId(courses[0].id);
+      if (!teachingAssignmentId && courses.length) {
+        setTeachingAssignmentId(courses[0].id);
+        setTargetTeachingAssignmentIds([courses[0].id]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลไม่สำเร็จ");
     } finally {
@@ -136,9 +148,16 @@ export function AssignmentManager() {
     return data.session.id as string;
   }
 
-  async function uploadTeacherFiles(assignmentId: string) {
+  async function uploadTeacherFiles(
+    assignmentId: string,
+    existingFiles: { fileName: string; contentType: string; sizeBytes: number }[] = [],
+  ) {
+    const uploaded = new Set(existingFiles.map((file) => [file.fileName, file.contentType, file.sizeBytes].join(":")));
     for (const originalFile of files) {
       const file = await compressImageBalanced(originalFile);
+      const signature = [file.name, file.type, file.size].join(":");
+      if (uploaded.has(signature)) continue;
+
       const presignResponse = await fetch("/api/files/presign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,7 +165,7 @@ export function AssignmentManager() {
       });
       const presign = await presignResponse.json();
       if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไฟล์ครูไม่สำเร็จ");
-      const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type, "If-None-Match": "*" }, body: file });
+      const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
       if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
       const completeResponse = await fetch("/api/files/complete", {
         method: "POST",
@@ -155,6 +174,7 @@ export function AssignmentManager() {
       });
       const complete = await completeResponse.json();
       if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์แนบไม่สำเร็จ");
+      uploaded.add(signature);
     }
   }
 
@@ -163,39 +183,73 @@ export function AssignmentManager() {
     setSaving(true);
     setError("");
     setNotice("");
+    let recoveryGroup = pendingGroup;
     try {
-      if (!teachingAssignmentId) throw new Error("ยังไม่มีรายวิชาที่ผูกกับห้องเรียน");
-      if (!gradeColumnId || !selectedGradeColumn) throw new Error("กรุณาเลือกชื่องานจากสมุดออนไลน์ก่อน");
-      if (mode === "SYSTEM_UPLOAD" && files.length === 0) throw new Error("งานแบบส่งในระบบต้องแนบไฟล์คำสั่งงานอย่างน้อย 1 ไฟล์");
-      const linkedSessionId = await resolveAttendanceSession();
-      const response = await fetch("/api/assignments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teachingAssignmentId,
-          gradeColumnId,
-          description,
-          mode,
-          status: "DRAFT",
-          googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
-          dueAt: dueAt ? new Date(dueAt).toISOString() : null,
-          autoMarkAttendance,
-          attendanceSessionId: linkedSessionId,
-        }),
-      });
-      const created = await response.json();
-      if (!response.ok) throw new Error(created.error || "สร้างงานไม่สำเร็จ");
+      if (!recoveryGroup) {
+        if (!teachingAssignmentId) throw new Error("ยังไม่มีรายวิชาที่ผูกกับห้องเรียน");
+        if (!gradeColumnId || !selectedGradeColumn) throw new Error("กรุณาเลือกชื่องานจากสมุดออนไลน์ก่อน");
+        if (mode === "SYSTEM_UPLOAD" && files.length === 0) throw new Error("งานแบบส่งในระบบต้องแนบไฟล์คำสั่งงานอย่างน้อย 1 ไฟล์");
 
-      if (files.length) await uploadTeacherFiles(created.id);
-      const publishResponse = await fetch("/api/assignments/" + created.id, {
+        const targetIds = Array.from(new Set([teachingAssignmentId, ...targetTeachingAssignmentIds]));
+        const linkedSessionId = await resolveAttendanceSession();
+        const response = await fetch("/api/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            teachingAssignmentId,
+            targetTeachingAssignmentIds: targetIds,
+            gradeColumnId,
+            description,
+            mode,
+            status: "DRAFT",
+            googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
+            dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+            autoMarkAttendance,
+            attendanceSessionId: linkedSessionId,
+            attendanceDate: autoMarkAttendance ? attendanceDate : "",
+          }),
+        });
+        const created = await response.json();
+        if (!response.ok) throw new Error(created.error || "สร้างงานไม่สำเร็จ");
+        if (!created.groupId || !Array.isArray(created.assignments) || created.assignments.length !== targetIds.length) {
+          throw new Error("ระบบสร้างกลุ่มงานไม่สมบูรณ์ กรุณารีเฟรชก่อนลองใหม่");
+        }
+        recoveryGroup = {
+          groupId: created.groupId,
+          mode,
+          assignments: created.assignments.map((target: { id: string }) => ({ id: target.id })),
+        };
+        setPendingGroup(recoveryGroup);
+      }
+
+      if (recoveryGroup.mode === "SYSTEM_UPLOAD") {
+        if (files.length === 0) throw new Error("เลือกไฟล์คำสั่งงานเดิมอีกครั้งเพื่อทำรายการที่ค้างต่อ");
+        const assignmentResponse = await fetch("/api/assignments", { cache: "no-store" });
+        const currentAssignments = await assignmentResponse.json();
+        if (!assignmentResponse.ok || !Array.isArray(currentAssignments)) {
+          throw new Error("ตรวจสอบไฟล์ที่อัปโหลดไปแล้วไม่สำเร็จ กรุณาลองใหม่");
+        }
+        const filesByAssignment = new Map<string, { fileName: string; contentType: string; sizeBytes: number }[]>(
+          currentAssignments.map((item: AssignmentRow) => [item.id, item.files || []] as const),
+        );
+        for (const target of recoveryGroup.assignments) {
+          const existingFiles = filesByAssignment.get(target.id);
+          if (!existingFiles) throw new Error("ไม่พบงานฉบับร่างที่กำลังทำต่อ กรุณารีเฟรชรายการงาน");
+          await uploadTeacherFiles(target.id, existingFiles);
+        }
+      }
+
+      const publishResponse = await fetch("/api/assignments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "PUBLISHED" }),
+        body: JSON.stringify({ groupId: recoveryGroup.groupId, status: "PUBLISHED" }),
       });
       const published = await publishResponse.json();
-      if (!publishResponse.ok) throw new Error(published.error || "สร้างงานแล้ว แต่เผยแพร่ไม่สำเร็จ งานยังเป็นฉบับร่าง");
+      if (!publishResponse.ok) throw new Error(published.error || "สร้างงานแล้ว แต่เผยแพร่ทั้งชุดไม่สำเร็จ งานยังเป็นฉบับร่าง");
 
+      setPendingGroup(null);
       setGradeColumnId("");
+      setTargetTeachingAssignmentIds([teachingAssignmentId]);
       setDescription("");
       setGoogleFormUrl("");
       setDueAt("");
@@ -203,10 +257,14 @@ export function AssignmentManager() {
       setAutoMarkAttendance(false);
       setAttendanceDate("");
       setAttendanceSessionId("");
-      setNotice("เผยแพร่งานให้นักเรียนเรียบร้อยแล้ว");
+      setNotice("เผยแพร่งานชุดเดียวให้นักเรียน " + recoveryGroup.assignments.length + " ห้องเรียนเรียบร้อยแล้ว");
       await refresh();
       setGradeColumnsVersion((current) => current + 1);
     } catch (err) {
+      if (recoveryGroup) {
+        setPendingGroup(recoveryGroup);
+        await refresh();
+      }
       setError(err instanceof Error ? err.message : "สร้างงานไม่สำเร็จ");
     } finally {
       setSaving(false);
@@ -217,6 +275,15 @@ export function AssignmentManager() {
     value === "TEACHER_CHECK" ? "ตรวจกับครู" : value === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
   const statusLabel = (value: AssignmentRow["status"]) =>
     value === "PUBLISHED" ? "เผยแพร่แล้ว" : value === "CLOSED" ? "ปิดรับแล้ว" : "ฉบับร่าง";
+  const assignmentGroups = Array.from(
+    assignments.reduce((groups, item) => {
+      const key = item.groupId || item.id;
+      const group = groups.get(key) || [];
+      group.push(item);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, AssignmentRow[]>()).values(),
+  );
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F4F4F2] px-4 pb-20 pt-8 text-[#1A1A1A] sm:px-6 sm:pt-10 lg:px-8">
@@ -258,13 +325,13 @@ export function AssignmentManager() {
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="block">
                   <span className={labelClass}>รายวิชา / ห้องเรียน</span>
-                  <select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setGradeColumnId(""); }} className={fieldClass}>
+                  <select value={teachingAssignmentId} onChange={(event) => { setTeachingAssignmentId(event.target.value); setTargetTeachingAssignmentIds([event.target.value]); setGradeColumnId(""); }} disabled={Boolean(pendingGroup) || saving} className={fieldClass}>
                     {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name} — {item.classroom.name}</option>)}
                   </select>
                 </label>
                 <label className="block">
                   <span className={labelClass}>รูปแบบการส่งงาน</span>
-                  <select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} className={fieldClass}>
+                  <select value={mode} onChange={(event) => { const nextMode = event.target.value as typeof mode; setMode(nextMode); setFiles([]); if (nextMode !== "SYSTEM_UPLOAD") { setAutoMarkAttendance(false); setAttendanceDate(""); setAttendanceSessionId(""); } }} disabled={Boolean(pendingGroup) || saving} className={fieldClass}>
                     <option value="TEACHER_CHECK">ตรวจกับครู — ทำในสมุดแล้วนำมาส่ง</option>
                     <option value="SYSTEM_UPLOAD">ส่งในระบบ — ดาวน์โหลดโจทย์และอัปโหลดไฟล์</option>
                     <option value="GOOGLE_FORM">Google Forms — เปิดลิงก์ทำแบบฟอร์ม</option>
@@ -272,13 +339,44 @@ export function AssignmentManager() {
                 </label>
               </div>
 
+              <div className="space-y-3 rounded-[1.5rem] border border-[#EAE8E3] bg-[#F9F9F8] p-4 sm:p-5">
+                <div>
+                  <span className={labelClass}>ห้องเรียนที่ได้รับมอบหมาย</span>
+                  <p className="text-xs leading-5 text-[#666666]">เลือกหลายห้องในรายวิชาเดียวกันได้ งานจะแสดงเป็นรายการเดียวในหน้าครู โดยแต่ละห้องยังมีคะแนนและการส่งงานแยกกัน ห้องอื่นต้องมีช่องคะแนนที่ชื่อ ช่วงคะแนน และคะแนนเต็มตรงกับงานที่เลือก</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {teachingAssignments.filter((course) => !selectedCourse || course.subject.id === selectedCourse.subject.id).map((course) => {
+                    const checked = course.id === teachingAssignmentId || targetTeachingAssignmentIds.includes(course.id);
+                    return (
+                      <label key={course.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition ${checked ? "border-[#A7F3D0] bg-[#F0FDF4]" : "border-[#EAE8E3] bg-white hover:border-[#D1CDC4]"}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={course.id === teachingAssignmentId || saving || Boolean(pendingGroup)}
+                          onChange={(event) => setTargetTeachingAssignmentIds((current) =>
+                            event.target.checked
+                              ? Array.from(new Set([...current, course.id]))
+                              : current.filter((id) => id !== course.id)
+                          )}
+                          className="mt-0.5 h-4 w-4 accent-[#166534]"
+                        />
+                        <span className="min-w-0 text-xs font-bold text-[#333333]">
+                          <span className="block">{course.subject.code} · {course.subject.name}</span>
+                          <span className="mt-1 block text-[11px] font-medium text-[#888888]">{course.classroom.name}{course.id === teachingAssignmentId ? " · ห้องหลัก" : ""}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
               <label className="block">
                 <span className={labelClass}>ชื่องานจากสมุดออนไลน์</span>
-                <select required value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={gradeColumnsLoading || gradeColumns.length === 0} className={fieldClass}>
+                <select required={!pendingGroup} value={gradeColumnId} onChange={(event) => setGradeColumnId(event.target.value)} disabled={Boolean(pendingGroup) || gradeColumnsLoading || gradeColumns.length === 0} className={fieldClass}>
                   <option value="">{gradeColumnsLoading ? "กำลังโหลดช่องคะแนน..." : gradeColumns.length ? "เลือกงานที่มีอยู่ในสมุดออนไลน์" : "ยังไม่มีช่องคะแนนที่เชื่อมกับรายวิชานี้"}</option>
                   {gradeColumns.map((column) => <option key={column.id} value={column.id}>{column.title} · เต็ม {column.maxScore} · {column.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}</option>)}
                 </select>
-                {selectedGradeColumn && <span className="mt-2 block rounded-xl bg-[#F0FDF4] px-4 py-3 text-xs font-medium leading-5 text-[#166534]"><Check className="mr-1 inline h-3.5 w-3.5" /> คะแนนเต็มและชื่องานจะอ้างอิงจากสมุดออนไลน์ โดยไม่แก้ไขคะแนนที่บันทึกไว้</span>}
+                {selectedGradeColumn && <span className="mt-2 block rounded-xl bg-[#F0FDF4] px-4 py-3 text-xs font-medium leading-5 text-[#166534]"><Check className="mr-1 inline h-3.5 w-3.5" /> คะแนนเต็มและชื่องานจะอ้างอิงจากสมุดออนไลน์ โดยระบบจะจับคู่ช่องคะแนนที่ตรงกันในห้องอื่น และไม่แก้ไขคะแนนเดิม</span>}
               </label>
 
               <label className="block">
@@ -334,12 +432,13 @@ export function AssignmentManager() {
                 </div>
               )}
 
+              {pendingGroup && <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold leading-5 text-amber-900">กำลังทำงานฉบับร่างที่สร้างไว้ต่อ ระบบจะไม่สร้างงานหรือเชื่อมช่องคะแนนซ้ำ หากเป็นงานส่งไฟล์ ให้เลือกไฟล์คำสั่งงานชุดเดิมอีกครั้งเพื่อข้ามไฟล์ที่บันทึกแล้วและทำต่อ</p>}
               {error && <div role="alert" className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-800"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
               {notice && <p role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-800">{notice}</p>}
 
               <div className="border-t border-[#EAE8E3] pt-5">
-                <button type="submit" disabled={saving || !selectedCourse || !selectedGradeColumn || gradeColumnsLoading} className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[1.25rem] border border-[#A7F3D0] bg-[#E5F3EB] px-5 py-4 text-sm font-black tracking-wide text-[#166534] transition hover:border-[#86EFAC] hover:bg-[#D1FAE5] hover:shadow-[0_15px_40px_rgba(22,101,52,0.12)] disabled:cursor-not-allowed disabled:opacity-50">
-                  <Sparkles className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : "มอบหมายงานให้นักเรียน"}
+                <button type="submit" disabled={saving || (!pendingGroup && (!selectedCourse || !selectedGradeColumn)) || gradeColumnsLoading} className="flex min-h-14 w-full items-center justify-center gap-2.5 rounded-[1.25rem] border border-[#A7F3D0] bg-[#E5F3EB] px-5 py-4 text-sm font-black tracking-wide text-[#166534] transition hover:border-[#86EFAC] hover:bg-[#D1FAE5] hover:shadow-[0_15px_40px_rgba(22,101,52,0.12)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <Sparkles className="h-4 w-4" />{saving ? "กำลังบันทึกและเผยแพร่..." : pendingGroup ? "ดำเนินการต่อและเผยแพร่" : "มอบหมายงานให้นักเรียน"}
                 </button>
               </div>
             </form>
@@ -364,28 +463,56 @@ export function AssignmentManager() {
             </div>
           ) : (
             <div className="grid gap-4">
-              {assignments.map((item) => {
+              {assignmentGroups.map((group) => {
+                const item = group[0];
+                const submissionCount = group.reduce((total, entry) => total + (entry.mode === "TEACHER_CHECK" ? Math.max(entry._count.submissions, entry.gradeColumn?._count?.scores ?? 0) : entry._count.submissions), 0);
+                const groupStatus = group.every((entry) => entry.status === item.status)
+                  ? statusLabel(item.status)
+                  : "สถานะไม่ตรงกัน";
                 return (
-                  <article key={item.id} className="group rounded-[1.5rem] border border-[#EAE8E3] bg-white/90 p-5 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-[#166534]/30 hover:shadow-lg sm:p-6">
+                  <article key={item.groupId || item.id} className="group rounded-[1.5rem] border border-[#EAE8E3] bg-white/90 p-5 shadow-sm backdrop-blur-xl transition-all duration-300 hover:border-[#166534]/30 hover:shadow-lg sm:p-6">
                     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-lg border border-[#D1FAE5] bg-[#F0FDF4] px-2.5 py-1 text-[10px] font-black text-[#166534]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name} — {item.classroom.name}</span>
+                          <span className="rounded-lg border border-[#D1FAE5] bg-[#F0FDF4] px-2.5 py-1 text-[10px] font-black text-[#166534]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name}</span>
+                          {group.map((entry) => (
+                            <span key={entry.id} className="rounded-lg border border-[#EAE8E3] bg-[#F9F9F8] px-2.5 py-1 text-[10px] font-bold text-[#666666]">{entry.classroom.name}</span>
+                          ))}
                           <span className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-bold text-[#666666]">{modeLabel(item.mode)}</span>
                         </div>
                         <h3 className="truncate text-base font-black text-[#1A1A1A] transition-colors group-hover:text-[#166534]">{item.gradeColumn?.title || item.title}</h3>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-[#888888]">
                           <span className="inline-flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> {item.gradeColumn ? `เต็ม ${item.gradeColumn.maxScore} คะแนน` : "ยังไม่เชื่อมสมุดออนไลน์"}</span>
-                          <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5" /> {statusLabel(item.status)}</span>
+                          <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5" /> {groupStatus}</span>
+                          <span>{group.length} ห้องเรียน</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {group.map((entry) => (
+                            <Link key={entry.id} href={"/dashboard/assignments/" + entry.id} className="inline-flex items-center gap-1 rounded-lg border border-[#EAE8E3] px-3 py-1.5 text-[11px] font-bold text-[#166534] transition hover:border-[#166534] hover:bg-[#F0FDF4]">
+                              {entry.classroom.name} · ดู/ตรวจงาน
+                            </Link>
+                          ))}
+                          {item.groupId && group.every((entry) => entry.status === "DRAFT") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingGroup({ groupId: item.groupId!, mode: item.mode, assignments: group.map((entry) => ({ id: entry.id })) });
+                                setMode(item.mode);
+                                setFiles([]);
+                                setError("");
+                                setNotice(item.mode === "SYSTEM_UPLOAD" ? "เลือกไฟล์คำสั่งงานชุดเดิมเพื่อดำเนินการต่อ" : "กดดำเนินการต่อเพื่อเผยแพร่งานชุดนี้");
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100"
+                            >
+                              {item.mode === "SYSTEM_UPLOAD" ? "แนบไฟล์ต่อ / เผยแพร่" : "เผยแพร่งานต่อ"}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-5 sm:justify-end">
                         <div className="min-w-[6rem] text-right">
-                          <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-[#888888]">ส่งแล้ว</div>
-                          <div className="text-lg font-black tabular-nums text-[#166534]">{item._count.submissions} <span className="text-xs font-bold text-[#999999]">รายการ</span></div>
-                        </div>
-                        <div className="border-l border-[#EAE8E3] pl-4">
-                          <Link href={"/dashboard/assignments/" + item.id} aria-label={`ดูรายละเอียดและตรวจงาน ${item.title}`} className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-[#EAE8E3] bg-[#F4F4F2] text-[#166534] transition hover:border-[#166534] hover:bg-[#166534] hover:text-white"><FileText className="h-4 w-4" /></Link>
+                          <div className="mb-1 text-[10px] font-black uppercase tracking-wider text-[#888888]">ส่งแล้วรวม</div>
+                          <div className="text-lg font-black tabular-nums text-[#166534]">{submissionCount} <span className="text-xs font-bold text-[#999999]">รายการ</span></div>
                         </div>
                       </div>
                     </div>

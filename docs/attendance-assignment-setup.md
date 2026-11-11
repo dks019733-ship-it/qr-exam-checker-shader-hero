@@ -8,35 +8,26 @@ The feature adds these tables and enums:
 - Submission / SubmissionFile
 - FeatureAvailability / FeatureAvailabilityStatus
 
-After the pull request is approved, apply the migration to the production PostgreSQL database using the project's production database environment:
-
-```bash
-npx prisma migrate deploy
-```
-
-Do not run `prisma db push` against production as a substitute for the reviewed migration.
+After the pull request is approved, apply the reviewed SQL migration files through the connected Supabase migration workflow. This project does not use Prisma's `_prisma_migrations` history table, so do not run `npx prisma migrate deploy` against Production. Apply schema changes before deploying the application code, then verify the resulting columns, indexes and backfilled rows with read-only SQL queries.
 
 Feature availability controls are managed by the LINE owner account. See [LINE feature availability commands](./feature-availability-line-commands.md). The answer-sheet feature is seeded as unavailable until it is explicitly enabled.
 
 ## Private file storage
 
-Assignment attachments and student submissions use a private Cloudflare R2 bucket through short-lived S3-compatible signed URLs. The bucket must not be public.
+Assignment attachments and student submissions use the existing private Supabase Storage bucket named `assignment-files`. The application creates short-lived signed upload URLs and signed download URLs on the server. The service-role key is never sent to the browser; all teacher/student authorization checks remain in the application API.
 
-Configure these server-side environment variables in Vercel for the Production and Preview environments as appropriate:
+Configure these server-side Vercel environment variables for Preview and Production:
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-- `UPLOAD_MAX_BYTES` (optional; defaults to 20 MiB)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` (sensitive/secret; server-only)
+- `SUPABASE_STORAGE_BUCKET=assignment-files`
+- `UPLOAD_MAX_BYTES=10485760` (10 MiB; must not exceed the bucket's configured limit)
 
-Never add these credentials to client-side variables or commit real values to Git.
-
-Create an R2 API token scoped to the required bucket with object read/write access only. Keep the bucket private. Configure bucket CORS to allow `PUT` from the production app origin (`https://ngankhongkhru.vercel.app`) and any explicitly approved Preview origin, with the `Content-Type` and `If-None-Match` request headers. Upload signatures bind both headers and use `If-None-Match: *`, preventing a valid upload URL from overwriting an object that has already been created. Ensure the R2 API token can read, write and delete objects; rejected or uncommitted objects are deleted by the server-side completion endpoint. Do not enable public bucket access. Signed upload URLs expire after 5 minutes; signed download URLs expire after 3 minutes.
+The bucket must remain private. Do not expose the service-role key through a `NEXT_PUBLIC_` variable, client code, logs, or API responses. Upload URLs are issued for a unique object path and are valid for up to two hours; download URLs expire after three minutes. The server verifies object size, content type and file signature before writing file metadata to PostgreSQL. Rejected or uncommitted objects are deleted server-side.
 
 ## Accepted files and optimization
 
-Accepted formats: PDF, JPEG, PNG, WebP, DOC and DOCX. The default maximum is 20 MiB per file and can be adjusted with `UPLOAD_MAX_BYTES`.
+Accepted formats: PDF, JPEG, PNG, WebP, DOC and DOCX. The maximum is 10 MiB per file, matching the existing bucket limit. `UPLOAD_MAX_BYTES` may lower this limit but cannot raise it above 10 MiB.
 
 Images are resized to a maximum edge of 2200 px and encoded as WebP at balanced quality when the result is smaller. The original file is retained when compression fails or would increase file size. PDF and Office documents are uploaded unchanged to avoid corrupting or altering source documents.
 
@@ -53,4 +44,4 @@ The server checks declared MIME type, file extension, actual object size, stored
 - Teachers can return a submission for revision only with feedback. Students see the returned status and feedback. SYSTEM_UPLOAD students can upload corrected files; TEACHER_CHECK students bring corrected physical work back to the teacher. The next successful resubmission/receipt returns the state to SUBMITTED and clears the previous score and review feedback.
 - Automatic attendance is supported only for SYSTEM_UPLOAD assignments because the server can verify successful file completion. The UI hides this option for TEACHER_CHECK and Google Forms, and the API rejects unsupported modes.
 - If automatic attendance is enabled and the attendance feature is available, successful submission creates a PRESENT record only when no record exists for the linked session. Existing teacher decisions (PRESENT, ABSENT, LATE or LEAVE) are preserved.
-- Missing R2 environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.
+- Missing Supabase Storage environment variables cause upload endpoints to return HTTP 503; the rest of the application remains available.

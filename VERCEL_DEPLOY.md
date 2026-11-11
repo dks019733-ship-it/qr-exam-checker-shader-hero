@@ -9,12 +9,15 @@
 4. สร้างโปรเจกต์บน Vercel และเชื่อม GitHub repository
 5. เพิ่ม Environment Variables ตาม `.env.example`
    - เพิ่ม `GEMINI_API_KEY` และ `GEMINI_MODEL=gemini-3.5-flash-lite` สำหรับผู้ช่วย AI
-   - ถ้าใช้ Supabase ให้ตั้ง `DATABASE_URL` เป็น Transaction pooler และ `DIRECT_URL` เป็น Session pooler
-6. เพิ่มตารางตาม `prisma/schema.prisma` ในฐานข้อมูล production โดยใช้ `npx prisma db push` กับ production `DATABASE_URL` ก่อนเปิดใช้งาน AI และรันซ้ำเมื่อมีการเพิ่มตารางหรือแก้ schema (รวมตาราง `TeacherAiMemory` สำหรับความจำส่วนตัวของครู)
-7. Deploy
-8. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
-9. ทดสอบ Google Login
-10. ทดสอบสร้างห้องเรียน/นักเรียน และบันทึกกระดาษคำตอบ
+   - ถ้าใช้ Supabase ให้ตั้ง `DATABASE_URL` เป็น Transaction pooler (port 6543, `pgbouncer=true`, `connection_limit=1`) และ `DIRECT_URL` เป็น Session pooler (port 5432)
+   - ตั้ง `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Sensitive/Secret) และ `SUPABASE_STORAGE_BUCKET=assignment-files` สำหรับไฟล์แนบ/ไฟล์ส่งงาน โดยใช้ private bucket ที่มีอยู่แล้ว
+6. ใช้ SQL migration ที่ผ่านการ review ผ่าน Supabase migration workflow เท่านั้น โดยตรวจ schema และผลกระทบก่อนทุกครั้ง
+7. ฐานข้อมูลนี้ไม่มี Prisma `_prisma_migrations` history table จึงห้ามใช้ `npx prisma migrate deploy` และห้ามใช้ `prisma db push` แทน migration
+8. ตรวจสอบ columns, indexes, foreign keys และจำนวนแถวที่ backfill ด้วย read-only SQL หลัง migration ก่อนปล่อยโค้ด
+9. Deploy หลังจากฐานข้อมูลพร้อมแล้วเท่านั้น ระบบจะไม่รัน DDL/แก้ Schema อัตโนมัติบน Request ของ Production เพื่อป้องกัน Cold-start connection spikes และ lock contention
+10. เปิด `/api/health` เพื่อตรวจว่า server ตอบ `{ "ok": true }`
+11. ทดสอบ Google Login
+12. ทดสอบสร้างห้องเรียน/นักเรียน, บันทึกกระดาษคำตอบ และทดสอบอัปโหลดไฟล์จริง
 
 ## ห้ามทำ
 
@@ -30,4 +33,4 @@
 - Manual Review และการยืนยันคะแนน
 - Excel/PDF report export
 - Backup และ recovery workflow
-- Security hardening และ production test suite
+- End-to-end production test suite สำหรับครู/นักเรียน, upload, Google Forms และ recovery

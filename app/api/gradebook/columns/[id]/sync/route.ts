@@ -38,14 +38,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const ownerId = session.user.id;
   const { id } = await params;
   const column = await prisma.gradeColumn.findFirst({
-    where: { id, ownerId: session.user.id, googleFormId: { not: null } },
+    where: { id, ownerId, googleFormId: { not: null } },
     include: { googleForm: { select: { formId: true } }, classroom: { select: { id: true, name: true } }, assignment: { select: { id: true, mode: true } } },
   });
   if (!column?.googleForm) return NextResponse.json({ error: "ช่องคะแนนนี้ไม่ได้เชื่อมกับ Google Form" }, { status: 404 });
   try {
-    const token = await getGoogleFormsAccessToken(session.user.id, "responses");
+    const token = await getGoogleFormsAccessToken(ownerId, "responses");
     const form = await googleFormsRequest<FormInfo>(token, `/forms/${encodeURIComponent(column.googleForm.formId)}`);
     const items = form.items || [];
     // Forms API answers are keyed by questionId, while each form item has a separate itemId.
@@ -65,11 +66,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       const question = item.questionItem?.question;
       return question?.questionId && Number(question.grading?.pointValue || 0) > 0 ? [question.questionId] : [];
     });
-    // Keep the displayed full score aligned with the actual quiz before storing raw responses.
-    if (maxFormScore > 0) await prisma.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+    // The gradebook owns the full score. Keep the linked assignment's denormalized
+    // maxScore aligned in the same transaction so no view can read a stale limit.
+    if (maxFormScore > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.gradeColumn.update({ where: { id: column.id }, data: { maxScore: maxFormScore } });
+        if (column.assignment?.id) {
+          await tx.assignment.updateMany({
+            where: { id: column.assignment.id, ownerId },
+            data: { maxScore: maxFormScore },
+          });
+        }
+      });
+    }
     const [students, classrooms, savedReviews] = await Promise.all([
-      prisma.student.findMany({ where: { class: { ownerId: session.user.id }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
-      prisma.class.findMany({ where: { ownerId: session.user.id }, select: { id: true } }),
+      prisma.student.findMany({ where: { class: { ownerId }, isActive: true }, include: { class: { select: { id: true, name: true } } } }),
+      prisma.class.findMany({ where: { ownerId }, select: { id: true } }),
       prisma.formResponseReview.findMany({ where: { columnId: column.id }, select: { responseId: true, studentId: true, score: true } }),
     ]);
     const reviewByResponse = new Map(savedReviews.map((review) => [review.responseId, review]));
