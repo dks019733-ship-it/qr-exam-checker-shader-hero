@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const classroom = classes.find((item) => item.id === classId);
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
   const [students, columns, matchingStudents, teachingAssignments] = await Promise.all([
-    prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true }, orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }] }),
+    prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } }),
     prisma.gradeColumn.findMany({
       where: { ownerId, classId },
       include: {
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     prisma.student.findMany({
       where: { class: { ownerId }, isActive: true },
       include: { class: { select: { name: true } } },
-      orderBy: [{ class: { name: "asc" } }, { rollNo: "asc" }, { studentNo: "asc" }],
+      orderBy: [{ class: { name: "asc" } }],
     }),
     prisma.teachingAssignment.findMany({
       where: { ownerId, classId },
@@ -45,11 +45,18 @@ export async function GET(request: Request) {
       orderBy: { subject: { code: "asc" } },
     }),
   ]);
+  const byRollNo = (a: { rollNo: string; studentNo: string }, b: { rollNo: string; studentNo: string }) =>
+    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
+    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true });
+  students.sort(byRollNo);
+  const sortedMatchingStudents = [...matchingStudents].sort((a, b) =>
+    a.class.name.localeCompare(b.class.name, "th", { numeric: true }) || byRollNo(a, b),
+  );
   return NextResponse.json({
     classes,
     classroom,
     students,
-    matchingStudents: matchingStudents.map(({ id, rollNo, studentNo, name, class: studentClass }) => ({ id, rollNo, studentNo, name, className: studentClass.name })),
+    matchingStudents: sortedMatchingStudents.map(({ id, rollNo, studentNo, name, class: studentClass }) => ({ id, rollNo, studentNo, name, className: studentClass.name })),
     columns,
     exams,
     googleForms,
