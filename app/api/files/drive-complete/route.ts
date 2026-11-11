@@ -74,7 +74,7 @@ export async function POST(request:Request){
   });
   return NextResponse.json({ok:true,submission:{id:result.submission.id,submittedAt:result.submission.submittedAt.toISOString()},file:result.file},{status:201});
  }catch(error){
-  if(storedOnDrive)await deleteDriveFile(assignment.ownerId,driveFileId).catch(cleanup=>console.error("[DriveUpload] orphan cleanup failed:",cleanup));
+  if(storedOnDrive || (error instanceof Error && error.message==="GOOGLE_DRIVE_FILE_SIGNATURE_INVALID"))await deleteDriveFile(assignment.ownerId,driveFileId).catch(cleanup=>console.error("[DriveUpload] orphan cleanup failed:",cleanup));
   if(error instanceof Error&&(error.message==="SUBMISSION_ALREADY_REVIEWED"||error.message==="SUBMISSION_STATE_CHANGED"))return NextResponse.json({error:"งานนี้ตรวจแล้ว ไม่สามารถเพิ่มหรือเปลี่ยนไฟล์ส่งงานได้"},{status:409});
   const mapped=mapError(error);if(mapped)return mapped;
   console.error("[DriveUpload] completion failed:",error);
