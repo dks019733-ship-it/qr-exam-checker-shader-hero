@@ -14,6 +14,7 @@ export default async function AssignmentReviewPage({ params }: { params: Promise
     <div>
       <div className="mx-auto max-w-6xl px-4 pt-5 sm:px-6 lg:px-8">
         <Link href="/dashboard/assignments" className="text-xs font-semibold text-[#4d5f4a] hover:underline">← กลับไปหน้ามอบหมายงาน</Link>
+        <Link href={"/dashboard/assignments/" + id + "/files"} className="ml-4 text-xs font-semibold text-[#4d5f4a] hover:underline">แก้ไขงานและไฟล์ประกอบ →</Link>
       </div>
       <AssignmentSubmissionReview assignmentId={id} />
     </div>
