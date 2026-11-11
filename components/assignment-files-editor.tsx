@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileUp, Loader2, RefreshCw } from "lucide-react";
+import { FileUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
 type FileRow = { id: string; fileName: string; contentType: string; sizeBytes: number };
 type AssignmentRow = {
@@ -91,6 +91,20 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
     } finally { setSaving(false); }
   }
 
+  async function removeFile(assignmentId: string, fileId: string) {
+    if (!window.confirm("ยืนยันลบไฟล์นี้ออกจากงานทุกห้องเรียนที่อยู่ในชุดเดียวกัน?")) return;
+    setSaving(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/assignments/" + assignmentId + "/files/" + fileId, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ลบไฟล์ไม่สำเร็จ");
+      setNotice(data.cleanupPending ? "ลบรายการไฟล์แล้ว แต่ระบบจัดเก็บกำลังรอเก็บกวาดไฟล์ต้นฉบับ" : "ลบไฟล์ออกจากงานทุกห้องเรียนแล้ว");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ลบไฟล์ไม่สำเร็จ");
+    } finally { setSaving(false); }
+  }
+
   async function openFile(fileId: string) {
     const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(fileId));
     const data = await response.json();
@@ -119,7 +133,7 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
           <div>
             <p className="text-sm font-semibold">ไฟล์งานที่นักเรียนเปิดดูได้</p>
             <p className="mt-1 text-xs text-slate-500">ครูเพิ่มไฟล์ได้ภายหลัง แม้งานเผยแพร่แล้ว นักเรียนดูหรือดาวน์โหลดได้เท่านั้น</p>
-            {allFiles.length ? <ul className="mt-3 divide-y rounded-xl border">{allFiles.map((file, index) => <li key={file.id + index} className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 text-sm"><span className="min-w-0 break-all">{file.fileName}<span className="ml-2 text-xs text-slate-400">{formatSize(file.sizeBytes)} · {file.classroom}</span></span><button type="button" onClick={() => void openFile(file.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">เปิดไฟล์</button></li>)}</ul> : <p className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">ยังไม่มีไฟล์แนบ</p>}
+            {allFiles.length ? <ul className="mt-3 divide-y rounded-xl border">{allFiles.map((file, index) => <li key={file.id + index} className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 text-sm"><span className="min-w-0 break-all">{file.fileName}<span className="ml-2 text-xs text-slate-400">{formatSize(file.sizeBytes)} · {file.classroom}</span></span><div className="flex gap-2"><button type="button" onClick={() => void openFile(file.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">เปิดไฟล์</button><button type="button" disabled={saving || items.some((item) => item._count.submissions > 0)} onClick={() => void removeFile(items.find((item) => item.files.some((entry) => entry.id === file.id))!.id, file.id)} title={items.some((item) => item._count.submissions > 0) ? "มีนักเรียนส่งงานแล้ว จึงลบไฟล์เดิมไม่ได้" : "ลบไฟล์"} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1.5 text-xs font-semibold text-rose-700 disabled:opacity-40"><Trash2 className="h-3 w-3" />ลบ</button></div></li>)}</ul> : <p className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">ยังไม่มีไฟล์แนบ</p>}
             <label className="mt-3 flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#cbd5c0] bg-[#f8faf6] p-4 text-center hover:bg-[#f0f5ed]">
               <FileUp className="h-5 w-5 text-[#4d5f4a]" />
               <span className="mt-2 text-sm font-semibold">เลือกไฟล์งานเพิ่มเติม</span>
