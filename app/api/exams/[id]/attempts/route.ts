@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 type Context = { params: Promise<{ id: string }> };
 const choices = new Set(["A", "B", "C", "D"]);
@@ -18,8 +19,8 @@ export async function GET(_request: Request, context: Context) {
   const attempts = await prisma.examAttempt.findMany({
     where: { examId: id },
     include: { student: { select: { id: true, rollNo: true, studentNo: true, name: true } } },
-    orderBy: { updatedAt: "desc" },
   });
+  attempts.sort((a, b) => compareByRollNo(a.student, b.student));
   return NextResponse.json(attempts);
 }
 

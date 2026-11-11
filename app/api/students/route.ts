@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -14,8 +15,8 @@ export async function GET(request: Request) {
   const students = await prisma.student.findMany({
     where: { classId, isActive: true },
     select: { id: true, rollNo: true, studentNo: true, name: true, qrToken: true },
-    orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }],
   });
+  students.sort(compareByRollNo);
   return NextResponse.json(students);
 }
 

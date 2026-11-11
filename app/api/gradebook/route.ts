@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 const periods = ["MIDTERM", "AFTER_MIDTERM"] as const;
 
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
   const classroom = classes.find((item) => item.id === classId);
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
   const [students, columns, matchingStudents, teachingAssignments] = await Promise.all([
-    prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true }, orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }] }),
+    prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } }),
     prisma.gradeColumn.findMany({
       where: { ownerId, classId },
       include: {
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     prisma.student.findMany({
       where: { class: { ownerId }, isActive: true },
       include: { class: { select: { name: true } } },
-      orderBy: [{ class: { name: "asc" } }, { rollNo: "asc" }, { studentNo: "asc" }],
+      orderBy: [{ class: { name: "asc" } }],
     }),
     prisma.teachingAssignment.findMany({
       where: { ownerId, classId },
@@ -45,11 +46,15 @@ export async function GET(request: Request) {
       orderBy: { subject: { code: "asc" } },
     }),
   ]);
+  students.sort(compareByRollNo);
+  const sortedMatchingStudents = [...matchingStudents].sort((a, b) =>
+    a.class.name.localeCompare(b.class.name, "th", { numeric: true }) || compareByRollNo(a, b),
+  );
   return NextResponse.json({
     classes,
     classroom,
     students,
-    matchingStudents: matchingStudents.map(({ id, rollNo, studentNo, name, class: studentClass }) => ({ id, rollNo, studentNo, name, className: studentClass.name })),
+    matchingStudents: sortedMatchingStudents.map(({ id, rollNo, studentNo, name, class: studentClass }) => ({ id, rollNo, studentNo, name, className: studentClass.name })),
     columns,
     exams,
     googleForms,

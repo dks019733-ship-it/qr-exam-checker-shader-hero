@@ -370,7 +370,7 @@ export default function StudentPortalPage() {
 
                 <div className="flex justify-center mb-6">
                   <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-black bg-[#D3E4CD]/70 text-[#242e24] border border-[#ADC2A9]/40 shadow-sm backdrop-blur-sm">
-                    <Sparkles className="h-3.5 w-3.5 text-[#5e6e5e]" /> ระบบเช็กงานและผลคะแนนสอบนักเรียน
+                    <Sparkles className="h-3.5 w-3.5 text-[#5e6e5e]" /> ระบบเช็กงานและคะแนนเก็บนักเรียน
                   </span>
                 </div>
 
@@ -379,7 +379,7 @@ export default function StudentPortalPage() {
                     เข้าสู่ระบบนักเรียน
                   </h1>
                   <p className="text-xs text-[#5e6e5e] font-medium leading-relaxed">
-                    ตรวจสอบการบ้าน งานค้าง และสรุปผลคะแนนสอบของคุณ
+                    ตรวจสอบการบ้าน งานค้าง และสรุปคะแนนเก็บของคุณ
                   </p>
                 </div>
 
@@ -607,7 +607,7 @@ export default function StudentPortalPage() {
                         : "text-[#5e6e5e] hover:text-[#242e24]"
                     }`}
                   >
-                    <PieChart className="h-4 w-4" /> สรุปคะแนนสอบ
+                    <PieChart className="h-4 w-4" /> สรุปคะแนนเก็บ
                   </button>
 
                   <button

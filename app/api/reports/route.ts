@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 export async function GET() {
   const unavailable = await featureAvailabilityResponse("gradebook");
@@ -18,5 +19,9 @@ export async function GET() {
     },
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json(exams);
+  const sortedExams = exams.map((exam) => ({
+    ...exam,
+    attempts: [...exam.attempts].sort((a, b) => compareByRollNo(a.student, b.student)),
+  }));
+  return NextResponse.json(sortedExams);
 }

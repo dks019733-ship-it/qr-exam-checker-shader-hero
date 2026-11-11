@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 const STATUSES = new Set(["PRESENT", "ABSENT", "LEAVE", "LATE"]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  students.sort(compareByRollNo);
   const recordByStudent = new Map((attendance?.records ?? []).map((record) => [record.studentId, record]));
   return NextResponse.json({
     session: attendance ? { id: attendance.id, date: params.get("date"), topic: attendance.topic } : null,
