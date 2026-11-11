@@ -139,7 +139,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       column: { id: column.id, title: column.title, className: column.classroom.name, maxScore: column.maxScore, formId: column.googleForm.formId },
       questions,
       classrooms,
-      students: roster.map(({ id, rollNo, studentNo, name, className }) => ({ id, rollNo: rollNo || studentNo, studentNo, name, className })).sort(compareFormStudents),
+      students: roster.map(({ id, rollNo, studentNo, name, className }) => ({ id, rollNo, studentNo, name, className })).sort(compareFormStudents),
       responses: entries,
     });
   } catch (error) {
