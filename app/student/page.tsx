@@ -73,6 +73,13 @@ interface ScoreSummaryItem {
   coursework: string;
   courseworkScore: number;
   courseworkMax: number;
+  courseworkItems: {
+    id: string;
+    title: string;
+    period: string;
+    score: number | null;
+    maxScore: number;
+  }[];
 }
 
 interface AnnouncementItem {
@@ -795,7 +802,28 @@ export default function StudentPortalPage() {
                                   <div className="font-black text-[#242e24] text-sm">{score.subject}</div>
                                   <div className="text-[11px] text-[#5e6e5e] font-medium">{score.teacher}</div>
                                 </td>
-                                <td className="p-4 text-center font-bold text-[#242e24]">{score.coursework}</td>
+                                <td className="p-4 text-center font-bold text-[#242e24]">
+                                  <div>{score.coursework}</div>
+                                  {!!score.courseworkItems?.length && (
+                                    <ul className="mt-3 space-y-2 text-left font-medium">
+                                      {score.courseworkItems.map((item) => (
+                                        <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#FEF5ED]/70 px-3 py-2 text-[11px]">
+                                          <span className="min-w-0 flex-1 text-[#5e6e5e]">
+                                            {item.title}
+                                            <span className="ml-1 text-[10px] text-[#99A799]">
+                                              · {item.period === "AFTER_MIDTERM" ? "หลังกลางภาค" : "ก่อนกลางภาค"}
+                                            </span>
+                                          </span>
+                                          {item.score === null ? (
+                                            <span className="shrink-0 font-semibold text-amber-700">ยังไม่มีคะแนน · เต็ม {item.maxScore}</span>
+                                          ) : (
+                                            <span className="shrink-0 font-bold text-[#425a49]">{item.score}/{item.maxScore}</span>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </td>
                               </tr>
                             ))
                           )}
