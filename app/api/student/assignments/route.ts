@@ -61,31 +61,36 @@ export async function GET() {
     assignments: assignments.map((assignment) => {
       const storedSubmission = assignment.submissions[0] ?? null;
       const gradeScore = assignment.gradeColumn?.scores[0] ?? null;
-      // Gradebook scores are authoritative for completion: a teacher-entered score
-      // completes a TEACHER_CHECK task, while Google Forms responses remain submitted.
       const hasGradebookScore = gradeScore !== null && gradeScore.score !== null;
-      const submission = storedSubmission
-        ? {
-            ...storedSubmission,
-            // Gradebook scores are authoritative for teacher-checked coursework,
-            // including submissions that were already recorded before grading.
-            // Preserve an explicit RETURNED state until the student resubmits.
-            status: assignment.mode === "TEACHER_CHECK" &&
-              storedSubmission.status === "SUBMITTED" &&
-              hasGradebookScore
-              ? "REVIEWED" as const
-              : storedSubmission.status,
-          }
-        : hasGradebookScore
+
+      // For teacher-checked coursework, the online gradebook is the sole source
+      // of truth. A REVIEWED submission without a gradebook score is still pending.
+      // This also prevents legacy/stale submission statuses from hiding missing work.
+      const submission = assignment.mode === "TEACHER_CHECK" && assignment.gradeColumn
+        ? hasGradebookScore
           ? {
-              id: null,
-              status: assignment.mode === "GOOGLE_FORM" ? "SUBMITTED" as const : "REVIEWED" as const,
-              submittedAt: gradeScore.updatedAt,
+              ...(storedSubmission ?? {
+                id: null,
+                submittedAt: gradeScore.updatedAt,
+                feedback: "",
+                files: [],
+              }),
+              status: "REVIEWED" as const,
               score: gradeScore.score,
-              feedback: "",
-              files: [],
             }
-          : null;
+          : null
+        : storedSubmission
+          ? storedSubmission
+          : hasGradebookScore
+            ? {
+                id: null,
+                status: "REVIEWED" as const,
+                submittedAt: gradeScore.updatedAt,
+                score: gradeScore.score,
+                feedback: "",
+                files: [],
+              }
+            : null;
       return {
         id: assignment.id,
         groupId: assignment.groupId,
