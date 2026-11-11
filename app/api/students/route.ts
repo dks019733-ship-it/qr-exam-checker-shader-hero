@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -15,10 +16,7 @@ export async function GET(request: Request) {
     where: { classId, isActive: true },
     select: { id: true, rollNo: true, studentNo: true, name: true, qrToken: true },
   });
-  students.sort((a, b) =>
-    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
-    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true }),
-  );
+  students.sort(compareByRollNo);
   return NextResponse.json(students);
 }
 
