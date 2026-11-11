@@ -18,5 +18,12 @@ export async function GET() {
     },
     orderBy: { updatedAt: "desc" },
   });
-  return NextResponse.json(exams);
+  const sortedExams = exams.map((exam) => ({
+    ...exam,
+    attempts: [...exam.attempts].sort((a, b) =>
+      (a.student.rollNo || "").localeCompare(b.student.rollNo || "", "th", { numeric: true }) ||
+      a.student.studentNo.localeCompare(b.student.studentNo, "th", { numeric: true }),
+    ),
+  }));
+  return NextResponse.json(sortedExams);
 }
