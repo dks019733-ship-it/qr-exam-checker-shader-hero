@@ -935,20 +935,18 @@ export default function StudentPortalPage() {
                           setSelectedFiles([...pendingFiles]);
                           continue;
                         }
-                        const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
-                        const presign = await presignResponse.json();
-                        if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
-                        const safeFileName = String(presign.fileName || file.name);
+                        const uploadForm = new FormData();
+                        uploadForm.set("assignmentId", selectedTask.assignmentId);
+                        uploadForm.set("file", file, file.name);
+                        const completeResponse = await fetch("/api/files/drive-upload", { method: "POST", body: uploadForm });
+                        const complete = await completeResponse.json();
+                        if (!completeResponse.ok) throw new Error(complete.error || "ส่งไฟล์ไปยัง Google Drive ไม่สำเร็จ");
+                        const safeFileName = String(complete.file?.fileName || file.name);
                         if (alreadyUploaded.has(safeFileName.toLocaleLowerCase())) {
                           pendingFiles.shift();
                           setSelectedFiles([...pendingFiles]);
                           continue;
                         }
-                        const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-                        if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
-                        const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: safeFileName, contentType: file.type, sizeBytes: file.size }) });
-                        const complete = await completeResponse.json();
-                        if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
                         const submittedAt = complete.submission.submittedAt as string;
                         alreadyUploaded.add(String(complete.file.fileName).toLocaleLowerCase());
                         setSelectedTask((current) => current ? {
