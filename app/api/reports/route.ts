@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 export async function GET() {
   const unavailable = await featureAvailabilityResponse("gradebook");
@@ -20,10 +21,7 @@ export async function GET() {
   });
   const sortedExams = exams.map((exam) => ({
     ...exam,
-    attempts: [...exam.attempts].sort((a, b) =>
-      (a.student.rollNo || "").localeCompare(b.student.rollNo || "", "th", { numeric: true }) ||
-      a.student.studentNo.localeCompare(b.student.studentNo, "th", { numeric: true }),
-    ),
+    attempts: [...exam.attempts].sort((a, b) => compareByRollNo(a.student, b.student)),
   }));
   return NextResponse.json(sortedExams);
 }
