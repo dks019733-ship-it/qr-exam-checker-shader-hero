@@ -63,9 +63,8 @@ export async function GET() {
       const gradeScore = assignment.gradeColumn?.scores[0] ?? null;
       const hasGradebookScore = gradeScore !== null && gradeScore.score !== null;
 
-      // For teacher-checked coursework, the online gradebook is the sole source
-      // of truth. A REVIEWED submission without a gradebook score is still pending.
-      // This also prevents legacy/stale submission statuses from hiding missing work.
+      // For linked coursework, the online gradebook is the sole completion source.
+      // Preserve existing upload/feedback details, but mark a missing grade as pending.
       const submission = assignment.gradeColumn
         ? hasGradebookScore
           ? {
@@ -78,7 +77,13 @@ export async function GET() {
               status: "REVIEWED" as const,
               score: gradeScore.score,
             }
-          : null
+          : storedSubmission
+            ? {
+                ...storedSubmission,
+                status: "PENDING_GRADEBOOK" as const,
+                score: null,
+              }
+            : null
         : storedSubmission
           ? storedSubmission
           : hasGradebookScore
