@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, BookOpen, Loader2, Plus, RefreshCw } from "lucide-react";
+import { SubjectCodeEditor } from "@/components/subject-code-editor";
 
 type Classroom = { id: string; name: string };
 type Assignment = {
@@ -125,6 +126,7 @@ export default function SubjectsPage() {
                   <div>
                     <p className="font-medium">{item.subject.name}</p>
                     <p className="mt-1 text-xs text-slate-500">{item.subject.code} · {item.classroom.name}</p>
+                    <SubjectCodeEditor teachingAssignmentId={item.id} initialCode={item.subject.code} initialName={item.subject.name} />
                   </div>
                   <p className="text-xs text-slate-500">{item._count.enrollments} นักเรียน · {item._count.exams} ข้อสอบ · {item._count.gradeColumns} ช่องคะแนน</p>
                 </article>
