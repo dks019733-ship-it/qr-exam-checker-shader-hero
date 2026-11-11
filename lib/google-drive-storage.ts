@@ -24,7 +24,7 @@ async function api(path:string,token:string,init:RequestInit={}){
 function escapeQuery(value:string){return value.replace(/\\/g,"\\\\").replace(/'/g,"\\'");}
 async function ensureFolder(name:string,parentId:string|null,token:string){
  const clauses=["name = '"+escapeQuery(name)+"'","mimeType = 'application/vnd.google-apps.folder'","trashed = false"];
- if(parentId)clauses.push("'"+escapeQuery(parentId)+"' in parents");
+ clauses.push("'"+escapeQuery(parentId || "root")+"' in parents");
  const found=await api("/files?q="+encodeURIComponent(clauses.join(" and "))+"&pageSize=100&fields=files(id,name)",token);
  const list=await found.json() as {files?:Array<{id?:string;name?:string}>};
  const existing=list.files?.find(x=>x.id&&x.name===name);if(existing?.id)return existing.id;
@@ -50,13 +50,32 @@ export function verifyUploadBytes(bytes:Uint8Array,type:string){
  default:return false;
  }
 }
-export async function uploadSubmissionToDrive(input:{token:string;folderId:string;fileName:string;contentType:string;bytes:Uint8Array}){
- const boundary="qr-exam-"+crypto.randomUUID(),metadata=JSON.stringify({name:input.fileName,mimeType:input.contentType,parents:[input.folderId]});
- const prefix=Buffer.from("--"+boundary+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+metadata+"\r\n--"+boundary+"\r\nContent-Type: "+input.contentType+"\r\n\r\n");
- const body=Buffer.concat([prefix,Buffer.from(input.bytes),Buffer.from("\r\n--"+boundary+"--")]);
- const response=await fetch(UPLOAD_API+"/files?uploadType=multipart&fields=id",{method:"POST",headers:{Authorization:"Bearer "+input.token,"Content-Type":"multipart/related; boundary="+boundary,"Content-Length":String(body.byteLength)},body,cache:"no-store"});
- const data=await response.json().catch(()=>null) as {id?:string}|null;if(!response.ok||!data?.id)throw new Error("GOOGLE_DRIVE_UPLOAD_FAILED_"+response.status);return data.id;
+export async function createDriveResumableSession(input:{token:string;folderId:string;fileName:string;contentType:string;sizeBytes:number}){
+ const metadata={name:input.fileName,mimeType:input.contentType,parents:[input.folderId]};
+ const response=await fetch(UPLOAD_API+"/files?uploadType=resumable&fields=id",{method:"POST",headers:{
+  Authorization:"Bearer "+input.token,"Content-Type":"application/json; charset=UTF-8",
+  "X-Upload-Content-Type":input.contentType,"X-Upload-Content-Length":String(input.sizeBytes),
+ },body:JSON.stringify(metadata),cache:"no-store"});
+ if(!response.ok){await response.body?.cancel();throw new Error("GOOGLE_DRIVE_SESSION_CREATE_FAILED_"+response.status);}
+ const location=response.headers.get("location");
+ if(!location)throw new Error("GOOGLE_DRIVE_SESSION_URL_MISSING");
+ const session=new URL(location);
+ if(session.protocol!=="https:"||session.hostname!=="www.googleapis.com"||!session.pathname.startsWith("/upload/drive/v3/files"))throw new Error("GOOGLE_DRIVE_SESSION_URL_INVALID");
+ return session.toString();
 }
+
+export async function verifyDriveUploadedFile(ownerId:string,id:string,folderId:string,expected:{fileName:string;contentType:string;sizeBytes:number}){
+ const token=await accessToken(ownerId);
+ const metadataResponse=await api("/files/"+encodeURIComponent(id)+"?fields=id,name,mimeType,size,parents,trashed",token);
+ const metadata=await metadataResponse.json() as {id?:string;name?:string;mimeType?:string;size?:string;parents?:string[];trashed?:boolean};
+ if(metadata.id!==id||metadata.name!==expected.fileName||metadata.mimeType!==expected.contentType||Number(metadata.size)!==expected.sizeBytes||metadata.trashed||!metadata.parents?.includes(folderId)){
+  throw new Error("GOOGLE_DRIVE_FILE_METADATA_MISMATCH");
+ }
+ const contentResponse=await api("/files/"+encodeURIComponent(id)+"?alt=media",token);
+ const bytes=new Uint8Array(await contentResponse.arrayBuffer());
+ if(bytes.byteLength!==expected.sizeBytes||!verifyUploadBytes(bytes,expected.contentType))throw new Error("GOOGLE_DRIVE_FILE_SIGNATURE_INVALID");
+}
+
 export async function deleteDriveFile(ownerId:string,id:string){
  const token=await accessToken(ownerId),response=await fetch(API+"/files/"+encodeURIComponent(id),{method:"DELETE",headers:{Authorization:"Bearer "+token},cache:"no-store"});
  if(!response.ok&&response.status!==404){await response.body?.cancel();throw new Error("GOOGLE_DRIVE_DELETE_FAILED_"+response.status);}
