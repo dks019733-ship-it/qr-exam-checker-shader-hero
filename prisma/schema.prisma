@@ -667,7 +667,8 @@ model Submission {
 model SubmissionFile {
   id           String     @id @default(cuid())
   submissionId String
-  objectKey    String     @unique
+  objectKey    String?    @unique
+  driveFileId  String?    @unique
   fileName     String
   contentType  String
   sizeBytes    Int
