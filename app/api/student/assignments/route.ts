@@ -66,7 +66,7 @@ export async function GET() {
       // For teacher-checked coursework, the online gradebook is the sole source
       // of truth. A REVIEWED submission without a gradebook score is still pending.
       // This also prevents legacy/stale submission statuses from hiding missing work.
-      const submission = assignment.mode === "TEACHER_CHECK" && assignment.gradeColumn
+      const submission = assignment.gradeColumn
         ? hasGradebookScore
           ? {
               ...(storedSubmission ?? {
