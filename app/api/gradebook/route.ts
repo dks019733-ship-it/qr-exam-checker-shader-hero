@@ -2,6 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareByRollNo } from "@/lib/student-sort";
 
 const periods = ["MIDTERM", "AFTER_MIDTERM"] as const;
 
@@ -45,12 +46,9 @@ export async function GET(request: Request) {
       orderBy: { subject: { code: "asc" } },
     }),
   ]);
-  const byRollNo = (a: { rollNo: string; studentNo: string }, b: { rollNo: string; studentNo: string }) =>
-    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
-    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true });
-  students.sort(byRollNo);
+  students.sort(compareByRollNo);
   const sortedMatchingStudents = [...matchingStudents].sort((a, b) =>
-    a.class.name.localeCompare(b.class.name, "th", { numeric: true }) || byRollNo(a, b),
+    a.class.name.localeCompare(b.class.name, "th", { numeric: true }) || compareByRollNo(a, b),
   );
   return NextResponse.json({
     classes,
