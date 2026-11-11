@@ -39,6 +39,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         })
       : Promise.resolve([]),
   ]);
+  students.sort((a, b) =>
+    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
+    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true }),
+  );
   const gradeScoreByStudent = new Map(gradeScores.map((item) => [item.studentId, item]));
   const receivedStudentIds = new Set(submissions.map((item) => item.studentId));
 
@@ -59,7 +63,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     }];
   });
   const allSubmissions = [...submissions, ...gradebookOnlySubmissions]
-    .sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+    .sort((a, b) =>
+      (a.student.rollNo || "").localeCompare(b.student.rollNo || "", "th", { numeric: true }) ||
+      a.student.studentNo.localeCompare(b.student.studentNo, "th", { numeric: true }),
+    );
 
   return NextResponse.json({
     assignment: {
@@ -71,14 +78,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     ),
     submissions: allSubmissions.map((item) => {
       const gradeScore = gradeScoreByStudent.get(item.student.id);
-      // A grade entered in the authoritative gradebook completes a teacher-check
-      // task even when a submission row already existed before the score was entered.
-      // Explicitly returned work remains returned until the student resubmits.
-      const status = assignment.mode === "TEACHER_CHECK" &&
-        item.status === "SUBMITTED" &&
-        gradeScore?.score !== null &&
-        gradeScore?.score !== undefined
-        ? "REVIEWED"
+      // For teacher-checked work, gradebook score alone determines completion.
+      // A stale REVIEWED flag without a gradebook score must remain pending.
+      const status = assignment.mode === "TEACHER_CHECK"
+        ? (gradeScore?.score !== null && gradeScore?.score !== undefined ? "REVIEWED" : "SUBMITTED")
         : item.status;
       return {
         id: item.id,
@@ -109,7 +112,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const assignment = await prisma.assignment.findFirst({
     where: { id, ownerId: session.user.id, mode: "TEACHER_CHECK", status: "PUBLISHED" },
-    select: { id: true, classId: true, maxScore: true, gradeColumn: { select: { id: true, classId: true } } },
+    select: {
+      id: true,
+      classId: true,
+      maxScore: true,
+      gradeColumn: { select: { id: true, classId: true, maxScore: true } },
+    },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานตรวจในชั้นเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
   const student = await prisma.student.findFirst({
@@ -123,52 +131,76 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const hasReviewInput = hasScore || hasFeedback;
   const score = !hasScore || body.score === "" || body.score === null ? null : Number(body.score);
   const feedback = hasFeedback && typeof body.feedback === "string" ? body.feedback.trim() : "";
-  if (hasScore && score !== null && (!Number.isFinite(score) || score < 0 || (assignment.maxScore !== null && score > assignment.maxScore))) {
-    return NextResponse.json({ error: "คะแนนไม่ถูกต้อง" }, { status: 400 });
+  const maxScore = assignment.gradeColumn?.maxScore ?? assignment.maxScore;
+  if (hasScore && score !== null && (!Number.isFinite(score) || score < 0 || (maxScore !== null && score > maxScore))) {
+    return NextResponse.json({ error: "คะแนนไม่ถูกต้อง หรือเกินคะแนนเต็มในสมุดออนไลน์" }, { status: 400 });
   }
   if (hasFeedback && (typeof body.feedback !== "string" || body.feedback.length > 5000)) {
     return NextResponse.json({ error: "ความคิดเห็นต้องเป็นข้อความไม่เกิน 5,000 ตัวอักษร" }, { status: 400 });
   }
 
   const now = new Date();
-  const existing = await prisma.submission.findUnique({
-    where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
-    select: { id: true, status: true },
-  });
-  if (existing?.status === "RETURNED" && !hasReviewInput) {
-    const transitioned = await prisma.submission.updateMany({
-      where: { id: existing.id, status: "RETURNED" },
-      data: { status: "SUBMITTED", submittedAt: now, score: null, feedback: "", reviewedAt: null },
-    });
-    if (transitioned.count !== 1) {
-      return NextResponse.json({ error: "สถานะงานเปลี่ยนไปแล้ว กรุณาโหลดข้อมูลใหม่" }, { status: 409 });
-    }
-    const saved = await prisma.submission.findUniqueOrThrow({
-      where: { id: existing.id },
-      select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
-    });
-    return NextResponse.json(saved);
-  }
+  try {
+    const saved = await prisma.$transaction(async (tx) => {
+      // A linked assignment writes directly to the gradebook; Submission.score is
+      // never used as a competing score source for linked coursework.
+      if (hasScore && assignment.gradeColumn) {
+        await tx.gradeScore.upsert({
+          where: {
+            columnId_studentId: {
+              columnId: assignment.gradeColumn.id,
+              studentId: student.id,
+            },
+          },
+          create: {
+            columnId: assignment.gradeColumn.id,
+            studentId: student.id,
+            score,
+            manualOverride: true,
+          },
+          update: { score, manualOverride: true },
+        });
+      }
 
-  const saved = await prisma.$transaction(async (tx) => {
-    const submission = await tx.submission.upsert({
-      where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
-      create: {
-        assignmentId: assignment.id,
-        studentId: student.id,
-        status: hasReviewInput ? "REVIEWED" : "SUBMITTED",
-        submittedAt: now,
-        ...(hasReviewInput ? { reviewedAt: now, score, feedback } : {}),
-      },
-      update: hasReviewInput ? {
-        status: "REVIEWED",
-        reviewedAt: now,
-        ...(hasScore ? { score } : {}),
-        ...(hasFeedback ? { feedback } : {}),
-      } : {},
-      select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+      const linkedScoreStatus = assignment.gradeColumn
+        ? (hasScore && score !== null ? "REVIEWED" as const : "SUBMITTED" as const)
+        : undefined;
+      const submission = await tx.submission.upsert({
+        where: { assignmentId_studentId: { assignmentId: assignment.id, studentId: student.id } },
+        create: {
+          assignmentId: assignment.id,
+          studentId: student.id,
+          status: linkedScoreStatus ?? (hasReviewInput ? "REVIEWED" : "SUBMITTED"),
+          submittedAt: now,
+          ...(assignment.gradeColumn ? { score: null } : hasScore ? { score } : {}),
+          ...(hasReviewInput ? { reviewedAt: linkedScoreStatus === "REVIEWED" || !assignment.gradeColumn ? now : null } : {}),
+          ...(hasFeedback ? { feedback } : {}),
+        },
+        update: assignment.gradeColumn
+          ? {
+              status: linkedScoreStatus ?? "SUBMITTED",
+              ...(hasScore ? { score: null, reviewedAt: linkedScoreStatus === "REVIEWED" ? now : null } : {}),
+              ...(hasFeedback ? { feedback } : {}),
+            }
+          : hasReviewInput
+            ? {
+                status: "REVIEWED",
+                reviewedAt: now,
+                ...(hasScore ? { score } : {}),
+                ...(hasFeedback ? { feedback } : {}),
+              }
+            : {},
+        select: { id: true, status: true, submittedAt: true, score: true, feedback: true, reviewedAt: true },
+      });
+      return submission;
     });
-    return submission;
-  });
-  return NextResponse.json({ ...saved, gradeColumnLinked: Boolean(assignment.gradeColumn), gradebookScoreChanged: false });
+    return NextResponse.json({
+      ...saved,
+      gradeColumnLinked: Boolean(assignment.gradeColumn),
+      gradebookScoreChanged: Boolean(hasScore && assignment.gradeColumn),
+    });
+  } catch (error) {
+    console.error("[AssignmentReview] receive or score update failed:", error);
+    return NextResponse.json({ error: "บันทึกการรับงานหรือคะแนนไม่สำเร็จ" }, { status: 500 });
+  }
 }
