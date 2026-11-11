@@ -111,15 +111,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!studentId) return NextResponse.json({ error: "กรุณาระบุนักเรียน" }, { status: 400 });
 
   const assignment = await prisma.assignment.findFirst({
-    where: { id, ownerId: session.user.id, mode: "TEACHER_CHECK", status: "PUBLISHED" },
+    where: { id, ownerId: session.user.id, mode: "TEACHER_CHECK" },
     select: {
       id: true,
       classId: true,
+      status: true,
       maxScore: true,
-      gradeColumn: { select: { id: true, classId: true, maxScore: true } },
+      gradeColumn: { select: { id: true, classId: true, ownerId: true, maxScore: true } },
     },
   });
   if (!assignment) return NextResponse.json({ error: "ไม่พบงานตรวจในชั้นเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
+  if (assignment.gradeColumn && (assignment.gradeColumn.classId !== assignment.classId || assignment.gradeColumn.ownerId !== session.user.id)) {
+    return NextResponse.json({ error: "ช่องคะแนนที่เชื่อมกับงานไม่ตรงกับห้องเรียนหรือเจ้าของงาน" }, { status: 409 });
+  }
   const student = await prisma.student.findFirst({
     where: { id: studentId, classId: assignment.classId, isActive: true },
     select: { id: true },
@@ -129,6 +133,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const hasScore = Object.prototype.hasOwnProperty.call(body, "score");
   const hasFeedback = Object.prototype.hasOwnProperty.call(body, "feedback");
   const hasReviewInput = hasScore || hasFeedback;
+  if (!hasScore && assignment.status !== "PUBLISHED") {
+    return NextResponse.json({ error: "งานปิดรับแล้ว ไม่สามารถบันทึกรับงานใหม่ได้ แต่ยังแก้คะแนนในสมุดออนไลน์ได้" }, { status: 409 });
+  }
   const score = !hasScore || body.score === "" || body.score === null ? null : Number(body.score);
   const feedback = hasFeedback && typeof body.feedback === "string" ? body.feedback.trim() : "";
   const maxScore = assignment.gradeColumn?.maxScore ?? assignment.maxScore;
