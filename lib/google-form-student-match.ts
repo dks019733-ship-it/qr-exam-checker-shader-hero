@@ -1,3 +1,5 @@
+import { compareByRollNo } from "./student-sort";
+
 export type FormStudentCandidate = {
   id: string;
   rollNo: string;
@@ -39,6 +41,5 @@ export function compareFormStudents(
   b: Pick<FormStudentCandidate, "rollNo" | "studentNo" | "name" | "className">,
 ) {
   return normalizeFormRoom(a.className).localeCompare(normalizeFormRoom(b.className), "th", { numeric: true })
-    || normalized(a.rollNo || a.studentNo).localeCompare(normalized(b.rollNo || b.studentNo), "th", { numeric: true })
-    || a.name.localeCompare(b.name, "th");
+    || compareByRollNo(a, b);
 }
