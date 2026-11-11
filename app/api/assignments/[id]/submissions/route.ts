@@ -31,7 +31,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
           select: { studentId: true, score: true, updatedAt: true },
         })
       : Promise.resolve([]),
-    assignment.mode === "TEACHER_CHECK"
+    assignment.gradeColumn
       ? prisma.student.findMany({
           where: { classId: assignment.classId, isActive: true },
           select: { id: true, rollNo: true, studentNo: true, name: true },
@@ -80,7 +80,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       const gradeScore = gradeScoreByStudent.get(item.student.id);
       // For teacher-checked work, gradebook score alone determines completion.
       // A stale REVIEWED flag without a gradebook score must remain pending.
-      const status = assignment.mode === "TEACHER_CHECK"
+      const status = assignment.gradeColumn
         ? (gradeScore?.score !== null && gradeScore?.score !== undefined ? "REVIEWED" : "SUBMITTED")
         : item.status;
       return {
@@ -111,7 +111,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!studentId) return NextResponse.json({ error: "กรุณาระบุนักเรียน" }, { status: 400 });
 
   const assignment = await prisma.assignment.findFirst({
-    where: { id, ownerId: session.user.id, mode: "TEACHER_CHECK" },
+    where: { id, ownerId: session.user.id },
     select: {
       id: true,
       classId: true,
@@ -120,7 +120,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       gradeColumn: { select: { id: true, classId: true, ownerId: true, maxScore: true } },
     },
   });
-  if (!assignment) return NextResponse.json({ error: "ไม่พบงานตรวจในชั้นเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
+  if (!assignment) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
   if (assignment.gradeColumn && (assignment.gradeColumn.classId !== assignment.classId || assignment.gradeColumn.ownerId !== session.user.id)) {
     return NextResponse.json({ error: "ช่องคะแนนที่เชื่อมกับงานไม่ตรงกับห้องเรียนหรือเจ้าของงาน" }, { status: 409 });
   }
@@ -133,6 +133,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const hasScore = Object.prototype.hasOwnProperty.call(body, "score");
   const hasFeedback = Object.prototype.hasOwnProperty.call(body, "feedback");
   const hasReviewInput = hasScore || hasFeedback;
+  if (hasScore && !assignment.gradeColumn) {
+    return NextResponse.json({ error: "กรุณาเชื่อมงานกับช่องคะแนนในสมุดออนไลน์ก่อนแก้คะแนน" }, { status: 409 });
+  }
+  if (!hasScore && assignment.mode !== "TEACHER_CHECK") {
+    return NextResponse.json({ error: "งานรูปแบบนี้ไม่รองรับการบันทึกรับงานด้วยตนเอง" }, { status: 400 });
+  }
   if (!hasScore && assignment.status !== "PUBLISHED") {
     return NextResponse.json({ error: "งานปิดรับแล้ว ไม่สามารถบันทึกรับงานใหม่ได้ แต่ยังแก้คะแนนในสมุดออนไลน์ได้" }, { status: 409 });
   }
