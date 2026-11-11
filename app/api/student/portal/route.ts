@@ -153,15 +153,20 @@ export async function GET() {
         teacher: string;
         courseworkScore: number;
         courseworkMax: number;
+        courseworkItems: {
+          id: string;
+          title: string;
+          period: string;
+          score: number | null;
+          maxScore: number;
+        }[];
       }
     >();
 
     for (const col of columns) {
       // A column linked to an Exam is an exam score, not coursework.
       if (col.examId) continue;
-      const studentScore = col.scores[0]?.score;
-      // An ungraded column must remain absent ("—"), not become 0/max.
-      if (studentScore === null || studentScore === undefined) continue;
+      const studentScore = col.scores[0]?.score ?? null;
 
       const teachingAssignment = resolveTeachingAssignment(col);
       const subjectName =
@@ -189,12 +194,22 @@ export async function GET() {
           teacher: teacherName,
           courseworkScore: 0,
           courseworkMax: 0,
+          courseworkItems: [],
         });
       }
 
       const entry = subjectMap.get(subjectKey)!;
-      entry.courseworkScore += studentScore;
+      // The gradebook defines the complete coursework denominator. Missing scores
+      // contribute zero earned points but retain the full column maximum.
+      entry.courseworkScore += studentScore ?? 0;
       entry.courseworkMax += col.maxScore;
+      entry.courseworkItems.push({
+        id: col.id,
+        title: col.title,
+        period: col.period,
+        score: studentScore,
+        maxScore: col.maxScore,
+      });
     }
 
     const scores = Array.from(subjectMap.values()).map((item) => ({
@@ -205,14 +220,16 @@ export async function GET() {
         : "—",
       courseworkScore: Number(item.courseworkScore.toFixed(2)),
       courseworkMax: Number(item.courseworkMax.toFixed(2)),
+      courseworkItems: item.courseworkItems,
     }));
 
     // Calculate overall stats
-    const totalTasks = assignments.length;
-    const pendingTasks = assignments.filter((a) => a.status === "pending").length;
-    const submittedTasks = assignments.filter((a) => a.status === "submitted").length;
-    const totalEarned = assignments.reduce((sum, a) => sum + (a.rawScore ?? 0), 0);
-    const totalMax = assignments.reduce((sum, a) => sum + a.maxScore, 0);
+    const courseworkColumns = columns.filter((column) => !column.examId);
+    const totalTasks = courseworkColumns.length;
+    const pendingTasks = courseworkColumns.filter((column) => column.scores[0]?.score == null).length;
+    const submittedTasks = totalTasks - pendingTasks;
+    const totalEarned = courseworkColumns.reduce((sum, column) => sum + (column.scores[0]?.score ?? 0), 0);
+    const totalMax = courseworkColumns.reduce((sum, column) => sum + column.maxScore, 0);
 
     // Dynamic announcements
     const announcements = [
