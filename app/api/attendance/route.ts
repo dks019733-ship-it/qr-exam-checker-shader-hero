@@ -46,6 +46,10 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  students.sort((a, b) =>
+    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
+    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true }),
+  );
   const recordByStudent = new Map((attendance?.records ?? []).map((record) => [record.studentId, record]));
   return NextResponse.json({
     session: attendance ? { id: attendance.id, date: params.get("date"), topic: attendance.topic } : null,
