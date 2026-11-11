@@ -35,6 +35,7 @@ export async function ensureTeacherSubmissionFolder(ownerId:string,subjectCode:s
  const token=await accessToken(ownerId);let parentId:string|null=null;
  const root=(process.env.GOOGLE_DRIVE_SUBMISSIONS_FOLDER||"งานของครู").trim();
  for(const name of [root,subjectCode,gradeLevel,roomName,"เลขที่ "+rollNo]){if(!name.trim()||name.length>100)throw new Error("GOOGLE_DRIVE_FOLDER_NAME_INVALID");parentId=await ensureFolder(name.trim(),parentId,token);}
+ if(!parentId)throw new Error("GOOGLE_DRIVE_FOLDER_CREATE_FAILED");
  return {token,folderId:parentId};
 }
 export function verifyUploadBytes(bytes:Uint8Array,type:string){
