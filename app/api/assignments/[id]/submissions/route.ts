@@ -115,6 +115,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     select: {
       id: true,
       classId: true,
+      mode: true,
       status: true,
       maxScore: true,
       gradeColumn: { select: { id: true, classId: true, ownerId: true, maxScore: true } },
