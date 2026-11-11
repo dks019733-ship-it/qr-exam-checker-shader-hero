@@ -14,8 +14,11 @@ export async function GET(request: Request) {
   const students = await prisma.student.findMany({
     where: { classId, isActive: true },
     select: { id: true, rollNo: true, studentNo: true, name: true, qrToken: true },
-    orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }],
   });
+  students.sort((a, b) =>
+    (a.rollNo || "").localeCompare(b.rollNo || "", "th", { numeric: true }) ||
+    a.studentNo.localeCompare(b.studentNo, "th", { numeric: true }),
+  );
   return NextResponse.json(students);
 }
 
