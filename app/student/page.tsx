@@ -935,7 +935,7 @@ export default function StudentPortalPage() {
                           setSelectedFiles([...pendingFiles]);
                           continue;
                         }
-                        const presignResponse = await fetch("/api/files/presign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
+                        const presignResponse = await fetch("/api/files/drive-upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId: selectedTask.assignmentId, fileName: file.name, contentType: file.type, sizeBytes: file.size }) });
                         const presign = await presignResponse.json();
                         if (!presignResponse.ok) throw new Error(presign.error || "เตรียมอัปโหลดไม่สำเร็จ");
                         const safeFileName = String(presign.fileName || file.name);
@@ -944,9 +944,11 @@ export default function StudentPortalPage() {
                           setSelectedFiles([...pendingFiles]);
                           continue;
                         }
-                        const uploadResponse = await fetch(presign.uploadUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-                        if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไม่สำเร็จ");
-                        const completeResponse = await fetch("/api/files/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scope: "submission", parentId: selectedTask.assignmentId, objectKey: presign.objectKey, fileName: safeFileName, contentType: file.type, sizeBytes: file.size }) });
+                        const uploadResponse = await fetch(presign.sessionUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+                        if (!uploadResponse.ok) throw new Error("อัปโหลดไฟล์ " + file.name + " ไปยัง Google Drive ไม่สำเร็จ");
+                        const uploaded = await uploadResponse.json();
+                        if (!uploaded?.id) throw new Error("Google Drive ไม่ได้ส่งรหัสไฟล์กลับมา");
+                        const completeResponse = await fetch("/api/files/drive-complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignmentId: selectedTask.assignmentId, driveFileId: uploaded.id, fileName: safeFileName, contentType: file.type, sizeBytes: file.size }) });
                         const complete = await completeResponse.json();
                         if (!completeResponse.ok) throw new Error(complete.error || "บันทึกไฟล์ไม่สำเร็จ");
                         const submittedAt = complete.submission.submittedAt as string;
