@@ -30,6 +30,33 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+const STUDENT_WELCOME_MESSAGES = {
+  complete: [
+    "ยอดเยี่ยมมาก! ตอนนี้คุณส่งงานครบแล้ว รักษาความสม่ำเสมอแบบนี้ต่อไปนะ",
+    "ขอบคุณที่รับผิดชอบงานของตนเองได้ดี ตอนนี้ไม่มีงานค้างในระบบแล้ว",
+    "ทำได้ดีมาก! คุณจัดการงานที่ได้รับมอบหมายครบถ้วนแล้ว อย่าลืมทบทวนบทเรียนด้วยนะ",
+    "ขอชื่นชมในความตั้งใจ ตอนนี้คุณไม่มีงานที่รอส่งในระบบแล้ว",
+  ],
+  pending: [
+    "ยังมีงานที่ต้องส่งอยู่นะ ลองจัดลำดับงานและทยอยทำทีละชิ้น คุณทำได้",
+    "ขอเป็นกำลังใจให้จัดการงานที่เหลือ หากติดปัญหาสามารถปรึกษาครูผู้สอนได้",
+    "อย่าลืมตรวจสอบกำหนดส่งของแต่ละวิชา วางแผนส่งงานล่วงหน้าเพื่อไม่ให้พลาดกำหนดนะ",
+  ],
+  urgent: [
+    "ขณะนี้มีงานค้างหลายรายการ แนะนำให้ตรวจสอบและทยอยส่งโดยเร็ว หากส่งไม่ทันควรปรึกษาครูผู้สอน",
+    "มีงานที่ยังไม่ส่งตั้งแต่ 3 รายการขึ้นไป โปรดวางแผนจัดการงานตามกำหนด เพราะอาจกระทบคะแนนและการพิจารณาผลการเรียน (มส.) ตามเกณฑ์รายวิชา",
+    "ขอแจ้งเตือนด้วยความห่วงใย กรุณาตรวจสอบงานค้างและกำหนดส่ง หากมีข้อขัดข้องให้ติดต่อครูผู้สอนเพื่อหาทางแก้ไข",
+  ],
+};
+
+function chooseStudentWelcomeMessage(pendingCount: number, previousMessage: string) {
+  const category = pendingCount >= 3 ? "urgent" : pendingCount > 0 ? "pending" : "complete";
+  const messages = STUDENT_WELCOME_MESSAGES[category];
+  const available = messages.filter((message) => message !== previousMessage);
+  const choices = available.length ? available : messages;
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
 interface StudentProfile {
   id: string;
   dbId?: string;
@@ -101,6 +128,9 @@ export default function StudentPortalPage() {
 
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const welcomeMessageRef = useRef("");
+  const hasShownWelcomeRef = useRef(false);
   const [assignmentLoadError, setAssignmentLoadError] = useState("");
   const [scores, setScores] = useState<ScoreSummaryItem[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -157,6 +187,9 @@ export default function StudentPortalPage() {
       const res = await fetch("/api/student/portal", { cache: "no-store" });
       if (res.status === 401) {
         setStudent(null);
+        hasShownWelcomeRef.current = false;
+        welcomeMessageRef.current = "";
+        setWelcomeMessage("");
         return;
       }
       if (!res.ok) {
@@ -214,7 +247,15 @@ export default function StudentPortalPage() {
         const standaloneGradebookTasks = (data.assignments || []).filter(
           (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
         );
-        setAssignments([...standaloneGradebookTasks, ...uniqueManagedTasks]);
+        const nextAssignments = [...standaloneGradebookTasks, ...uniqueManagedTasks];
+        setAssignments(nextAssignments);
+        if (!hasShownWelcomeRef.current) {
+          const nextPendingCount = nextAssignments.filter((item) => item.status === "pending").length;
+          const nextMessage = chooseStudentWelcomeMessage(nextPendingCount, welcomeMessageRef.current);
+          welcomeMessageRef.current = nextMessage;
+          setWelcomeMessage(nextMessage);
+          hasShownWelcomeRef.current = true;
+        }
       } else {
         const failure = await taskResponse.json().catch(() => null);
         setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
@@ -282,6 +323,9 @@ export default function StudentPortalPage() {
     setStudent(null);
     setStudentNo("");
     setStudentId("");
+    hasShownWelcomeRef.current = false;
+    welcomeMessageRef.current = "";
+    setWelcomeMessage("");
   }
 
   const pendingCount = useMemo(
@@ -585,6 +629,34 @@ export default function StudentPortalPage() {
                 </div>
               </div>
 
+              {welcomeMessage && (
+                <section
+                  aria-live="polite"
+                  className={pendingCount >= 3
+                    ? "rounded-3xl border border-amber-200 bg-amber-50/90 p-5 shadow-sm"
+                    : pendingCount > 0
+                      ? "rounded-3xl border border-[#ADC2A9]/40 bg-white/85 p-5 shadow-sm"
+                      : "rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm"}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={pendingCount >= 3 ? "mt-0.5 rounded-xl bg-amber-100 p-2 text-amber-700" : "mt-0.5 rounded-xl bg-white/80 p-2 text-[#5e6e5e]"}>
+                      {pendingCount >= 3 ? <Bell className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-[#242e24]">
+                        {pendingCount >= 3 ? "แจ้งเตือนงานที่ควรรีบดำเนินการ" : pendingCount > 0 ? "ข้อความถึงคุณ" : "ข้อความต้อนรับ"}
+                      </p>
+                      <p className="mt-1 break-words text-xs leading-6 text-[#5e6e5e]">{welcomeMessage}</p>
+                      {pendingCount >= 3 && (
+                        <p className="mt-2 text-[11px] font-semibold leading-5 text-amber-800">
+                          มีงานค้าง {pendingCount} รายการ · การพิจารณา มส. ขึ้นอยู่กับเกณฑ์ของครูผู้สอนและสถานศึกษา
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
               {/* Navigation Pill Bar */}
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex bg-white/80 backdrop-blur-xl p-1.5 rounded-2xl border border-[#ADC2A9]/40 shadow-sm w-full sm:w-auto">
@@ -691,7 +763,7 @@ export default function StudentPortalPage() {
                             )}
                           </div>
 
-                          <h4 className="text-sm font-black text-[#242e24] tracking-tight">
+                          <h4 className="break-words [overflow-wrap:anywhere] text-sm font-black text-[#242e24] tracking-tight">
                             {item.title}
                           </h4>
                           <p className="text-xs text-[#5e6e5e] line-clamp-1">{item.desc}</p>
@@ -867,14 +939,14 @@ export default function StudentPortalPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-[2.5rem] p-6 sm:p-8 max-w-lg w-full border border-white shadow-2xl space-y-5 relative overflow-hidden"
+              className="max-h-[90dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[2.5rem] border border-white bg-white p-6 shadow-2xl sm:p-8 space-y-5 relative"
             >
               <div className="flex items-start justify-between border-b border-[#e5ece2] pb-4">
                 <div>
                   <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#D3E4CD] text-[#242e24]">
                     {selectedTask.subject}
                   </span>
-                  <h3 className="text-base font-black text-[#242e24] mt-1">{selectedTask.title}</h3>
+                  <h3 className="mt-1 break-words [overflow-wrap:anywhere] text-base font-black text-[#242e24]">{selectedTask.title}</h3>
                   <p className="text-xs text-[#5e6e5e]">กำหนดส่ง: {selectedTask.dueDate}</p>
                 </div>
                 <button
@@ -898,11 +970,11 @@ export default function StudentPortalPage() {
                 ) : selectedTask.mode === "TEACHER_CHECK" ? (
                   <div className="space-y-3">
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-6 text-emerald-900">{selectedTask.submission?.status === "PENDING_GRADEBOOK" ? "มีบันทึกการส่งเดิม แต่ยังไม่มีคะแนนในสมุดออนไลน์ ระบบจึงยังนับเป็นงานค้าง" : selectedTask.submission?.status === "RETURNED" ? "ครูส่งงานกลับให้แก้ไข กรุณาปรับปรุงงานแล้วนำมาส่งครูอีกครั้ง" : selectedTask.submission?.status === "REVIEWED" ? "ครูตรวจงานนี้แล้ว" : "งานนี้ให้ทำลงสมุดหรือกระดาษ แล้วนำไปส่งให้ครูตรวจในชั้นเรียน ไม่ต้องอัปโหลดไฟล์ในระบบ"}{selectedTask.submission?.feedback && <p className="mt-2 font-semibold">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}{selectedTask.submission?.submittedAt && <p className="mt-1">บันทึกการส่งล่าสุด: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>}</div>
-                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="min-w-0 flex-1 truncate" title={file.fileName}>{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
                   </div>
                 ) : selectedTask.mode === "SYSTEM_UPLOAD" ? (
                   <div className="space-y-3">
-                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="min-w-0 flex-1 truncate" title={file.fileName}>{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
                     {selectedTask.submission && <div className={selectedTask.submission.status === "RETURNED" ? "rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950" : "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"}><p className="font-bold">{selectedTask.submission.status === "PENDING_GRADEBOOK" ? "ยังไม่มีคะแนนในสมุดออนไลน์ · ยังนับเป็นงานค้าง" : selectedTask.submission.status === "RETURNED" ? "ครูส่งงานกลับให้แก้ไข" : selectedTask.submission.status === "REVIEWED" ? "ครูตรวจงานแล้ว" : "ส่งงานแล้ว"}{selectedTask.submission.isLate ? " · ส่งล่าช้า" : ""}</p><p className="mt-1">เวลาส่งล่าสุด: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>{selectedTask.submission.feedback && <p className="mt-2">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}{!!selectedTask.submission.files.length && <p className="mt-2">ส่งแล้ว {selectedTask.submission.files.length} ไฟล์</p>}</div>}
                     {selectedTask.submission?.status !== "REVIEWED" && <div className="space-y-2"><label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-[#99A799]" /> {selectedTask.submission?.status === "RETURNED" ? "เลือกไฟล์ฉบับแก้ไข" : "เลือกไฟล์งาน (PDF, รูปภาพ, DOC/DOCX)"}</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} className="block w-full rounded-2xl border border-[#ADC2A9]/40 bg-[#FEF5ED]/90 p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#D3E4CD] file:px-3 file:py-2 file:text-xs file:font-bold" />{selectedFiles.length > 0 && <p className="text-xs text-[#5e6e5e]">รอส่งอีก {selectedFiles.length} ไฟล์</p>}</div>}
                     {uploadError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700">{uploadError}</p>}
