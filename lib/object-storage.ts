@@ -1,3 +1,5 @@
+import { normalizeSupabaseApiOrigin } from "./supabase-storage-url.mjs";
+
 const configuredUploadLimit = Number(process.env.UPLOAD_MAX_BYTES);
 const MAX_UPLOAD_BYTES = Number.isSafeInteger(configuredUploadLimit) && configuredUploadLimit > 0
   ? Math.min(configuredUploadLimit, 10 * 1024 * 1024)
@@ -19,22 +21,21 @@ type StorageConfig = {
 };
 
 function getConfig(): StorageConfig {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || "assignment-files";
   if (!supabaseUrl || !serviceKey || !bucket) {
     throw new Error("OBJECT_STORAGE_NOT_CONFIGURED");
   }
-  let parsed: URL;
+
+  let apiOrigin: string;
   try {
-    parsed = new URL(supabaseUrl);
+    apiOrigin = normalizeSupabaseApiOrigin(supabaseUrl);
   } catch {
     throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
   }
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && parsed.hostname === "localhost")) {
-    throw new Error("OBJECT_STORAGE_CONFIGURATION_INVALID");
-  }
-  return { baseUrl: supabaseUrl + "/storage/v1", bucket, serviceKey };
+
+  return { baseUrl: apiOrigin + "/storage/v1", bucket, serviceKey };
 }
 
 export function isObjectStorageConfigured() {
