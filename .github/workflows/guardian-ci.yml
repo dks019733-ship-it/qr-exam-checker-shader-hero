@@ -103,5 +103,8 @@ jobs:
       - name: Spreadsheet import/export regression test
         run: npm run test:spreadsheet
 
+      - name: Supabase Storage URL regression tests
+        run: npm run test:storage
+
       - name: Production build
         run: npm run build
