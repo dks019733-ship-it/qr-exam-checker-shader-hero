@@ -253,8 +253,21 @@ export default function StudentPortalPage() {
           const nextPendingCount = nextAssignments.filter((item) => item.status === "pending").length;
           const nextMessage = chooseStudentWelcomeMessage(nextPendingCount, welcomeMessageRef.current);
           welcomeMessageRef.current = nextMessage;
-          setWelcomeMessage(nextMessage);
           hasShownWelcomeRef.current = true;
+
+          // The dismissal is stored server-side so it follows the student across devices.
+          try {
+            const dismissalResponse = await fetch("/api/student/welcome-dismissal", { cache: "no-store" });
+            if (dismissalResponse.ok) {
+              const dismissalData = await dismissalResponse.json();
+              if (!dismissalData.dismissed) setWelcomeMessage(nextMessage);
+            } else if (dismissalResponse.status !== 401) {
+              setWelcomeMessage(nextMessage);
+            }
+          } catch {
+            // Keep the portal usable during a transient network failure.
+            setWelcomeMessage(nextMessage);
+          }
         }
       } else {
         const failure = await taskResponse.json().catch(() => null);
@@ -328,6 +341,16 @@ export default function StudentPortalPage() {
     setWelcomeMessage("");
   }
 
+  async function handleDismissWelcome() {
+    try {
+      const response = await fetch("/api/student/welcome-dismissal", { method: "POST" });
+      if (!response.ok) return;
+      setWelcomeMessage("");
+    } catch {
+      // Keep the message visible if the server could not persist the dismissal.
+    }
+  }
+
   const pendingCount = useMemo(
     () => assignments.filter((item) => item.status === "pending").length,
     [assignments]
@@ -368,7 +391,7 @@ export default function StudentPortalPage() {
             <GraduationCap className="h-6 w-6 text-[#5e6e5e]" />
           </motion.div>
           <div>
-            <span className="block text-base font-black tracking-tight text-[#242e24]">งานของครู</span>
+            <span className="block text-base font-black tracking-tight text-[#242e24]">ระบบสารสนเทศ งานของครู</span>
             <span className="block text-[10px] font-extrabold text-[#99A799] uppercase tracking-widest">
               ngankhongkhru.com
             </span>
@@ -628,34 +651,6 @@ export default function StudentPortalPage() {
                   </div>
                 </div>
               </div>
-
-              {welcomeMessage && (
-                <section
-                  aria-live="polite"
-                  className={pendingCount >= 3
-                    ? "rounded-3xl border border-amber-200 bg-amber-50/90 p-5 shadow-sm"
-                    : pendingCount > 0
-                      ? "rounded-3xl border border-[#ADC2A9]/40 bg-white/85 p-5 shadow-sm"
-                      : "rounded-3xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-sm"}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={pendingCount >= 3 ? "mt-0.5 rounded-xl bg-amber-100 p-2 text-amber-700" : "mt-0.5 rounded-xl bg-white/80 p-2 text-[#5e6e5e]"}>
-                      {pendingCount >= 3 ? <Bell className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-black text-[#242e24]">
-                        {pendingCount >= 3 ? "แจ้งเตือนงานที่ควรรีบดำเนินการ" : pendingCount > 0 ? "ข้อความถึงคุณ" : "ข้อความต้อนรับ"}
-                      </p>
-                      <p className="mt-1 break-words text-xs leading-6 text-[#5e6e5e]">{welcomeMessage}</p>
-                      {pendingCount >= 3 && (
-                        <p className="mt-2 text-[11px] font-semibold leading-5 text-amber-800">
-                          มีงานค้าง {pendingCount} รายการ · การพิจารณา มส. ขึ้นอยู่กับเกณฑ์ของครูผู้สอนและสถานศึกษา
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              )}
 
               {/* Navigation Pill Bar */}
               <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -930,6 +925,46 @@ export default function StudentPortalPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Daily student welcome / reminder modal */}
+      <AnimatePresence>
+        {student && welcomeMessage && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="presentation">
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-welcome-title"
+              aria-describedby="student-welcome-description"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-[#FFFCF8] p-6 shadow-2xl sm:p-8"
+            >
+              <div className={pendingCount >= 3 ? "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700" : "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#D3E4CD] text-[#425442]"}>
+                {pendingCount >= 3 ? <Bell className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+              </div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#99A799]">ระบบสารสนเทศ งานของครู</p>
+              <h2 id="student-welcome-title" className="text-xl font-black leading-snug text-[#242e24]">
+                {pendingCount >= 3 ? "แจ้งเตือนงานที่ควรรีบดำเนินการ" : pendingCount > 0 ? "ข้อความถึงคุณ" : "ยินดีต้อนรับ"}
+              </h2>
+              <p id="student-welcome-description" className="mt-3 break-words text-sm leading-7 text-[#5e6e5e]">{welcomeMessage}</p>
+              {pendingCount >= 3 && (
+                <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-6 text-amber-800">
+                  มีงานค้าง {pendingCount} รายการ · ความเสี่ยงต่อการพิจารณา มส. ขึ้นอยู่กับเกณฑ์ของครูผู้สอนและสถานศึกษา
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleDismissWelcome()}
+                className="mt-6 w-full rounded-2xl bg-[#425442] px-5 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-[#344434] focus:outline-none focus:ring-2 focus:ring-[#ADC2A9] focus:ring-offset-2"
+              >
+                รับทราบและเข้าสู่ระบบ
+              </button>
+            </motion.section>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Submission Modal Sheet */}
       <AnimatePresence>
