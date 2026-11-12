@@ -13,7 +13,8 @@
     "postinstall": "prisma generate",
     "test:guardian": "node --test tests/line-signature.test.mjs tests/guardian-task-finalize.test.mjs tests/guardian-task-retry.test.mjs",
     "test:guardian:integration": "node --test tests/guardian-database-concurrency.test.mjs",
-    "test:spreadsheet": "node --test tests/spreadsheet.test.mjs"
+    "test:spreadsheet": "node --test tests/spreadsheet.test.mjs",
+    "test:storage": "node --test tests/object-storage-url.test.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

@@ -79,7 +79,8 @@ jobs:
             20261106_site_announcement \
             20261106_subject_based_access \
             20261108_attendance_assignments \
-            20261108_feature_availability
+            20261108_feature_availability \
+            20261111100000_submission_files_google_drive
           do
             npx prisma migrate resolve --applied "$migration"
           done
@@ -102,6 +103,9 @@ jobs:
 
       - name: Spreadsheet import/export regression test
         run: npm run test:spreadsheet
+
+      - name: Supabase Storage URL regression tests
+        run: npm run test:storage
 
       - name: Production build
         run: npm run build

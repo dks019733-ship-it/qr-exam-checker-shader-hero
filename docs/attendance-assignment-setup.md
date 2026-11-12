@@ -18,12 +18,12 @@ Assignment attachments and student submissions use the existing private Supabase
 
 Configure these server-side Vercel environment variables for Preview and Production:
 
-- `SUPABASE_URL`
+- `SUPABASE_URL` — the regular project API URL, e.g. `https://<project-ref>.supabase.co` (not the dedicated `https://<project-ref>.storage.supabase.co` S3 hostname)
 - `SUPABASE_SERVICE_ROLE_KEY` (sensitive/secret; server-only)
 - `SUPABASE_STORAGE_BUCKET=assignment-files`
 - `UPLOAD_MAX_BYTES=10485760` (10 MiB; must not exceed the bucket's configured limit)
 
-The bucket must remain private. Do not expose the service-role key through a `NEXT_PUBLIC_` variable, client code, logs, or API responses. Upload URLs are issued for a unique object path and are valid for up to two hours; download URLs expire after three minutes. The server verifies object size, content type and file signature before writing file metadata to PostgreSQL. Rejected or uncommitted objects are deleted server-side.
+The bucket must remain private. `SUPABASE_URL` is used for the REST Storage API and must point to the regular project API host; the dedicated `*.storage.supabase.co` hostname is for the S3-compatible API and is not interchangeable. The application normalizes that known Storage hostname to the project API hostname as a compatibility safeguard. Do not expose the service-role key through a `NEXT_PUBLIC_` variable, client code, logs, or API responses. Upload URLs are issued for a unique object path and are valid for up to two hours; download URLs expire after three minutes. The server verifies object size, content type and file signature before writing file metadata to PostgreSQL. Rejected or uncommitted objects are deleted server-side.
 
 ## Accepted files and optimization
 
