@@ -121,7 +121,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="min-h-screen lg:pl-64">
+      <div className="min-h-screen pb-24 lg:pl-64 lg:pb-0">
         {children}
       </div>
 
