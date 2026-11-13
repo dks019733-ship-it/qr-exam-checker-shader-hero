@@ -27,7 +27,9 @@ export function signStudentToken(payload: { studentId: string; studentNo: string
  */
 export function verifyStudentToken(token: string): StudentTokenPayload | null {
   if (!token || !token.includes(".")) return null;
-  const [json, signature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [json, signature] = parts;
   if (!json || !signature) return null;
 
   const signatureBytes = Buffer.from(signature);
