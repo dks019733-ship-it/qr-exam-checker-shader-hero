@@ -21,7 +21,7 @@ import { SignInButton, SignOutButton } from "@/components/auth-buttons";
 import { SystemGuardianPanel } from "@/components/system-guardian-panel";
 import { SiteAnnouncementBanner } from "@/components/site-announcement-banner";
 import { isSystemOwner } from "@/lib/system-guardian";
-import { FEATURE_CATALOG, getFeatureAvailability, type FeatureKey } from "@/lib/feature-availability";
+import { getFeatureAvailabilitySnapshot, type FeatureKey } from "@/lib/feature-availability";
 
 type ToolCard = { title: string; description: string; href: string; icon: LucideIcon; feature?: FeatureKey; highlight?: boolean };
 
@@ -154,9 +154,7 @@ export default async function HomePage() {
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
   const systemOwner = signedIn ? await isSystemOwner() : false;
-  const featureKeys = Object.keys(FEATURE_CATALOG) as FeatureKey[];
-  const featureStates = await Promise.all(featureKeys.map(async (key) => [key, await getFeatureAvailability(key)] as const));
-  const availability = Object.fromEntries(featureStates) as Record<FeatureKey, Awaited<ReturnType<typeof getFeatureAvailability>>>;
+  const availability = await getFeatureAvailabilitySnapshot();
 
   return (
     <main className="min-h-screen bg-[#f8f7f4] text-[#1c241b]">
