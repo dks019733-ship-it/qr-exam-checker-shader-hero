@@ -129,6 +129,7 @@ export default function StudentPortalPage() {
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [welcomeDismissError, setWelcomeDismissError] = useState("");
   const welcomeMessageRef = useRef("");
   const hasShownWelcomeRef = useRef(false);
   const [assignmentLoadError, setAssignmentLoadError] = useState("");
@@ -205,7 +206,11 @@ export default function StudentPortalPage() {
         const taskData = await taskResponse.json();
         setAssignmentLoadError("");
         const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
-          const submitted = Boolean(task.submission && task.submission.status !== "PENDING_GRADEBOOK");
+          const submitted = Boolean(
+            task.submission &&
+            task.submission.status !== "PENDING_GRADEBOOK" &&
+            task.submission.status !== "RETURNED"
+          );
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
           const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
@@ -342,12 +347,17 @@ export default function StudentPortalPage() {
   }
 
   async function handleDismissWelcome() {
+    setWelcomeDismissError("");
     try {
       const response = await fetch("/api/student/welcome-dismissal", { method: "POST" });
-      if (!response.ok) return;
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        setWelcomeDismissError(data?.error || "บันทึกการรับทราบไม่สำเร็จ กรุณาลองอีกครั้ง");
+        return;
+      }
       setWelcomeMessage("");
     } catch {
-      // Keep the message visible if the server could not persist the dismissal.
+      setWelcomeDismissError("ไม่สามารถเชื่อมต่อระบบได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
     }
   }
 
@@ -952,6 +962,11 @@ export default function StudentPortalPage() {
               {pendingCount >= 3 && (
                 <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-6 text-amber-800">
                   มีงานค้าง {pendingCount} รายการ · ความเสี่ยงต่อการพิจารณา มส. ขึ้นอยู่กับเกณฑ์ของครูผู้สอนและสถานศึกษา
+                </p>
+              )}
+              {welcomeDismissError && (
+                <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold leading-5 text-rose-800">
+                  {welcomeDismissError}
                 </p>
               )}
               <button
