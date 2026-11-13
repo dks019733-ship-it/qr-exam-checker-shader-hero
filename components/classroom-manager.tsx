@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Save, Search, Trash2, Upload, Users } from "lucide-react";
-import * as XLSX from "xlsx";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Student = { id: string; rollNo: string; studentNo: string; name: string; qrToken: string };
@@ -50,6 +49,7 @@ export function ClassroomManager() {
     setNotice("");
     try {
       if (file.size > 15 * 1024 * 1024) throw new Error("ไฟล์ใหญ่เกิน 15 MB");
+      const XLSX = await import("xlsx");
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false });
       const normalizeRoom = (value: string) => value.toLocaleLowerCase("th-TH").replace(/^(ห้อง|ม\.)/u, "").replace(/\s+/g, "");
       const roomPattern = /^(?:(?:ห้อง|ม\.)\s*)?\d+\s*[/.\-]\s*\d+$/u;
