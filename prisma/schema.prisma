@@ -99,11 +99,23 @@ model Student {
   courseEnrollments CourseEnrollment[]
   attendanceRecords AttendanceRecord[]
   submissions Submission[]
+  welcomeDismissals StudentWelcomeDismissal[]
   qrToken   String   @unique @default(cuid())
   createdAt DateTime @default(now())
   @@unique([classId, studentNo])
   @@index([classId, rollNo])
   @@index([identityId])
+}
+
+model StudentWelcomeDismissal {
+  id          String   @id @default(cuid())
+  studentId   String
+  dismissedOn DateTime @db.Date
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([studentId, dismissedOn])
+  @@index([dismissedOn])
 }
 
 model Exam {
