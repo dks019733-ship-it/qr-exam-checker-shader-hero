@@ -11,7 +11,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "postinstall": "prisma generate",
-    "test:guardian": "node --test tests/line-signature.test.mjs tests/guardian-task-finalize.test.mjs tests/guardian-task-retry.test.mjs",
+    "test:guardian": "node --test tests/line-signature.test.mjs tests/guardian-task-finalize.test.mjs tests/guardian-task-retry.test.mjs tests/student-token.test.mjs",
     "test:guardian:integration": "node --test tests/guardian-database-concurrency.test.mjs",
     "test:spreadsheet": "node --test tests/spreadsheet.test.mjs",
     "test:storage": "node --test tests/object-storage-url.test.mjs"
