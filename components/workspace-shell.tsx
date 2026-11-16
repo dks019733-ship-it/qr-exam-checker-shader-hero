@@ -85,12 +85,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-[#f5f4ee]">
       <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-[#e6e5dc] bg-[#fffefa] shadow-[8px_0_32px_-28px_rgba(28,43,32,0.35)] transition-[width] duration-200 lg:flex ${sidebarCollapsed ? "w-[5.25rem] px-2.5 py-5" : "w-64 px-4 py-5"}`}>
         <div className={`flex items-center ${sidebarCollapsed ? "flex-col gap-3" : "justify-between gap-2"}`}>
-          <Link href="/" className={`flex min-w-0 items-center ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"} py-2`} aria-label="ระบบสารสนเทศ งานของครู">
+          <Link href="/" className={`flex min-w-0 items-center ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"} py-2`} aria-label="งานของครู">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#304a38] to-[#1f3427] text-[#f8f4e9] shadow-[0_5px_14px_-7px_rgba(30,52,39,0.8)] ring-1 ring-[#9b8050]/30">
               <GraduationCap className="h-5 w-5" aria-hidden="true" />
             </span>
             {!sidebarCollapsed && <span className="min-w-0">
-              <span className="block truncate text-[13px] font-bold tracking-tight text-[#26382b]">ระบบสารสนเทศ งานของครู</span>
+              <span className="block truncate text-[13px] font-bold tracking-tight text-[#26382b]">งานของครู</span>
               <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-[0.17em] text-[#9b8050]">Teacher workspace</span>
             </span>}
           </Link>
