@@ -263,7 +263,7 @@ export async function PATCH(request: Request) {
   }
 
   const group = await prisma.assignment.findMany({
-    where: { groupId, ownerId: session.user.id },
+    where: { ownerId: session.user.id, OR: [{ groupId }, { id: groupId, groupId: null }] },
     include: { _count: { select: { files: true } } },
   });
   if (!group.length) return NextResponse.json({ error: "ไม่พบงานหรือไม่มีสิทธิ์เข้าถึง" }, { status: 404 });
