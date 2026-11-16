@@ -302,18 +302,20 @@ export function Gradebook() {
   return <main className="min-h-screen bg-[#f3f1e9] p-4 text-[#303832] sm:p-8"><div className="mx-auto max-w-7xl">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">สมุดคะแนนออนไลน์</h1><p className="mt-2 text-sm text-slate-600">บันทึกคะแนนงาน/บทในช่วงกลางภาคหรือหลังกลางภาค พร้อมรวมคะแนนตามช่องใน SGS</p></div><div className="flex flex-wrap gap-2"><button onClick={exportCsv} disabled={!students.length} className="inline-flex items-center rounded-lg border px-3 py-2 text-sm disabled:opacity-50"><Download className="mr-2 h-4 w-4" />ส่งออกคะแนน</button><Link href="/dashboard/classes" className="rounded-lg border px-3 py-2 text-sm">จัดการห้องเรียน</Link></div></div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <label className="text-sm font-medium">ห้องเรียน</label>
-        <select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); }}>
-          <option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
-        <label className="text-sm font-medium">รายวิชา</label>
-        <select className={inputClass} value={subjectFilter === "__auto__" ? "all" : subjectFilter} onChange={(event) => { setSubjectFilter(event.target.value); setSelectedColumns([]); }} disabled={!classId || payload?.classroom?.id !== classId}>
-          <option value="all">ทุกวิชา</option>
-          <option value="__unassigned__">ยังไม่ผูกรายวิชา</option>
-          {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
-        </select>
-        <span className="text-sm text-slate-500">{students.length} คน · {columns.length} ช่องคะแนน</span>
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:items-end">
+        <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">ห้องเรียน
+          <select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); }}>
+            <option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">รายวิชา
+          <select className={inputClass} value={subjectFilter === "__auto__" ? "all" : subjectFilter} onChange={(event) => { setSubjectFilter(event.target.value); setSelectedColumns([]); }} disabled={!classId || payload?.classroom?.id !== classId}>
+            <option value="all">ทุกวิชา</option>
+            <option value="__unassigned__">ยังไม่ผูกรายวิชา</option>
+            {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
+          </select>
+        </label>
+        <span className="self-end pb-2 text-xs text-slate-500 sm:col-span-2 lg:ml-auto">{students.length} คน · {columns.length} ช่องคะแนน</span>
       </div>
     </header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
@@ -347,7 +349,39 @@ export function Gradebook() {
           {(sourceType === "exam" || sourceType === "google_form") && <label className="grid gap-1 text-xs font-medium">เลือกรายการ<select required className={inputClass} value={sourceId} onChange={(event) => { setSourceId(event.target.value); if (!title) { const selected = sourceType === "exam" ? payload.exams.find((item) => item.id === event.target.value)?.title : payload.googleForms.find((item) => item.id === event.target.value)?.material.title; if (selected) setTitle(selected); } }}><option value="">เลือกรายการ</option>{sourceType === "exam" ? payload.exams.filter((item) => item.classId === classId && !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.title} ({item._count.questions} ข้อ)</option>) : payload.googleForms.filter((item) => !item.gradeColumn).map((item) => <option key={item.id} value={item.id}>{item.material.title}</option>)}</select></label>}
           <div className="flex items-end gap-2"><button disabled={busy || (sourceType !== "exam" && !teachingAssignmentId)} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Save className="mr-1.5 h-4 w-4" />บันทึกช่อง</button><button type="button" onClick={() => setShowAdd(false)} className="rounded-lg border bg-white px-3 py-2 text-sm">ยกเลิก</button></div>
         </form>}
-        {!students.length ? <div className="p-8 text-center text-sm text-slate-500">ห้องนี้ยังไม่มีรายชื่อนักเรียน <Link className="underline" href="/dashboard/classes">เพิ่มรายชื่อนักเรียน</Link></div> : <div className="overflow-x-auto"><table className="min-w-full border-collapse text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-10 min-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-10 min-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} className="min-w-32 border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
+        {!students.length ? <div className="p-8 text-center text-sm text-slate-500">ห้องนี้ยังไม่มีรายชื่อนักเรียน <Link className="underline" href="/dashboard/classes">เพิ่มรายชื่อนักเรียน</Link></div> : <div className="space-y-3 p-3 md:hidden">
+          {sortedStudents.map((student) => (
+            <article key={student.id} className="rounded-2xl border border-[#e2ddcf] bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 border-b border-[#eee9df] pb-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-slate-500">เลขที่ {student.rollNo || student.studentNo}</p>
+                  <h3 className="mt-1 break-words text-sm font-bold leading-6 text-[#303832]">{student.name}</h3>
+                  <p className="text-xs text-slate-500">{student.studentNo}</p>
+                </div>
+                <div className="shrink-0 rounded-xl bg-[#f4f1e8] px-3 py-2 text-right">
+                  <p className="text-[10px] font-semibold text-slate-500">รวมช่วงนี้</p>
+                  <p className="text-sm font-bold tabular-nums text-[#304b38]">{sum(student, periodColumns).toFixed(2).replace(/\\.00$/, "")} / {maxSum(periodColumns)}</p>
+                </div>
+              </div>
+              {periodColumns.length ? (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {periodColumns.map((column) => (
+                    <label key={column.id} className="block min-w-0 rounded-xl border border-[#eee9df] bg-[#fcfbf8] p-3">
+                      <span className="block break-words text-xs font-semibold leading-5 text-[#526052]">{column.title}</span>
+                      <span className="mb-2 block text-[10px] text-slate-500">คะแนนเต็ม {column.maxScore}</span>
+                      <input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} text-center tabular-nums`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} />
+                    </label>
+                  ))}
+                </div>
+              ) : <p className="mt-3 rounded-xl bg-[#f7f6f0] p-3 text-xs text-slate-500">ยังไม่มีช่องคะแนนในช่วงนี้</p>}
+              <div className="mt-3 flex items-center justify-between border-t border-[#eee9df] pt-3 text-xs">
+                <span className="text-slate-500">รวมทุกช่วง</span>
+                <strong className="tabular-nums text-[#304b38]">{sum(student, columns).toFixed(2).replace(/\\.00$/, "")} / {maxSum(columns)}</strong>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block"><table className="min-w-full border-collapse text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-10 min-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-10 min-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} className="min-w-32 border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
                   <select aria-label={`รายวิชาของ ${column.title}`} className={`mt-2 w-full rounded-lg border border-[#ddd7c9] bg-white px-2 py-1.5 text-[11px] font-normal ${column.teachingAssignment ? "text-[#303832]" : "text-slate-500"}`} value={column.teachingAssignment?.id || ""} onChange={(event) => void updateColumnSubject(column, event.target.value)} disabled={busy || !teachingAssignments.length}>
                     <option value="">ยังไม่ผูกกับรายวิชา</option>
                     {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
