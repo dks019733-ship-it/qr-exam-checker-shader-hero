@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     if (form.gradeColumn) return NextResponse.json({ error: "Google Form นี้เชื่อมกับสมุดคะแนนแล้ว" }, { status: 409 });
     googleFormId = form.id;
     googleFormResponderUrl = form.responderUrl;
-  } else if (sourceType !== "manual") {
+  } else if (sourceType !== "manual" && sourceType !== "online") {
     return NextResponse.json({ error: "แหล่งคะแนนไม่ถูกต้อง" }, { status: 400 });
   }
 
@@ -165,9 +165,9 @@ export async function POST(request: Request) {
               title,
               description: googleFormId
                 ? "ทำแบบฝึกหัด/แบบทดสอบออนไลน์ผ่าน Google Forms"
-                : "งานเก็บคะแนนในชั้นเรียน",
-              mode: googleFormId ? "GOOGLE_FORM" : "TEACHER_CHECK",
-              status: "PUBLISHED",
+                : sourceType === "online" ? "งานส่งออนไลน์ — กรุณาแนบไฟล์คำสั่งงานก่อนเผยแพร่" : "งานเก็บคะแนนในชั้นเรียน",
+              mode: googleFormId ? "GOOGLE_FORM" : sourceType === "online" ? "SYSTEM_UPLOAD" : "TEACHER_CHECK",
+              status: sourceType === "online" ? "DRAFT" : "PUBLISHED",
               googleFormUrl: googleFormId ? googleFormResponderUrl : null,
               maxScore,
             },
