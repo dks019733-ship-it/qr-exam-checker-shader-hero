@@ -30,6 +30,33 @@ import {
   AlertCircle,
 } from "lucide-react";
 
+const STUDENT_WELCOME_MESSAGES = {
+  complete: [
+    "ยอดเยี่ยมมาก! ตอนนี้คุณส่งงานครบแล้ว รักษาความสม่ำเสมอแบบนี้ต่อไปนะ",
+    "ขอบคุณที่รับผิดชอบงานของตนเองได้ดี ตอนนี้ไม่มีงานค้างในระบบแล้ว",
+    "ทำได้ดีมาก! คุณจัดการงานที่ได้รับมอบหมายครบถ้วนแล้ว อย่าลืมทบทวนบทเรียนด้วยนะ",
+    "ขอชื่นชมในความตั้งใจ ตอนนี้คุณไม่มีงานที่รอส่งในระบบแล้ว",
+  ],
+  pending: [
+    "ยังมีงานที่ต้องส่งอยู่นะ ลองจัดลำดับงานและทยอยทำทีละชิ้น คุณทำได้",
+    "ขอเป็นกำลังใจให้จัดการงานที่เหลือ หากติดปัญหาสามารถปรึกษาครูผู้สอนได้",
+    "อย่าลืมตรวจสอบกำหนดส่งของแต่ละวิชา วางแผนส่งงานล่วงหน้าเพื่อไม่ให้พลาดกำหนดนะ",
+  ],
+  urgent: [
+    "ขณะนี้มีงานค้างหลายรายการ แนะนำให้ตรวจสอบและทยอยส่งโดยเร็ว หากส่งไม่ทันควรปรึกษาครูผู้สอน",
+    "มีงานที่ยังไม่ส่งตั้งแต่ 3 รายการขึ้นไป โปรดวางแผนจัดการงานตามกำหนด เพราะอาจกระทบคะแนนและการพิจารณาผลการเรียน (มส.) ตามเกณฑ์รายวิชา",
+    "ขอแจ้งเตือนด้วยความห่วงใย กรุณาตรวจสอบงานค้างและกำหนดส่ง หากมีข้อขัดข้องให้ติดต่อครูผู้สอนเพื่อหาทางแก้ไข",
+  ],
+};
+
+function chooseStudentWelcomeMessage(pendingCount: number, previousMessage: string) {
+  const category = pendingCount >= 3 ? "urgent" : pendingCount > 0 ? "pending" : "complete";
+  const messages = STUDENT_WELCOME_MESSAGES[category];
+  const available = messages.filter((message) => message !== previousMessage);
+  const choices = available.length ? available : messages;
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+
 interface StudentProfile {
   id: string;
   dbId?: string;
@@ -101,6 +128,10 @@ export default function StudentPortalPage() {
 
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [welcomeDismissError, setWelcomeDismissError] = useState("");
+  const welcomeMessageRef = useRef("");
+  const hasShownWelcomeRef = useRef(false);
   const [assignmentLoadError, setAssignmentLoadError] = useState("");
   const [scores, setScores] = useState<ScoreSummaryItem[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -118,6 +149,8 @@ export default function StudentPortalPage() {
 
   // Submission Modal state
   const [selectedTask, setSelectedTask] = useState<AssignmentItem | null>(null);
+  const [viewingTask, setViewingTask] = useState<AssignmentItem | null>(null);
+  const [viewTaskError, setViewTaskError] = useState("");
   const [submitLink, setSubmitLink] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -154,9 +187,16 @@ export default function StudentPortalPage() {
     if (showInitialLoading) setInitialChecking(true);
 
     try {
-      const res = await fetch("/api/student/portal", { cache: "no-store" });
+      // Load the student dashboard and assignment list concurrently to avoid a network waterfall.
+      const [res, taskResponse] = await Promise.all([
+        fetch("/api/student/portal", { cache: "no-store" }),
+        fetch("/api/student/assignments", { cache: "no-store" }).catch(() => null),
+      ]);
       if (res.status === 401) {
         setStudent(null);
+        hasShownWelcomeRef.current = false;
+        welcomeMessageRef.current = "";
+        setWelcomeMessage("");
         return;
       }
       if (!res.ok) {
@@ -167,12 +207,15 @@ export default function StudentPortalPage() {
       const data = await res.json();
       setStudent(data.student);
 
-      const taskResponse = await fetch("/api/student/assignments", { cache: "no-store" });
-      if (taskResponse.ok) {
+      if (taskResponse?.ok) {
         const taskData = await taskResponse.json();
         setAssignmentLoadError("");
         const managedTasks: AssignmentItem[] = (taskData.assignments || []).map((task: any) => {
-          const submitted = Boolean(task.submission && task.submission.status !== "PENDING_GRADEBOOK");
+          const submitted = Boolean(
+            task.submission &&
+            task.submission.status !== "PENDING_GRADEBOOK" &&
+            task.submission.status !== "RETURNED"
+          );
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
           const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
@@ -214,9 +257,30 @@ export default function StudentPortalPage() {
         const standaloneGradebookTasks = (data.assignments || []).filter(
           (item: AssignmentItem) => !linkedGradeColumnIds.has(item.id),
         );
-        setAssignments([...standaloneGradebookTasks, ...uniqueManagedTasks]);
+        const nextAssignments = [...standaloneGradebookTasks, ...uniqueManagedTasks];
+        setAssignments(nextAssignments);
+        if (!hasShownWelcomeRef.current) {
+          const nextPendingCount = nextAssignments.filter((item) => item.status === "pending").length;
+          const nextMessage = chooseStudentWelcomeMessage(nextPendingCount, welcomeMessageRef.current);
+          welcomeMessageRef.current = nextMessage;
+          hasShownWelcomeRef.current = true;
+
+          // The dismissal is stored server-side so it follows the student across devices.
+          try {
+            const dismissalResponse = await fetch("/api/student/welcome-dismissal", { cache: "no-store" });
+            if (dismissalResponse.ok) {
+              const dismissalData = await dismissalResponse.json();
+              if (!dismissalData.dismissed) setWelcomeMessage(nextMessage);
+            } else if (dismissalResponse.status !== 401) {
+              setWelcomeMessage(nextMessage);
+            }
+          } catch {
+            // Keep the portal usable during a transient network failure.
+            setWelcomeMessage(nextMessage);
+          }
+        }
       } else {
-        const failure = await taskResponse.json().catch(() => null);
+        const failure = taskResponse ? await taskResponse.json().catch(() => null) : null;
         setAssignmentLoadError(failure?.error || "ไม่สามารถโหลดรายการงานได้ กรุณาลองใหม่ภายหลัง");
       }
 
@@ -282,6 +346,24 @@ export default function StudentPortalPage() {
     setStudent(null);
     setStudentNo("");
     setStudentId("");
+    hasShownWelcomeRef.current = false;
+    welcomeMessageRef.current = "";
+    setWelcomeMessage("");
+  }
+
+  async function handleDismissWelcome() {
+    setWelcomeDismissError("");
+    try {
+      const response = await fetch("/api/student/welcome-dismissal", { method: "POST" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        setWelcomeDismissError(data?.error || "บันทึกการรับทราบไม่สำเร็จ กรุณาลองอีกครั้ง");
+        return;
+      }
+      setWelcomeMessage("");
+    } catch {
+      setWelcomeDismissError("ไม่สามารถเชื่อมต่อระบบได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
+    }
   }
 
   const pendingCount = useMemo(
@@ -324,7 +406,7 @@ export default function StudentPortalPage() {
             <GraduationCap className="h-6 w-6 text-[#5e6e5e]" />
           </motion.div>
           <div>
-            <span className="block text-base font-black tracking-tight text-[#242e24]">งานของครู</span>
+            <span className="block text-base font-black tracking-tight text-[#242e24]">ระบบสารสนเทศ งานของครู</span>
             <span className="block text-[10px] font-extrabold text-[#99A799] uppercase tracking-widest">
               ngankhongkhru.com
             </span>
@@ -691,7 +773,7 @@ export default function StudentPortalPage() {
                             )}
                           </div>
 
-                          <h4 className="text-sm font-black text-[#242e24] tracking-tight">
+                          <h4 className="break-words [overflow-wrap:anywhere] text-sm font-black text-[#242e24] tracking-tight">
                             {item.title}
                           </h4>
                           <p className="text-xs text-[#5e6e5e] line-clamp-1">{item.desc}</p>
@@ -706,36 +788,49 @@ export default function StudentPortalPage() {
 
                         <div className="shrink-0 flex items-center justify-between sm:justify-end gap-3 pt-3 sm:pt-0 border-t sm:border-0 border-[#e5ece2]">
                           {item.status === "pending" ? (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100/80 px-3 py-1.5 rounded-xl border border-amber-200">
                                 <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span> ยังไม่ได้ส่ง
                               </span>
-
+                              <button
+                                type="button"
+                                onClick={() => { setViewTaskError(""); setViewingTask(item); }}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-[#ADC2A9]/50 bg-white px-4 py-2 text-xs font-bold text-[#425442] transition hover:bg-[#FEF5ED]"
+                              >
+                                <FileText className="h-3.5 w-3.5" /> ดูงาน
+                              </button>
                               {item.actionUrl ? (
                                 <a
                                   href={item.actionUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="px-5 py-2 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition cursor-pointer shadow-md flex items-center gap-1.5"
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#242e24] px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-[#5e6e5e]"
                                 >
                                   ทำแบบฝึกหัด <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
                               ) : (
                                 <motion.button
-                                  whileHover={{ scale: 1.05 }}
-                                  whileTap={{ scale: 0.95 }}
+                                  whileHover={{ scale: 1.03 }}
+                                  whileTap={{ scale: 0.97 }}
                                   onClick={() => setSelectedTask(item)}
-                                  className="px-5 py-2 rounded-xl bg-[#242e24] text-white text-xs font-bold hover:bg-[#5e6e5e] transition cursor-pointer shadow-md flex items-center gap-1.5"
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#242e24] px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-[#5e6e5e]"
                                 >
                                   ส่งงาน <ChevronRight className="h-3.5 w-3.5" />
                                 </motion.button>
                               )}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/80 px-3.5 py-1.5 rounded-xl border border-emerald-200">
                                 <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> ส่งแล้ว ({item.score})
                               </span>
+                              <button
+                                type="button"
+                                onClick={() => { setViewTaskError(""); setViewingTask(item); }}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-[#ADC2A9]/50 bg-white px-4 py-2 text-xs font-bold text-[#425442] transition hover:bg-[#FEF5ED]"
+                              >
+                                <FileText className="h-3.5 w-3.5" /> ดูงาน
+                              </button>
                               {item.actionUrl && (
                                 <a
                                   href={item.actionUrl}
@@ -859,6 +954,152 @@ export default function StudentPortalPage() {
         </AnimatePresence>
       </main>
 
+      {/* Daily student welcome / reminder modal */}
+      <AnimatePresence>
+        {student && welcomeMessage && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" role="presentation">
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-welcome-title"
+              aria-describedby="student-welcome-description"
+              initial={{ opacity: 0, y: 16, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-[#FFFCF8] p-6 shadow-2xl sm:p-8"
+            >
+              <div className={pendingCount >= 3 ? "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700" : "mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#D3E4CD] text-[#425442]"}>
+                {pendingCount >= 3 ? <Bell className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+              </div>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#99A799]">ระบบสารสนเทศ งานของครู</p>
+              <h2 id="student-welcome-title" className="text-xl font-black leading-snug text-[#242e24]">
+                {pendingCount >= 3 ? "แจ้งเตือนงานที่ควรรีบดำเนินการ" : pendingCount > 0 ? "ข้อความถึงคุณ" : "ยินดีต้อนรับ"}
+              </h2>
+              <p id="student-welcome-description" className="mt-3 break-words text-sm leading-7 text-[#5e6e5e]">{welcomeMessage}</p>
+              {pendingCount >= 3 && (
+                <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-6 text-amber-800">
+                  มีงานค้าง {pendingCount} รายการ · ความเสี่ยงต่อการพิจารณา มส. ขึ้นอยู่กับเกณฑ์ของครูผู้สอนและสถานศึกษา
+                </p>
+              )}
+              {welcomeDismissError && (
+                <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold leading-5 text-rose-800">
+                  {welcomeDismissError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleDismissWelcome()}
+                className="mt-6 w-full rounded-2xl bg-[#425442] px-5 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-[#344434] focus:outline-none focus:ring-2 focus:ring-[#ADC2A9] focus:ring-offset-2"
+              >
+                รับทราบและเข้าสู่ระบบ
+              </button>
+            </motion.section>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Assignment details modal — view-only; submission remains a separate action. */}
+      <AnimatePresence>
+        {viewingTask && (
+          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingTask(null); }}>
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="student-assignment-view-title"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.18 }}
+              className="max-h-[88dvh] w-full max-w-xl overflow-y-auto overscroll-contain rounded-3xl border border-white bg-white p-5 shadow-2xl sm:p-7"
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-[#e5ece2] pb-4">
+                <div className="min-w-0 space-y-2">
+                  <span className="inline-flex rounded-lg bg-[#D3E4CD]/70 px-2.5 py-1 text-[10px] font-black text-[#425442]">{viewingTask.subject}</span>
+                  <h2 id="student-assignment-view-title" className="break-words [overflow-wrap:anywhere] text-lg font-black leading-snug text-[#242e24]">{viewingTask.title}</h2>
+                  <p className="text-xs text-[#5e6e5e]">กำหนดส่ง: {viewingTask.dueDate} · โดย {viewingTask.teacher}</p>
+                </div>
+                <button type="button" onClick={() => setViewingTask(null)} aria-label="ปิดรายละเอียดงาน" className="shrink-0 rounded-full bg-[#FEF5ED] px-3 py-2 text-sm font-bold text-[#5e6e5e] transition hover:bg-[#D3E4CD]">✕</button>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <section className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4">
+                  <p className="mb-2 text-xs font-black text-[#242e24]">รายละเอียดงาน</p>
+                  <p className="whitespace-pre-wrap break-words text-sm leading-7 text-[#5e6e5e]">{viewingTask.desc || "ครูไม่ได้ระบุรายละเอียดเพิ่มเติม"}</p>
+                </section>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-lg bg-[#F4F6F1] px-3 py-2 font-semibold text-[#5e6e5e]">{viewingTask.type}</span>
+                  <span className="rounded-lg bg-[#F4F6F1] px-3 py-2 font-semibold text-[#5e6e5e]">{viewingTask.points}</span>
+                  {viewingTask.status === "submitted" && <span className="rounded-lg bg-emerald-50 px-3 py-2 font-bold text-emerald-800">สถานะ: ส่งแล้ว</span>}
+                  {viewingTask.status === "pending" && <span className="rounded-lg bg-amber-50 px-3 py-2 font-bold text-amber-800">สถานะ: ยังไม่ได้ส่ง</span>}
+                </div>
+
+                {!!viewingTask.files?.length && (
+                  <section className="rounded-2xl border border-[#ADC2A9]/30 p-4">
+                    <p className="mb-2 text-xs font-black text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>
+                    <div className="space-y-1">
+                      {viewingTask.files.map((file) => (
+                        <button
+                          key={file.id}
+                          type="button"
+                          onClick={async () => {
+                            setViewTaskError("");
+                            try {
+                              const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id));
+                              const result = await response.json().catch(() => null);
+                              if (!response.ok || !result?.url) throw new Error(result?.error || "เปิดไฟล์ไม่สำเร็จ");
+                              window.open(result.url, "_blank", "noopener,noreferrer");
+                            } catch (error) {
+                              setViewTaskError(error instanceof Error ? error.message : "เปิดไฟล์ไม่สำเร็จ");
+                            }
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-xs font-semibold text-[#4d5f4a] transition hover:bg-[#FEF5ED]"
+                        >
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 break-words">{file.fileName}</span>
+                          <span className="shrink-0 underline">เปิดไฟล์</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {viewingTask.submission && (
+                  <section className="rounded-2xl border border-[#ADC2A9]/30 bg-white p-4 text-xs leading-6 text-[#5e6e5e]">
+                    <p className="font-black text-[#242e24]">ข้อมูลการส่งล่าสุด</p>
+                    <p>เวลาส่ง: {new Date(viewingTask.submission.submittedAt).toLocaleString("th-TH")}</p>
+                    {viewingTask.submission.feedback && <p className="mt-1 break-words">ความคิดเห็นครู: {viewingTask.submission.feedback}</p>}
+                    {viewingTask.submission.score !== null && <p>คะแนน: {viewingTask.submission.score}{viewingTask.maxScore !== null ? " / " + viewingTask.maxScore : ""}</p>}
+                  </section>
+                )}
+
+                {viewingTask.mode === "GOOGLE_FORM" && viewingTask.actionUrl && (
+                  <a href={viewingTask.actionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#242e24] px-4 py-3 text-xs font-bold text-white transition hover:bg-[#5e6e5e]">
+                    เปิด Google Forms <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+
+                {viewTaskError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{viewTaskError}</p>}
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#e5ece2] pt-4">
+                <button type="button" onClick={() => setViewingTask(null)} className="rounded-xl border border-[#ADC2A9]/50 px-4 py-2.5 text-xs font-bold text-[#5e6e5e] transition hover:bg-[#FEF5ED]">ปิด</button>
+                {viewingTask.status === "pending" && viewingTask.mode !== "GOOGLE_FORM" && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTask(viewingTask); setViewingTask(null); setSelectedFiles([]); setUploadError(""); }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#242e24] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#5e6e5e]"
+                  >
+                    ไปหน้าส่งงาน <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </motion.section>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Submission Modal Sheet */}
       <AnimatePresence>
         {selectedTask && (
@@ -867,14 +1108,14 @@ export default function StudentPortalPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-[2.5rem] p-6 sm:p-8 max-w-lg w-full border border-white shadow-2xl space-y-5 relative overflow-hidden"
+              className="max-h-[90dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[2.5rem] border border-white bg-white p-6 shadow-2xl sm:p-8 space-y-5 relative"
             >
               <div className="flex items-start justify-between border-b border-[#e5ece2] pb-4">
                 <div>
                   <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#D3E4CD] text-[#242e24]">
                     {selectedTask.subject}
                   </span>
-                  <h3 className="text-base font-black text-[#242e24] mt-1">{selectedTask.title}</h3>
+                  <h3 className="mt-1 break-words [overflow-wrap:anywhere] text-base font-black text-[#242e24]">{selectedTask.title}</h3>
                   <p className="text-xs text-[#5e6e5e]">กำหนดส่ง: {selectedTask.dueDate}</p>
                 </div>
                 <button
@@ -898,11 +1139,11 @@ export default function StudentPortalPage() {
                 ) : selectedTask.mode === "TEACHER_CHECK" ? (
                   <div className="space-y-3">
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-6 text-emerald-900">{selectedTask.submission?.status === "PENDING_GRADEBOOK" ? "มีบันทึกการส่งเดิม แต่ยังไม่มีคะแนนในสมุดออนไลน์ ระบบจึงยังนับเป็นงานค้าง" : selectedTask.submission?.status === "RETURNED" ? "ครูส่งงานกลับให้แก้ไข กรุณาปรับปรุงงานแล้วนำมาส่งครูอีกครั้ง" : selectedTask.submission?.status === "REVIEWED" ? "ครูตรวจงานนี้แล้ว" : "งานนี้ให้ทำลงสมุดหรือกระดาษ แล้วนำไปส่งให้ครูตรวจในชั้นเรียน ไม่ต้องอัปโหลดไฟล์ในระบบ"}{selectedTask.submission?.feedback && <p className="mt-2 font-semibold">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}{selectedTask.submission?.submittedAt && <p className="mt-1">บันทึกการส่งล่าสุด: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>}</div>
-                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์คำสั่งงานจากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="min-w-0 flex-1 truncate" title={file.fileName}>{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
                   </div>
                 ) : selectedTask.mode === "SYSTEM_UPLOAD" ? (
                   <div className="space-y-3">
-                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="truncate">{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
+                    {!!selectedTask.files?.length && <div className="rounded-2xl border border-[#ADC2A9]/30 bg-[#FEF5ED]/70 p-4"><p className="mb-2 text-xs font-bold text-[#242e24]">ไฟล์จากครู</p>{selectedTask.files.map((file) => <button key={file.id} type="button" onClick={async () => { const response = await fetch("/api/files/download?kind=assignment&fileId=" + encodeURIComponent(file.id)); const result = await response.json(); if (response.ok && result.url) window.open(result.url, "_blank", "noopener,noreferrer"); else setUploadError(result.error || "เปิดไฟล์ไม่สำเร็จ"); }} className="flex w-full items-center justify-between gap-3 py-1 text-left text-xs font-semibold text-[#4d5f4a] hover:underline"><span className="min-w-0 flex-1 truncate" title={file.fileName}>{file.fileName}</span><span className="shrink-0">ดาวน์โหลด</span></button>)}</div>}
                     {selectedTask.submission && <div className={selectedTask.submission.status === "RETURNED" ? "rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950" : "rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900"}><p className="font-bold">{selectedTask.submission.status === "PENDING_GRADEBOOK" ? "ยังไม่มีคะแนนในสมุดออนไลน์ · ยังนับเป็นงานค้าง" : selectedTask.submission.status === "RETURNED" ? "ครูส่งงานกลับให้แก้ไข" : selectedTask.submission.status === "REVIEWED" ? "ครูตรวจงานแล้ว" : "ส่งงานแล้ว"}{selectedTask.submission.isLate ? " · ส่งล่าช้า" : ""}</p><p className="mt-1">เวลาส่งล่าสุด: {new Date(selectedTask.submission.submittedAt).toLocaleString("th-TH")}</p>{selectedTask.submission.feedback && <p className="mt-2">ความคิดเห็นครู: {selectedTask.submission.feedback}</p>}{!!selectedTask.submission.files.length && <p className="mt-2">ส่งแล้ว {selectedTask.submission.files.length} ไฟล์</p>}</div>}
                     {selectedTask.submission?.status !== "REVIEWED" && <div className="space-y-2"><label className="text-xs font-bold text-[#242e24] flex items-center gap-1.5"><Upload className="h-3.5 w-3.5 text-[#99A799]" /> {selectedTask.submission?.status === "RETURNED" ? "เลือกไฟล์ฉบับแก้ไข" : "เลือกไฟล์งาน (PDF, รูปภาพ, DOC/DOCX)"}</label><input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))} className="block w-full rounded-2xl border border-[#ADC2A9]/40 bg-[#FEF5ED]/90 p-3 text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[#D3E4CD] file:px-3 file:py-2 file:text-xs file:font-bold" />{selectedFiles.length > 0 && <p className="text-xs text-[#5e6e5e]">รอส่งอีก {selectedFiles.length} ไฟล์</p>}</div>}
                     {uploadError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700">{uploadError}</p>}

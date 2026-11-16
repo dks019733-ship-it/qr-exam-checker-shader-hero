@@ -27,11 +27,15 @@ export function signStudentToken(payload: { studentId: string; studentNo: string
  */
 export function verifyStudentToken(token: string): StudentTokenPayload | null {
   if (!token || !token.includes(".")) return null;
-  const [json, signature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [json, signature] = parts;
   if (!json || !signature) return null;
 
+  const signatureBytes = Buffer.from(signature);
   const expectedSig = crypto.createHmac("sha256", SECRET).update(json).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+  const expectedBytes = Buffer.from(expectedSig);
+  if (signatureBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(signatureBytes, expectedBytes)) {
     return null;
   }
 
@@ -61,9 +65,16 @@ export function hashStudentPin(pin: string): string {
 export function verifyStudentPin(pin: string, storedHashOrValue: string): boolean {
   if (!storedHashOrValue) return false;
   if (storedHashOrValue.includes(":")) {
-    const [salt, hash] = storedHashOrValue.split(":");
-    const testHash = crypto.pbkdf2Sync(pin.trim(), salt, 1000, 32, "sha256").toString("hex");
-    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(testHash));
+    try {
+      const [salt, hash, ...extra] = storedHashOrValue.split(":");
+      if (!salt || !hash || extra.length > 0 || !/^[a-f0-9]{64}$/i.test(hash)) return false;
+      const testHash = crypto.pbkdf2Sync(pin.trim(), salt, 1000, 32, "sha256").toString("hex");
+      const storedBytes = Buffer.from(hash, "hex");
+      const testBytes = Buffer.from(testHash, "hex");
+      return storedBytes.length === testBytes.length && crypto.timingSafeEqual(storedBytes, testBytes);
+    } catch {
+      return false;
+    }
   }
   return storedHashOrValue.trim() === pin.trim();
 }

@@ -304,7 +304,7 @@ export function AssignmentManager() {
           </Link>
         </header>
 
-        <section className="relative rounded-[2rem] border border-white bg-white/85 p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.05)] backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-8 lg:p-10">
+        <section id="assignment-editor" className="relative scroll-mt-6 rounded-[2rem] border border-white bg-white/85 p-5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.05)] backdrop-blur-2xl sm:rounded-[2.5rem] sm:p-8 lg:p-10">
           <div className="flex items-center justify-between border-b border-[#EAE8E3] pb-5 sm:pb-6">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#166534] to-[#14532D] text-white shadow-lg shadow-[#166534]/20 sm:h-12 sm:w-12">
@@ -501,6 +501,9 @@ export function AssignmentManager() {
                                 setFiles([]);
                                 setError("");
                                 setNotice(item.mode === "SYSTEM_UPLOAD" ? "เลือกไฟล์คำสั่งงานชุดเดิมเพื่อดำเนินการต่อ" : "กดดำเนินการต่อเพื่อเผยแพร่งานชุดนี้");
+                                window.requestAnimationFrame(() => {
+                                  document.getElementById("assignment-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                });
                               }}
                               className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100"
                             >
