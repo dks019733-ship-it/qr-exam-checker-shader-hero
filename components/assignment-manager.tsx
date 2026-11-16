@@ -474,13 +474,13 @@ export function AssignmentManager() {
                     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-lg border border-[#D1FAE5] bg-[#F0FDF4] px-2.5 py-1 text-[10px] font-black text-[#166534]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name}</span>
+                          <span className="max-w-full whitespace-normal break-words [overflow-wrap:anywhere] rounded-lg border border-[#D1FAE5] bg-[#F0FDF4] px-2.5 py-1 text-[10px] font-black leading-5 text-[#166534]">{item.teachingAssignment.subject.code} · {item.teachingAssignment.subject.name}</span>
                           {group.map((entry) => (
-                            <span key={entry.id} className="rounded-lg border border-[#EAE8E3] bg-[#F9F9F8] px-2.5 py-1 text-[10px] font-bold text-[#666666]">{entry.classroom.name}</span>
+                            <span key={entry.id} className="max-w-full whitespace-normal break-words [overflow-wrap:anywhere] rounded-lg border border-[#EAE8E3] bg-[#F9F9F8] px-2.5 py-1 text-[10px] font-bold leading-5 text-[#666666]">{entry.classroom.name}</span>
                           ))}
                           <span className="rounded-lg bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-bold text-[#666666]">{modeLabel(item.mode)}</span>
                         </div>
-                        <h3 className="truncate text-base font-black text-[#1A1A1A] transition-colors group-hover:text-[#166534]">{item.gradeColumn?.title || item.title}</h3>
+                        <h3 className="break-words text-base font-black leading-6 text-[#1A1A1A] [overflow-wrap:anywhere] transition-colors group-hover:text-[#166534]">{item.gradeColumn?.title || item.title}</h3>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-[#888888]">
                           <span className="inline-flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> {item.gradeColumn ? `เต็ม ${item.gradeColumn.maxScore} คะแนน` : "ยังไม่เชื่อมสมุดออนไลน์"}</span>
                           <span className="inline-flex items-center gap-1.5"><Check className="h-3.5 w-3.5" /> {groupStatus}</span>
