@@ -360,7 +360,7 @@ export function Gradebook() {
                 </div>
                 <div className="shrink-0 rounded-xl bg-[#f4f1e8] px-3 py-2 text-right">
                   <p className="text-[10px] font-semibold text-slate-500">รวมช่วงนี้</p>
-                  <p className="text-sm font-bold tabular-nums text-[#304b38]">{sum(student, periodColumns).toFixed(2).replace(/\\.00$/, "")} / {maxSum(periodColumns)}</p>
+                  <p className="text-sm font-bold tabular-nums text-[#304b38]">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</p>
                 </div>
               </div>
               {periodColumns.length ? (
@@ -376,7 +376,7 @@ export function Gradebook() {
               ) : <p className="mt-3 rounded-xl bg-[#f7f6f0] p-3 text-xs text-slate-500">ยังไม่มีช่องคะแนนในช่วงนี้</p>}
               <div className="mt-3 flex items-center justify-between border-t border-[#eee9df] pt-3 text-xs">
                 <span className="text-slate-500">รวมทุกช่วง</span>
-                <strong className="tabular-nums text-[#304b38]">{sum(student, columns).toFixed(2).replace(/\\.00$/, "")} / {maxSum(columns)}</strong>
+                <strong className="tabular-nums text-[#304b38]">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</strong>
               </div>
             </article>
           ))}
