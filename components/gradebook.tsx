@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
-import * as XLSX from "xlsx";
 import { compareByRollNo } from "@/lib/student-sort";
 
 type Period = "MIDTERM" | "AFTER_MIDTERM";
@@ -221,7 +220,8 @@ export function Gradebook() {
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `คะแนน-${payload?.classroom?.name || "ห้องเรียน"}.csv`; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  function downloadScoreTemplate() {
+  async function downloadScoreTemplate() {
+    const XLSX = await import("xlsx");
     const activeColumns = columns;
     const headers = ["เลขที่", "รหัสนักเรียน", "ชื่อ-นามสกุล", ...activeColumns.map((column) => `${column.title} (${periods.find((item) => item.id === column.period)?.label}, เต็ม ${column.maxScore})`)];
     const rows = [headers, ...sortedStudents.map((student) => [student.rollNo, student.studentNo, student.name, ...activeColumns.map(() => "")])];
@@ -235,6 +235,7 @@ export function Gradebook() {
     setImportRows([]); setImportFile(file?.name || ""); setMessage("");
     if (!file) return;
     try {
+      const XLSX = await import("xlsx");
       const book = XLSX.read(await file.arrayBuffer(), { type: "array", raw: false });
       const sheet = book.Sheets[book.SheetNames[0]];
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
