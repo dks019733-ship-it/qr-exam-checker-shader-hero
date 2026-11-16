@@ -279,7 +279,7 @@ export async function PATCH(request: Request) {
   }
 
   const updated = await prisma.assignment.updateMany({
-    where: { groupId, ownerId: session.user.id },
+    where: { ownerId: session.user.id, OR: [{ groupId }, { id: groupId, groupId: null }] },
     data: { status },
   });
   return NextResponse.json({ ok: true, groupId, updatedCount: updated.count });
