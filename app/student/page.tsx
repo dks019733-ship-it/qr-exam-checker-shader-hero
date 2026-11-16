@@ -808,16 +808,16 @@ export default function StudentPortalPage() {
                                 >
                                   ทำแบบฝึกหัด <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
-                              ) : (
+                              ) : item.mode === "SYSTEM_UPLOAD" ? (
                                 <motion.button
-                                  whileHover={{ scale: 1.03 }}
-                                  whileTap={{ scale: 0.97 }}
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
                                   onClick={() => setSelectedTask(item)}
-                                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#242e24] px-4 py-2 text-xs font-bold text-white shadow-md transition hover:bg-[#5e6e5e]"
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#304a38] to-[#1f3427] px-4 py-2 text-xs font-bold text-[#fffefa] shadow-[0_5px_14px_-8px_rgba(31,52,39,0.8)] transition hover:brightness-110"
                                 >
                                   ส่งงาน <ChevronRight className="h-3.5 w-3.5" />
                                 </motion.button>
-                              )}
+                              ) : null}
                             </div>
                           ) : (
                             <div className="flex flex-wrap items-center gap-2">
@@ -1085,7 +1085,7 @@ export default function StudentPortalPage() {
 
               <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#e5ece2] pt-4">
                 <button type="button" onClick={() => setViewingTask(null)} className="rounded-xl border border-[#ADC2A9]/50 px-4 py-2.5 text-xs font-bold text-[#5e6e5e] transition hover:bg-[#FEF5ED]">ปิด</button>
-                {viewingTask.status === "pending" && viewingTask.mode !== "GOOGLE_FORM" && (
+                {viewingTask.status === "pending" && viewingTask.mode === "SYSTEM_UPLOAD" && (
                   <button
                     type="button"
                     onClick={() => { setSelectedTask(viewingTask); setViewingTask(null); setSelectedFiles([]); setUploadError(""); }}
