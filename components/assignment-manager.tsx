@@ -492,11 +492,11 @@ export function AssignmentManager() {
                               {entry.classroom.name} · ดู/ตรวจงาน
                             </Link>
                           ))}
-                          {item.groupId && group.every((entry) => entry.status === "DRAFT") && (
+                          {group.every((entry) => entry.status === "DRAFT") && (
                             <button
                               type="button"
                               onClick={() => {
-                                setPendingGroup({ groupId: item.groupId!, mode: item.mode, assignments: group.map((entry) => ({ id: entry.id })) });
+                                setPendingGroup({ groupId: item.groupId || item.id, mode: item.mode, assignments: group.map((entry) => ({ id: entry.id })) });
                                 setMode(item.mode);
                                 setFiles([]);
                                 setError("");
