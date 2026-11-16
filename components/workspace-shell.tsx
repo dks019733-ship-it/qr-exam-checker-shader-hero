@@ -91,7 +91,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             </span>
             {!sidebarCollapsed && <span className="min-w-0">
               <span className="block truncate text-[13px] font-bold tracking-tight text-[#26382b]">งานของครู</span>
-              <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-[0.17em] text-[#9b8050]">Teacher workspace</span>
             </span>}
           </Link>
           <button type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? "ขยายแถบเมนู" : "ย่อแถบเมนู"} aria-pressed={sidebarCollapsed} title={sidebarCollapsed ? "ขยายเมนู" : "ย่อเมนู"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#e8e5da] text-[#657365] transition hover:border-[#c8cfbf] hover:bg-[#f2f3ed] hover:text-[#304a38] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9b8050]/50">
