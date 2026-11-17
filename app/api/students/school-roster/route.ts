@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SOURCE_URL = "https://www.mks.ac.th/doc/liststd/std-22569.xlsx";
+const SOURCE_PAGE_URL = "https://www.mks.ac.th/about/19-std/399-std";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_STUDENTS = 500;
 
@@ -22,6 +22,26 @@ function classKey(value: string) {
 
 function classKeyFromClassName(value: string) {
   return classKey(value) || classKey(value.replace(/^ม\\.?\\s*/u, ""));
+}
+
+async function resolveSourceWorkbookUrl() {
+  const page = await fetch(SOURCE_PAGE_URL, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+    headers: { Accept: "text/html" },
+  });
+  if (!page.ok) throw new Error(`เปิดหน้าแหล่งข้อมูลโรงเรียนไม่สำเร็จ (HTTP ${page.status})`);
+  const html = await page.text();
+  if (html.length > 2 * 1024 * 1024) throw new Error("หน้าแหล่งข้อมูลมีขนาดใหญ่เกินกำหนด");
+  const links = [...html.matchAll(/href\\s*=\\s*(["'])([^"']+\\.xlsx(?:\\?[^"']*)?)\\1/giu)];
+  for (const match of links) {
+    const href = match[2].replace(/&amp;/gu, "&");
+    const candidate = new URL(href, SOURCE_PAGE_URL);
+    if (candidate.protocol === "https:" && ["www.mks.ac.th", "mks.ac.th"].includes(candidate.hostname) && candidate.pathname.toLowerCase().endsWith(".xlsx")) {
+      return candidate.toString();
+    }
+  }
+  throw new Error("ไม่พบลิงก์ไฟล์ Excel บนหน้าเว็บไซต์โรงเรียน กรุณาใช้ Excel ด้วยตนเอง");
 }
 
 function parseRoster(buffer: Buffer, requestedClass: string) {
@@ -106,7 +126,8 @@ export async function GET(request: Request) {
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
 
   try {
-    const response = await fetch(SOURCE_URL, {
+    const sourceUrl = await resolveSourceWorkbookUrl();
+    const response = await fetch(sourceUrl, {
       method: "GET",
       cache: "no-store",
       signal: AbortSignal.timeout(20_000),
@@ -131,7 +152,7 @@ export async function GET(request: Request) {
       className: classroom.name,
       students,
       sourceLastModified: response.headers.get("last-modified"),
-      source: "MKS school roster",
+      source: "MKS school roster",\n      sourceUrl,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ไม่สามารถอ่านไฟล์รายชื่อนักเรียนได้";
