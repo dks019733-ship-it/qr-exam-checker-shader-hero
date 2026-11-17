@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileUp, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { FileUp, Link2, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
 type FileRow = { id: string; fileName: string; contentType: string; sizeBytes: number };
 type AssignmentRow = {
-  id: string; groupId: string | null; title: string; description: string; dueAt: string | null;
+  id: string; groupId: string | null; title: string; description: string; dueAt: string | null; resourceUrl: string | null;
   status: string; mode: string; classroom: { name: string };
   files: FileRow[]; _count: { submissions: number };
 };
@@ -18,6 +18,7 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
   const [items, setItems] = useState<AssignmentRow[]>([]);
   const [description, setDescription] = useState("");
   const [dueAt, setDueAt] = useState("");
+  const [resourceUrl, setResourceUrl] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +37,7 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
       setItems(group);
       setDescription(current.description || "");
       setDueAt(current.dueAt ? new Date(current.dueAt).toISOString().slice(0, 16) : "");
+      setResourceUrl(current.resourceUrl || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "โหลดข้อมูลงานไม่สำเร็จ");
     } finally { setLoading(false); }
@@ -65,7 +67,7 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
     try {
       const detailResponse = await fetch("/api/assignments/" + assignmentId + "/edit", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description, dueAt: dueAt ? new Date(dueAt).toISOString() : null }),
+        body: JSON.stringify({ description, dueAt: dueAt ? new Date(dueAt).toISOString() : null, resourceUrl }),
       });
       const detail = await detailResponse.json();
       if (!detailResponse.ok) throw new Error(detail.error || "บันทึกรายละเอียดงานไม่สำเร็จ");
@@ -83,7 +85,7 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
         }
       }
       setFiles([]);
-      setNotice("บันทึกงานและเพิ่มไฟล์ประกอบให้ครบทุกห้องเรียนแล้ว");
+      setNotice("บันทึกงาน ลิงก์ และไฟล์ประกอบให้ครบทุกห้องเรียนแล้ว");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกงานไม่สำเร็จ");
@@ -129,6 +131,20 @@ export function AssignmentFilesEditor({ assignmentId }: { assignmentId: string }
           </label>
           <label className="block text-sm font-semibold">กำหนดส่ง
             <input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm" />
+          </label>
+          <label className="block text-sm font-semibold">
+            <span className="inline-flex items-center gap-1.5"><Link2 className="h-4 w-4" /> ลิงก์ประกอบงาน (ไม่บังคับ)</span>
+            <input
+              type="url"
+              inputMode="url"
+              maxLength={2048}
+              value={resourceUrl}
+              onChange={(event) => setResourceUrl(event.target.value)}
+              placeholder="https://..."
+              aria-describedby="edit-assignment-resource-help"
+              className="mt-2 min-h-11 w-full rounded-xl border border-[#dfe4d8] px-3 text-sm"
+            />
+            <span id="edit-assignment-resource-help" className="mt-1 block text-xs font-normal text-slate-500">แก้ไขหรือลบลิงก์เอกสาร วิดีโอ หรือเว็บไซต์ที่นักเรียนใช้ประกอบงานได้</span>
           </label>
           <div>
             <p className="text-sm font-semibold">ไฟล์งานที่นักเรียนเปิดดูได้</p>

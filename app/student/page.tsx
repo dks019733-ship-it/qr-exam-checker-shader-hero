@@ -67,6 +67,7 @@ interface StudentProfile {
   school: string;
   rank?: string;
   courseworkScore: string;
+  courseworkBonusScore: string;
 }
 
 interface AssignmentItem {
@@ -78,6 +79,7 @@ interface AssignmentItem {
   dueDate: string;
   status: "pending" | "submitted";
   score?: string;
+  bonusScore?: number;
   rawScore?: number | null;
   maxScore: number | null;
   points: string;
@@ -101,12 +103,15 @@ interface ScoreSummaryItem {
   teacher: string;
   coursework: string;
   courseworkScore: number;
+  courseworkBonus: number;
   courseworkMax: number;
   courseworkItems: {
     id: string;
     title: string;
     period: string;
     score: number | null;
+    earnedScore: number;
+    bonusScore: number;
     maxScore: number;
   }[];
 }
@@ -220,6 +225,12 @@ export default function StudentPortalPage() {
           );
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
+          const earnedScore = typeof score === "number" && maxScore !== null
+            ? Math.min(Math.max(score, 0), maxScore)
+            : score;
+          const bonusScore = typeof score === "number" && maxScore !== null
+            ? Math.max(score - maxScore, 0)
+            : 0;
           const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
           const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
           return {
@@ -235,7 +246,8 @@ export default function StudentPortalPage() {
             dueAt: task.dueAt,
             period: task.period || undefined,
             status: submitted ? "submitted" : "pending",
-            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : score !== null && score !== undefined ? (maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
+            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : earnedScore !== null && earnedScore !== undefined ? (maxScore === null ? String(earnedScore) + " คะแนน" : String(earnedScore) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
+            bonusScore,
             rawScore: score ?? null,
             maxScore,
             points: maxScore !== null ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
@@ -666,6 +678,7 @@ export default function StudentPortalPage() {
                       <Trophy className="h-3 w-3 text-emerald-600" /> คะแนนเก็บรวม
                     </div>
                     <div className="text-xl font-black text-emerald-800 mt-0.5">{student.courseworkScore}</div>
+                    <div className="mt-0.5 text-[10px] font-bold text-amber-700">คะแนนพิเศษ +{student.courseworkBonusScore} คะแนน</div>
                   </div>
                 </div>
               </div>
@@ -826,6 +839,7 @@ export default function StudentPortalPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/80 px-3.5 py-1.5 rounded-xl border border-emerald-200">
                                 <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> ส่งแล้ว ({item.score})
+                                {item.bonusScore && item.bonusScore > 0 ? <span className="ml-1 text-[10px] font-bold text-amber-700">· คะแนนพิเศษ +{item.bonusScore}</span> : null}
                               </span>
                               <button
                                 type="button"
@@ -902,6 +916,7 @@ export default function StudentPortalPage() {
                                 </td>
                                 <td className="p-4 text-center font-bold text-[#242e24]">
                                   <div>{score.coursework}</div>
+                                  <div className="mt-1 text-[11px] font-bold text-amber-700">คะแนนพิเศษ +{score.courseworkBonus} คะแนน</div>
                                   {!!score.courseworkItems?.length && (
                                     <ul className="mt-3 space-y-2 text-left font-medium">
                                       {score.courseworkItems.map((item) => (
@@ -915,7 +930,10 @@ export default function StudentPortalPage() {
                                           {item.score === null ? (
                                             <span className="shrink-0 font-semibold text-amber-700">ยังไม่มีคะแนน · เต็ม {item.maxScore}</span>
                                           ) : (
-                                            <span className="shrink-0 font-bold text-[#425a49]">{item.score}/{item.maxScore}</span>
+                                            <span className="shrink-0 text-right">
+                                              <span className="block font-bold text-[#425a49]">{item.earnedScore}/{item.maxScore}</span>
+                                              {item.bonusScore > 0 && <span className="mt-0.5 block text-[10px] font-bold text-amber-700">+{item.bonusScore} คะแนนพิเศษ</span>}
+                                            </span>
                                           )}
                                         </li>
                                       ))}

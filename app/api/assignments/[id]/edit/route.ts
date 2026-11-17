@@ -3,6 +3,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+function isAllowedResourceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const unavailable = await featureAvailabilityResponse("assignments");
   if (unavailable) return unavailable;
@@ -11,10 +20,29 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
-  const description = typeof body?.description === "string" ? body.description.trim() : null;
-  const dueAt = body?.dueAt === null || body?.dueAt === "" ? null : new Date(body?.dueAt);
-  if (description === null || description.length > 5000 || (dueAt && Number.isNaN(dueAt.getTime()))) {
-    return NextResponse.json({ error: "รายละเอียดงานหรือกำหนดส่งไม่ถูกต้อง" }, { status: 400 });
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "ข้อมูลแก้ไขงานไม่ถูกต้อง" }, { status: 400 });
+  }
+
+  const description = typeof body.description === "string" ? body.description.trim() : null;
+  const dueAt = body.dueAt === null || body.dueAt === "" ? null : typeof body.dueAt === "string" ? new Date(body.dueAt) : new Date(Number.NaN);
+  // Omitted resourceUrl keeps compatibility with older clients; null/empty clears it.
+  const resourceUrl = body.resourceUrl === undefined
+    ? null
+    : typeof body.resourceUrl === "string"
+      ? body.resourceUrl.trim()
+      : body.resourceUrl === null
+        ? ""
+        : undefined;
+
+  if (
+    description === null ||
+    description.length > 5000 ||
+    (body.dueAt !== null && body.dueAt !== "" && (!body.dueAt || Number.isNaN(dueAt?.getTime()))) ||
+    resourceUrl === undefined ||
+    (typeof resourceUrl === "string" && (resourceUrl.length > 2048 || (resourceUrl !== "" && !isAllowedResourceUrl(resourceUrl))))
+  ) {
+    return NextResponse.json({ error: "รายละเอียดงาน กำหนดส่ง หรือลิงก์ประกอบงานไม่ถูกต้อง (ลิงก์ต้องเป็น HTTPS)" }, { status: 400 });
   }
 
   const assignment = await prisma.assignment.findFirst({
@@ -26,6 +54,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const where = assignment.groupId
     ? { groupId: assignment.groupId, ownerId: session.user.id }
     : { id: assignment.id, ownerId: session.user.id };
-  await prisma.assignment.updateMany({ where, data: { description, dueAt } });
+  await prisma.assignment.updateMany({
+    where,
+    data: {
+      description,
+      dueAt,
+      ...(resourceUrl !== null ? { resourceUrl: resourceUrl || null } : {}),
+    },
+  });
   return NextResponse.json({ ok: true, groupId: assignment.groupId });
 }
