@@ -84,7 +84,14 @@ export function Gradebook() {
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
   const scoreAt = (column: Column, studentId: string) => column.scores.find((score) => score.studentId === studentId)?.score ?? null;
   const scoreValue = (column: Column, studentId: string) => draft[keyOf(column.id, studentId)] ?? (scoreAt(column, studentId)?.toString() ?? "");
-  const sum = (student: Student, subset: Column[]) => subset.reduce((total, column) => total + (scoreAt(column, student.id) ?? 0), 0);
+  const sum = (student: Student, subset: Column[]) => subset.reduce(
+    (total, column) => total + Math.min(Math.max(scoreAt(column, student.id) ?? 0, 0), column.maxScore),
+    0,
+  );
+  const bonusSum = (student: Student, subset: Column[]) => subset.reduce(
+    (total, column) => total + Math.max((scoreAt(column, student.id) ?? 0) - column.maxScore, 0),
+    0,
+  );
   const maxSum = (subset: Column[]) => subset.reduce((total, column) => total + column.maxScore, 0);
 
   async function addColumn(event: React.FormEvent) {
@@ -214,8 +221,8 @@ export function Gradebook() {
 
   function exportCsv() {
     const safe = (value: unknown) => { const text = String(value ?? ""); return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replaceAll('"', '""')}"`; };
-    const rows: unknown[][] = [["เลขที่", "รหัสนักเรียน", "ชื่อ-นามสกุล", ...columns.map((column) => `${column.title} (${periods.find((item) => item.id === column.period)?.label}, เต็ม ${column.maxScore})`), ...periods.map((item) => `${item.label} (รวมเต็ม ${maxSum(columns.filter((column) => column.period === item.id))})`), "รวมคะแนน", "คะแนนเต็ม"]];
-    for (const student of sortedStudents) rows.push([student.rollNo, student.studentNo, student.name, ...columns.map((column) => scoreAt(column, student.id) ?? ""), ...periods.map((item) => sum(student, columns.filter((column) => column.period === item.id))), sum(student, columns), maxSum(columns)]);
+    const rows: unknown[][] = [["เลขที่", "รหัสนักเรียน", "ชื่อ-นามสกุล", ...columns.map((column) => `${column.title} (${periods.find((item) => item.id === column.period)?.label}, เต็ม ${column.maxScore})`), ...periods.map((item) => `${item.label} (รวมเต็ม ${maxSum(columns.filter((column) => column.period === item.id))})`), "รวมคะแนนเก็บ (ไม่รวมพิเศษ)", "คะแนนเต็ม", "คะแนนพิเศษ"]];
+    for (const student of sortedStudents) rows.push([student.rollNo, student.studentNo, student.name, ...columns.map((column) => scoreAt(column, student.id) ?? ""), ...periods.map((item) => sum(student, columns.filter((column) => column.period === item.id))), sum(student, columns), maxSum(columns), bonusSum(student, columns)]);
     const blob = new Blob(["\uFEFF" + rows.map((row) => row.map(safe).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `คะแนน-${payload?.classroom?.name || "ห้องเรียน"}.csv`; anchor.click(); URL.revokeObjectURL(url);
   }
@@ -362,6 +369,7 @@ export function Gradebook() {
                 <div className="shrink-0 rounded-xl bg-[#f4f1e8] px-3 py-2 text-right">
                   <p className="text-[10px] font-semibold text-slate-500">รวมช่วงนี้</p>
                   <p className="text-sm font-bold tabular-nums text-[#304b38]">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</p>
+                  {bonusSum(student, periodColumns) > 0 && <p className="mt-1 text-[10px] font-bold tabular-nums text-amber-700">คะแนนพิเศษ +{bonusSum(student, periodColumns).toFixed(2).replace(/\.00$/, "")}</p>}
                 </div>
               </div>
               {periodColumns.length ? (
@@ -375,9 +383,12 @@ export function Gradebook() {
                   ))}
                 </div>
               ) : <p className="mt-3 rounded-xl bg-[#f7f6f0] p-3 text-xs text-slate-500">ยังไม่มีช่องคะแนนในช่วงนี้</p>}
-              <div className="mt-3 flex items-center justify-between border-t border-[#eee9df] pt-3 text-xs">
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#eee9df] pt-3 text-xs">
                 <span className="text-slate-500">รวมทุกช่วง</span>
-                <strong className="tabular-nums text-[#304b38]">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</strong>
+                <div className="text-right">
+                  <strong className="tabular-nums text-[#304b38]">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</strong>
+                  {bonusSum(student, columns) > 0 && <p className="mt-1 font-bold tabular-nums text-amber-700">คะแนนพิเศษ +{bonusSum(student, columns).toFixed(2).replace(/\.00$/, "")}</p>}
+                </div>
               </div>
             </article>
           ))}
@@ -387,8 +398,8 @@ export function Gradebook() {
                     <option value="">ยังไม่ผูกกับรายวิชา</option>
                     {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
                   </select>
-                  <div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}</th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="sticky right-0 z-10 min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="sticky right-0 border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td></tr>)}</tbody></table></div></>}
-        <div className="border-t bg-slate-50 px-4 py-3 text-xs text-slate-500">ช่องคะแนนเดิมเลือกผูกรายวิชาได้จากเมนูใต้หัวช่อง · คลิกคะแนนเพื่อแก้ไข ระบบบันทึกเมื่อออกจากช่อง · คะแนนรวมอัปเดตทันที</div>
+                  <div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}</th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th><th className="sticky right-0 min-w-28 border-l bg-amber-50 p-3">คะแนนพิเศษ</th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td><td className="sticky right-0 border-l bg-amber-50/50 p-3 font-bold tabular-nums text-amber-800">{bonusSum(student, columns).toFixed(2).replace(/\.00$/, "")}</td></tr>)}</tbody></table></div></>}
+        <div className="border-t bg-slate-50 px-4 py-3 text-xs text-slate-500">คะแนนที่กรอกเกินคะแนนเต็มจะถูกแยกเป็นคะแนนพิเศษ ไม่รวมในคะแนนเก็บปกติ · คลิกคะแนนเพื่อแก้ไข ระบบบันทึกเมื่อออกจากช่อง</div>
       </section>
       <p className="mt-3 text-xs text-slate-500">เลือกช่วงให้ตรงกับ SGS แล้วเพิ่มช่องงาน/บทพร้อมคะแนนเต็มแต่ละช่อง ยอดรวมแสดงตรง ๆ เช่น 3 งาน งานละ 10 คะแนน รวม 30 · คะแนนข้อสอบเข้าหลังครูยืนยัน · Google Forms จับคู่ด้วยเลขที่ ห้อง และชื่อ</p>
     </>}
