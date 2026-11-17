@@ -67,6 +67,7 @@ interface StudentProfile {
   school: string;
   rank?: string;
   courseworkScore: string;
+  courseworkBonusScore: string;
 }
 
 interface AssignmentItem {
@@ -101,12 +102,15 @@ interface ScoreSummaryItem {
   teacher: string;
   coursework: string;
   courseworkScore: number;
+  courseworkBonus: number;
   courseworkMax: number;
   courseworkItems: {
     id: string;
     title: string;
     period: string;
     score: number | null;
+    earnedScore: number;
+    bonusScore: number;
     maxScore: number;
   }[];
 }
@@ -666,6 +670,7 @@ export default function StudentPortalPage() {
                       <Trophy className="h-3 w-3 text-emerald-600" /> คะแนนเก็บรวม
                     </div>
                     <div className="text-xl font-black text-emerald-800 mt-0.5">{student.courseworkScore}</div>
+                    <div className="mt-0.5 text-[10px] font-bold text-amber-700">คะแนนพิเศษ +{student.courseworkBonusScore} คะแนน</div>
                   </div>
                 </div>
               </div>
@@ -902,6 +907,7 @@ export default function StudentPortalPage() {
                                 </td>
                                 <td className="p-4 text-center font-bold text-[#242e24]">
                                   <div>{score.coursework}</div>
+                                  <div className="mt-1 text-[11px] font-bold text-amber-700">คะแนนพิเศษ +{score.courseworkBonus} คะแนน</div>
                                   {!!score.courseworkItems?.length && (
                                     <ul className="mt-3 space-y-2 text-left font-medium">
                                       {score.courseworkItems.map((item) => (
@@ -915,7 +921,10 @@ export default function StudentPortalPage() {
                                           {item.score === null ? (
                                             <span className="shrink-0 font-semibold text-amber-700">ยังไม่มีคะแนน · เต็ม {item.maxScore}</span>
                                           ) : (
-                                            <span className="shrink-0 font-bold text-[#425a49]">{item.score}/{item.maxScore}</span>
+                                            <span className="shrink-0 text-right">
+                                              <span className="block font-bold text-[#425a49]">{item.earnedScore}/{item.maxScore}</span>
+                                              {item.bonusScore > 0 && <span className="mt-0.5 block text-[10px] font-bold text-amber-700">+{item.bonusScore} คะแนนพิเศษ</span>}
+                                            </span>
                                           )}
                                         </li>
                                       ))}
