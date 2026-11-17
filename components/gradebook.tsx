@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, FileSpreadsheet, Loader2, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import { compareByRollNo } from "@/lib/student-sort";
@@ -39,6 +40,7 @@ export function Gradebook() {
   const [subjectFilter, setSubjectFilter] = useState("__auto__");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [needsGoogleReauth, setNeedsGoogleReauth] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [showImport, setShowImport] = useState(false);
   const [importRows, setImportRows] = useState<SheetRow[]>([]);
@@ -90,7 +92,7 @@ export function Gradebook() {
   async function addColumn(event: React.FormEvent) {
     event.preventDefault();
     if (!classId) return;
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage(""); setNeedsGoogleReauth(false);
     try {
       const response = await fetch("/api/gradebook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, title, period, maxScore: Number(maxScore), sourceType, sourceId, teachingAssignmentId: teachingAssignmentId || null }) });
       const body = await response.json().catch(() => null);
@@ -101,6 +103,7 @@ export function Gradebook() {
       if (sourceType === "google_form") {
         const sync = await fetch(`/api/gradebook/columns/${body.id}/sync`, { method: "POST" });
         const result = await sync.json().catch(() => null);
+        if (!sync.ok && sync.status === 403 && result?.action === "reauthorize") setNeedsGoogleReauth(true);
         notice = sync.ok ? `เพิ่มแล้วและนำเข้าคะแนน ${result.imported} คน${result.pending ? ` · รอจับคู่กับรายชื่อ ${result.pending} รายการ` : ""}${result.skipped ? ` · ข้าม ${result.skipped} รายการ` : ""}` : `เพิ่มช่องแล้ว แต่ซิงก์ไม่สำเร็จ: ${result?.error || "กรุณากดซิงก์อีกครั้ง"}`;
       }
       await load(classId); setMessage(notice);
@@ -145,11 +148,14 @@ export function Gradebook() {
   }
 
   async function syncForm(column: Column) {
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage(""); setNeedsGoogleReauth(false);
     try {
       const response = await fetch(`/api/gradebook/columns/${column.id}/sync`, { method: "POST" });
       const body = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(body?.error || "ซิงก์คะแนนไม่สำเร็จ");
+      if (!response.ok) {
+        if (response.status === 403 && body?.action === "reauthorize") setNeedsGoogleReauth(true);
+        throw new Error(body?.error || "ซิงก์คะแนนไม่สำเร็จ");
+      }
       await load(classId);
       let detail = `นำเข้าคะแนน ${body.imported} คน`;
       if (body.pending) detail += ` · รอจับคู่รายชื่อ ${body.pending} รายการ`;
@@ -318,7 +324,7 @@ export function Gradebook() {
         <span className="self-end pb-2 text-xs text-slate-500 sm:col-span-2 lg:ml-auto">{students.length} คน · {columns.length} ช่องคะแนน</span>
       </div>
     </header>
-    {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
+    {message && <div role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm"><p>{message}</p>{needsGoogleReauth && <button type="button" onClick={() => void signIn("google", { callbackUrl: window.location.href })} className="mt-3 rounded-lg bg-[#425a49] px-4 py-2 font-medium text-white">เชื่อมต่อ Google ใหม่</button>}</div>}
     {!payload ? <div className="mt-6 flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลดสมุดคะแนน</div> : !payload.classes.length ? <section className="mt-5 rounded-2xl border bg-white p-8 text-center"><p className="font-medium">ยังไม่มีห้องเรียน</p><Link href="/dashboard/classes" className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">ไปจัดการห้องเรียน</Link></section> : !classId ? null : <>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">{periods.map((item) => { const items = columns.filter((column) => column.period === item.id); return <button key={item.id} onClick={() => setPeriod(item.id)} className={`rounded-2xl border bg-white p-4 text-left shadow-sm ${period === item.id ? "border-slate-900 ring-1 ring-slate-900" : ""}`}><span className="text-sm font-medium">{item.label}</span><div className="mt-2 text-xl font-semibold">รวมเต็ม {maxSum(items)} คะแนน</div><p className="mt-1 text-xs text-slate-500">{items.length} งาน/บท · รวมตรงตามคะแนนเต็ม เช่น 3 งาน งานละ 10 รวม 30</p></button>; })}</div>
       {unmatchedFormScores.length > 0 && <section className="mt-5 overflow-hidden rounded-2xl border border-amber-300 bg-white shadow-sm">
