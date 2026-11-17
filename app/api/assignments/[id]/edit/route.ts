@@ -25,7 +25,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   const description = typeof body.description === "string" ? body.description.trim() : null;
-  const dueAt = body.dueAt === null || body.dueAt === "" ? null : new Date(body.dueAt);
+  const dueAt = body.dueAt === null || body.dueAt === "" ? null : typeof body.dueAt === "string" ? new Date(body.dueAt) : new Date(Number.NaN);
   // Omitted resourceUrl keeps compatibility with older clients; null/empty clears it.
   const resourceUrl = body.resourceUrl === undefined
     ? null
