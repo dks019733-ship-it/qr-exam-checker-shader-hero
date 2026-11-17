@@ -30,6 +30,9 @@ export function ClassroomManager() {
   const [studentNoColumn, setStudentNoColumn] = useState(-1);
   const [rollNoColumn, setRollNoColumn] = useState(-1);
   const [nameColumn, setNameColumn] = useState(-1);
+  const [schoolRoster, setSchoolRoster] = useState<{ rollNo: string; studentNo: string; name: string }[]>([]);
+  const [schoolRosterUpdatedAt, setSchoolRosterUpdatedAt] = useState<string | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
 
   const selectedClass = classes.find((row) => row.id === classId);
   const preview = useMemo(() => {
@@ -166,6 +169,42 @@ export function ClassroomManager() {
     setStudentName(student?.name || "");
   }
 
+  async function loadSchoolRoster(targetClassId = classId) {
+    if (!targetClassId) return setNotice("เลือกห้องเรียนก่อนดึงรายชื่อ");
+    setRosterLoading(true);
+    setSchoolRoster([]);
+    setNotice("กำลังดึงรายชื่อนักเรียนจากเว็บไซต์โรงเรียน...");
+    try {
+      const response = await fetch(`/api/students/school-roster?classId=${encodeURIComponent(targetClassId)}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "ดึงรายชื่อจากเว็บไซต์โรงเรียนไม่สำเร็จ");
+      if (!Array.isArray(body.students) || body.students.length === 0) throw new Error("ไม่พบรายชื่อในห้องนี้ ตรวจชื่อห้องหรือใช้การนำเข้า Excel ด้วยตนเอง");
+      setSchoolRoster(body.students);
+      setSchoolRosterUpdatedAt(body.sourceLastModified || null);
+      setNotice(`พบรายชื่อห้อง ${body.className} จำนวน ${body.students.length} คน กรุณาตรวจสอบก่อนยืนยันนำเข้า`);
+    } catch (error: any) {
+      setSchoolRoster([]);
+      setNotice(error.message || "ดึงรายชื่อจากเว็บไซต์โรงเรียนไม่สำเร็จ ยังสามารถนำเข้า Excel ด้วยตนเองได้");
+    } finally {
+      setRosterLoading(false);
+    }
+  }
+
+  async function importSchoolRoster() {
+    if (!classId || !schoolRoster.length || busy) return;
+    if (!window.confirm(`ยืนยันนำเข้ารายชื่อ ${schoolRoster.length} คนเข้าห้อง ${selectedClass?.name || ""} หรือไม่? รายชื่อเดิมที่มีรหัสตรงกันจะได้รับการอัปเดต แต่ระบบจะไม่ลบนักเรียนที่ไม่อยู่ในไฟล์ต้นทางและไม่ลบประวัติคะแนน`)) return;
+    setBusy(true); setNotice("");
+    try {
+      const response = await fetch("/api/students/bulk", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, rows: schoolRoster }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "นำเข้ารายชื่อนักเรียนไม่สำเร็จ");
+      await loadStudents(classId);
+      setSchoolRoster([]);
+      setNotice(`นำเข้ารายชื่อนักเรียน ${body.count} คนแล้ว${body.matchedFormScores ? ` · จับคู่คะแนน Forms ${body.matchedFormScores} รายการ` : ""}${body.pendingFormScores ? ` · ยังรอจับคู่อีก ${body.pendingFormScores} รายการ` : ""}`);
+    } catch (error: any) { setNotice(error.message || "นำเข้ารายชื่อนักเรียนไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
+
   async function createClass() {
     if (busy) return;
     if (!className.trim()) return setNotice("กรอกชื่อห้องเรียนก่อน");
@@ -175,7 +214,7 @@ export function ClassroomManager() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "สร้างห้องเรียนไม่สำเร็จ");
       setClasses((current) => current.some((row) => row.id === body.id) ? current : [...current, body]);
-      setClassId(body.id); setClassName(""); setNotice("สร้างห้องเรียนแล้ว");
+      setClassId(body.id); setClassName(""); setSchoolRoster([]); setNotice("สร้างห้องเรียนแล้ว");\n      void loadSchoolRoster(body.id);
     } catch (error: any) { setNotice(error.message || "สร้างห้องเรียนไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
@@ -292,6 +331,15 @@ export function ClassroomManager() {
     {loading ? <div className="mt-8 flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />กำลังโหลด...</div> : <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
       <section className="space-y-5">
         <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">ห้องเรียน</h2><label className="mt-4 block text-sm">เลือกห้อง<select value={classId} onChange={(event) => setClassId(event.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="">เลือกห้องเรียน</option>{classes.map((row) => <option key={row.id} value={row.id}>{row.name} · {row._count?.students ?? (row.id === classId ? students.length : 0)} คน</option>)}</select></label><div className="mt-2 max-h-24 space-y-1 overflow-auto">{classes.map((row) => <label key={row.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedClassIds.includes(row.id)} onChange={(event) => setSelectedClassIds((current) => event.target.checked ? [...current, row.id] : current.filter((id) => id !== row.id))} />เลือก {row.name} เพื่อลบ</label>)}</div>{selectedClassIds.length > 0 && <button onClick={() => void deleteSelectedClasses()} disabled={busy} className="mt-2 text-xs text-red-700">ลบห้องที่เลือก ({selectedClassIds.length})</button>}<div className="mt-3 flex gap-2"><input value={className} onChange={(event) => setClassName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void createClass(); } }} placeholder="เช่น ม.4/1" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" /><button disabled={busy} onClick={createClass} className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"><Plus className="mr-1 h-4 w-4" />สร้าง</button></div></div>
+        <div className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2"><div><h2 className="font-semibold">รายชื่อจากเว็บไซต์โรงเรียน</h2><p className="mt-1 text-xs text-slate-500">ดึงรายชื่อภาคเรียนล่าสุดจากเว็บไซต์โรงเรียน แล้วตรวจสอบก่อนนำเข้า</p></div><button type="button" disabled={rosterLoading || !classId} onClick={() => void loadSchoolRoster()} className="rounded-lg border px-3 py-2 text-xs disabled:opacity-50">{rosterLoading ? "กำลังดึงข้อมูล..." : "ดึงรายชื่อ / อัปเดต"}</button></div>
+          {schoolRoster.length > 0 && <div className="mt-3 space-y-3">
+            <div className="rounded-lg bg-slate-50 p-3 text-sm"><strong>{selectedClass?.name}</strong> · พบ {schoolRoster.length} คน <span className="text-xs text-slate-500">{schoolRosterUpdatedAt ? ` · ไฟล์ต้นทางอัปเดต ${new Date(schoolRosterUpdatedAt).toLocaleString("th-TH")}` : ""}</span><p className="mt-1 text-xs text-slate-500">ตรวจตัวอย่างรายชื่อก่อนกดยืนยัน ระบบจะไม่ลบนักเรียนที่ไม่มีในไฟล์และไม่ลบประวัติคะแนน</p></div>
+            <div className="max-h-56 overflow-auto rounded-lg border"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-50"><tr><th className="p-2">เลขที่</th><th className="p-2">รหัสนักเรียน</th><th className="p-2">ชื่อ-นามสกุล</th></tr></thead><tbody>{schoolRoster.slice(0, 100).map((student) => <tr key={student.studentNo} className="border-t"><td className="p-2">{student.rollNo}</td><td className="p-2">{student.studentNo}</td><td className="p-2">{student.name}</td></tr>)}</tbody></table></div>
+            {schoolRoster.length > 100 && <p className="text-xs text-slate-500">แสดงตัวอย่าง 100 คนแรก จากทั้งหมด {schoolRoster.length} คน</p>}
+            <button type="button" disabled={busy || rosterLoading} onClick={() => void importSchoolRoster()} className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50">ยืนยันนำเข้า {schoolRoster.length} คนในห้องนี้</button>
+          </div>}
+        </div>
         <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 className="font-semibold">นำเข้ารายชื่อนักเรียนจาก Excel</h2><p className="mt-1 text-xs text-slate-500">รองรับ .xlsx, .xls และ .csv · เลือกห้องที่สร้างไว้ก่อน ระบบจะนำเข้าเฉพาะแถวที่ห้องตรงกัน</p>
           <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void readRosterFile(event.dataTransfer.files[0]); }} className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-slate-50 px-4 py-6 text-center hover:bg-slate-100"><Upload className="mb-2 h-6 w-6 text-slate-500"/><span className="text-sm font-medium">ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</span><span className="mt-1 text-xs text-slate-500">{fileName || "ไฟล์ต้องมีคอลัมน์ห้อง, เลขที่/รหัส และชื่อ"}</span><input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => void readRosterFile(event.target.files?.[0])}/></label>
           {headers.length > 0 && <div className="mt-4 space-y-3"><p className="text-sm font-medium">ตรวจคอลัมน์ที่ระบบอ่านเจอ</p><div className="grid gap-2 sm:grid-cols-2">{([["ห้อง", roomColumn, setRoomColumn], ["เลขที่", rollNoColumn, setRollNoColumn], ["รหัสนักเรียน", studentNoColumn, setStudentNoColumn], ["ชื่อ-นามสกุล", nameColumn, setNameColumn]] as const).map(([label, value, setter]) => <label key={label} className="text-xs text-slate-600">{label}<select value={value} onChange={(event) => (setter as (index: number) => void)(Number(event.target.value))} className="mt-1 w-full rounded-lg border p-2 text-sm"><option value={-1}>เลือกคอลัมน์</option>{headers.map((header, index) => <option key={`${index}-${header}`} value={index}>{header}</option>)}</select></label>)}</div>
