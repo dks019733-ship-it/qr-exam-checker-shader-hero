@@ -84,6 +84,7 @@ interface AssignmentItem {
   priority: "high" | "medium" | "low";
   desc: string;
   actionUrl?: string | null;
+  resourceUrl?: string | null;
   period?: string;
   createdAt?: string;
   assignmentId?: string;
@@ -241,6 +242,7 @@ export default function StudentPortalPage() {
             priority: submitted ? "low" : "high",
             desc: task.description || "ไม่มีรายละเอียดเพิ่มเติม",
             actionUrl: task.googleFormUrl,
+            resourceUrl: task.resourceUrl || null,
             createdAt: task.submission?.submittedAt || "",
             files: task.files || [],
             submission: task.submission || null,
@@ -1074,6 +1076,12 @@ export default function StudentPortalPage() {
                   </section>
                 )}
 
+                {viewingTask.resourceUrl && (
+                  <a href={viewingTask.resourceUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#ADC2A9]/40 bg-[#F4F6F1] px-4 py-3 text-xs font-bold text-[#304a38] transition hover:bg-[#eaf0e7]">
+                    <Link2 className="h-3.5 w-3.5" /> เปิดลิงก์ประกอบงาน <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+
                 {viewingTask.mode === "GOOGLE_FORM" && viewingTask.actionUrl && (
                   <a href={viewingTask.actionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#242e24] px-4 py-3 text-xs font-bold text-white transition hover:bg-[#5e6e5e]">
                     เปิด Google Forms <ExternalLink className="h-3.5 w-3.5" />
@@ -1131,6 +1139,11 @@ export default function StudentPortalPage() {
                   {selectedTask.desc}
                 </p>
 
+                {selectedTask.resourceUrl && (
+                  <a href={selectedTask.resourceUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#ADC2A9]/40 bg-[#F4F6F1] px-4 py-3 text-xs font-bold text-[#304a38] transition hover:bg-[#eaf0e7]">
+                    <Link2 className="h-3.5 w-3.5" /> เปิดลิงก์ประกอบงาน <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
                 {selectedTask.mode === "GOOGLE_FORM" && selectedTask.actionUrl ? (
                   <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 space-y-2">
                     <p className="text-xs font-bold text-blue-900">งานนี้ทำผ่าน Google Forms</p>
