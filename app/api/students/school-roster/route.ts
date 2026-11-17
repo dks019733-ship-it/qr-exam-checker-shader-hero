@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SOURCE_PAGE_URL = "https://www.mks.ac.th/about/19-std/399-std";
+const SOURCE_PAGE_URL = "https://www.mks.ac.th/about/19-std/399-%E0%B8%A3%E0%B8%B2%E0%B8%A2%E0%B8%8A%E0%B8%B7%E0%B9%88%E0%B8%AD%E0%B8%99%E0%B8%B1%E0%B8%81%E0%B9%80%E0%B8%A3%E0%B8%B5%E0%B8%A2%E0%B8%99%E0%B8%9B%E0%B8%B5%E0%B8%81%E0%B8%B2%E0%B8%A3%E0%B8%A8%E0%B8%B6%E0%B8%81%E0%B8%A9%E0%B8%B2-2-2569";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_STUDENTS = 500;
 
