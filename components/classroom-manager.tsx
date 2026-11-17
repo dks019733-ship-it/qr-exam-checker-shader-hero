@@ -214,7 +214,8 @@ export function ClassroomManager() {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "สร้างห้องเรียนไม่สำเร็จ");
       setClasses((current) => current.some((row) => row.id === body.id) ? current : [...current, body]);
-      setClassId(body.id); setClassName(""); setSchoolRoster([]); setNotice("สร้างห้องเรียนแล้ว");\n      void loadSchoolRoster(body.id);
+      setClassId(body.id); setClassName(""); setSchoolRoster([]); setNotice("สร้างห้องเรียนแล้ว");
+      void loadSchoolRoster(body.id);
     } catch (error: any) { setNotice(error.message || "สร้างห้องเรียนไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
