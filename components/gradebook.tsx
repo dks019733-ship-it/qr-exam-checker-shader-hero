@@ -54,19 +54,19 @@ export function Gradebook() {
     return allColumns.filter((column) => column.teachingAssignment?.id === subjectFilter);
   }, [allColumns, subjectFilter]);
 
-  const load = useCallback(async (selectedId = classId) => {
+  const load = useCallback(async (selectedId: string) => {
     const response = await fetch(selectedId ? `/api/gradebook?classId=${encodeURIComponent(selectedId)}` : "/api/gradebook");
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.error || "โหลดสมุดคะแนนไม่สำเร็จ");
     const data = body as Payload;
     setPayload(data);
-    if (data.classroom?.id && data.classroom.id !== classId) setClassId(data.classroom.id);
+    if (!selectedId && data.classroom?.id) setClassId(data.classroom.id);
     setDraft({});
-  }, [classId]);
+  }, []);
 
   // The API selects the first classroom on an initial request; changing classrooms
   // explicitly triggers the next load, avoiding a duplicate mount-time request.
-  useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, []);
+  useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, [load]);
   useEffect(() => {
     if (payload?.classroom?.id !== classId || subjectFilter !== "__auto__") return;
     const firstLinked = teachingAssignments.find((item) =>
