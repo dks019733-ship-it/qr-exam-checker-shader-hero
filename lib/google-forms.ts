@@ -10,14 +10,14 @@ export async function getGoogleFormsAccessToken(userId: string, purpose: "create
     where: { userId, provider: "google" },
     select: { provider: true, providerAccountId: true, access_token: true, refresh_token: true, expires_at: true, scope: true },
   });
-  if (!account) throw new Error("ไม่พบบัญชี Google ที่เชื่อมไว้ กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
+  if (!account) throw new GoogleFormsAccessError("ไม่พบบัญชี Google ที่เชื่อมไว้ กรุณาเชื่อมต่อบัญชี Google ใหม่");
   const requiredScope = purpose === "create" ? FORMS_BODY_SCOPE : FORMS_RESPONSES_SCOPE;
   if (!account.scope?.split(/\s+/).includes(requiredScope)) {
     const permission = purpose === "create" ? "สร้างและแก้ไข Google Forms" : "อ่านคำตอบ Google Forms";
     throw new GoogleFormsAccessError(`บัญชี Google ยังไม่ได้อนุญาต${permission} กรุณายืนยันสิทธิ์ Google ใหม่`);
   }
   if (account.access_token && account.expires_at && account.expires_at * 1000 > Date.now() + 60_000) return account.access_token;
-  if (!account.refresh_token) throw new Error("ไม่พบสิทธิ์ต่ออายุบัญชี Google กรุณาออกจากระบบแล้วเข้าสู่ระบบ Google อีกครั้ง");
+  if (!account.refresh_token) throw new GoogleFormsAccessError("ไม่พบสิทธิ์ต่ออายุบัญชี Google กรุณาเชื่อมต่อบัญชี Google ใหม่");
 
   const clientId = process.env.AUTH_GOOGLE_ID;
   const clientSecret = process.env.AUTH_GOOGLE_SECRET;
@@ -29,7 +29,21 @@ export async function getGoogleFormsAccessToken(userId: string, purpose: "create
     cache: "no-store",
   });
   const refreshed = await response.json().catch(() => ({}));
-  if (!response.ok || typeof refreshed.access_token !== "string") throw new Error("ต่ออายุการเชื่อมต่อ Google ไม่สำเร็จ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่");
+  if (!response.ok || typeof refreshed.access_token !== "string") {
+    // Log only Google's stable error code and HTTP status. Never log tokens or request bodies.
+    const oauthError = typeof refreshed.error === "string" ? refreshed.error : "unknown_error";
+    console.error("[Google OAuth] token refresh failed", { status: response.status, error: oauthError });
+
+    if (oauthError === "invalid_grant") {
+      throw new GoogleFormsAccessError(
+        "การเชื่อมต่อ Google หมดอายุหรือถูกเพิกถอน กรุณาเชื่อมต่อบัญชี Google ใหม่อีกครั้ง หากปัญหาเกิดซ้ำ ให้ตรวจ Google Cloud > OAuth consent screen ว่า Publishing status เป็น In production ไม่ใช่ Testing",
+      );
+    }
+    if (oauthError === "invalid_client" || oauthError === "unauthorized_client") {
+      throw new Error("การตั้งค่า Google OAuth ของระบบไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ");
+    }
+    throw new Error("ต่ออายุการเชื่อมต่อ Google ไม่สำเร็จ กรุณาเชื่อมต่อบัญชี Google ใหม่");
+  }
   await prisma.account.update({
     where: { provider_providerAccountId: { provider: account.provider, providerAccountId: account.providerAccountId } },
     data: { access_token: refreshed.access_token, expires_at: Math.floor(Date.now() / 1000) + Number(refreshed.expires_in || 3600), scope: refreshed.scope || account.scope },

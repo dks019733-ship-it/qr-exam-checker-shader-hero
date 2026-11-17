@@ -2,7 +2,7 @@ import { featureAvailabilityResponse } from "@/lib/feature-availability";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAPIError } from "@/lib/google-forms";
+import { getGoogleFormsAccessToken, googleFormsRequest, GoogleFormsAccessError, GoogleFormsAPIError } from "@/lib/google-forms";
 import { getFormScoreDestination } from "@/lib/gradebook-form-destination";
 import { matchFormStudent } from "@/lib/google-form-student-match";
 
@@ -191,7 +191,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json({ imported, preservedManualScores, pending: pendingRows.length, skipped, ungraded, responsesSeen, maxFormScore, maxGradeScore: maxFormScore, scoreSource: "google_forms_raw" });
   } catch (error) {
-    if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof GoogleFormsAccessError) return NextResponse.json({ error: error.message, action: "reauthorize" }, { status: 403 });
+    if (error instanceof GoogleFormsAPIError) return NextResponse.json({ error: error.message, ...(error.status === 401 ? { action: "reauthorize" } : {}) }, { status: error.status });
     const message = error instanceof Error ? error.message : "ซิงก์คะแนนไม่สำเร็จ";
     if (/บัญชี Google|สิทธิ์|Google OAuth/i.test(message)) return NextResponse.json({ error: message }, { status: 403 });
     console.error("[Gradebook] Google Forms sync failed", error);
