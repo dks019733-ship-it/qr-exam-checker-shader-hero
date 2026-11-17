@@ -130,7 +130,10 @@ export async function GET() {
         title: col.title,
         dueDate: periodLabel,
         status: isSubmitted ? ("submitted" as const) : ("pending" as const),
-        score: isSubmitted ? `${studentScore}/${col.maxScore}` : undefined,
+        score: isSubmitted
+          ? `${Math.min(Math.max(studentScore ?? 0, 0), col.maxScore)}/${col.maxScore}`
+          : undefined,
+        bonusScore: Math.max((studentScore ?? 0) - col.maxScore, 0),
         rawScore: studentScore,
         maxScore: col.maxScore,
         points: `${col.maxScore} คะแนน`,
