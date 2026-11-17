@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookOpen, Loader2, Save, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, BarChart3, BookOpen, FileText, Loader2, Save, Plus } from "lucide-react";
+import { ScoreReport } from "@/components/score-report";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; status: string; questions?: { number: number; answer: string }[]; _count?: { attempts: number } };
@@ -20,6 +21,7 @@ export function ExamManager() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<"work" | "scores">("work");
 
   async function load() {
     setLoading(true);
@@ -35,6 +37,10 @@ export function ExamManager() {
   }
 
   useEffect(() => { void load(); }, []);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "scores") setActiveTab("scores");
+  }, []);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -105,9 +111,44 @@ export function ExamManager() {
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-6xl">
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
-    <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><h1 className="text-2xl font-semibold">จัดการข้อสอบ</h1><p className="mt-2 text-sm text-slate-600">สร้างข้อสอบ เลือกห้อง และกำหนดเฉลยปรนัย 4 ตัวเลือก</p></header>
-    {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
-    <div className="mt-5 grid gap-5 lg:grid-cols-[300px_1fr]">
+    <header className="mt-5 rounded-2xl border border-[#e6e5dc] bg-white p-5 shadow-sm sm:p-6">
+      <h1 className="text-2xl font-bold text-[#26382b]">ศูนย์จัดการข้อสอบ</h1>
+      <p className="mt-2 text-sm text-[#697568]">สร้างชุดข้อสอบ กำหนดเฉลย และติดตามผลคะแนนในพื้นที่เดียว</p>
+    </header>
+    <div className="mt-4 rounded-2xl border border-[#e6e5dc] bg-white p-1.5 shadow-sm">
+      <div role="tablist" aria-label="ส่วนจัดการข้อสอบและคะแนน" className="grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          role="tab"
+          id="exam-work-tab"
+          aria-selected={activeTab === "work"}
+          aria-controls="exam-work-panel"
+          onClick={() => setActiveTab("work")}
+          className={"flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition " + (activeTab === "work" ? "bg-[#e6eee2] text-[#304a38] shadow-sm" : "text-[#738071] hover:bg-[#f5f6f2]")}
+        >
+          <FileText className="h-4 w-4" /> จัดการข้อสอบ
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="exam-scores-tab"
+          aria-selected={activeTab === "scores"}
+          aria-controls="exam-scores-panel"
+          onClick={() => setActiveTab("scores")}
+          className={"flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition " + (activeTab === "scores" ? "bg-[#e6eee2] text-[#304a38] shadow-sm" : "text-[#738071] hover:bg-[#f5f6f2]")}
+        >
+          <BarChart3 className="h-4 w-4" /> สรุปคะแนนสอบ
+        </button>
+      </div>
+    </div>
+    {activeTab === "scores" ? (
+      <div id="exam-scores-panel" role="tabpanel" aria-labelledby="exam-scores-tab" className="mt-5">
+        <ScoreReport />
+      </div>
+    ) : (
+      <div id="exam-work-panel" role="tabpanel" aria-labelledby="exam-work-tab">
+        {message && <p role="status" className="mt-4 rounded-xl border border-[#e6e5dc] bg-white p-3 text-sm text-[#4e5d4d]">{message}</p>}
+        <div className="mt-5 grid gap-5 lg:grid-cols-[300px_1fr]">
       <aside className="space-y-4">
         <form onSubmit={createExam} className="rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="font-semibold">สร้างข้อสอบใหม่</h2>
@@ -125,6 +166,8 @@ export function ExamManager() {
           {!selected._count?.attempts && <button disabled={saving} className="mt-5 inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50"><Save className="mr-2 h-4 w-4" />{saving ? "กำลังบันทึก..." : "บันทึกข้อสอบและเฉลย"}</button>}
         </form>}
       </section>
-    </div>
+        </div>
+      </div>
+    )}
   </div></main>;
 }
