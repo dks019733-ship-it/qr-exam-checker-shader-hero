@@ -26,6 +26,7 @@ import {
   CheckCircle,
   Calendar,
   ExternalLink,
+  Link2,
   RotateCw,
   AlertCircle,
 } from "lucide-react";
