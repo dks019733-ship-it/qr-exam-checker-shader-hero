@@ -627,6 +627,7 @@ model Assignment {
   mode                 AssignmentMode
   status               AssignmentStatus @default(DRAFT)
   googleFormUrl        String?          @db.Text
+  resourceUrl          String?          @db.Text
   dueAt                DateTime?
   maxScore             Float?
   autoMarkAttendance   Boolean          @default(false)
