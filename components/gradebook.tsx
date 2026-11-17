@@ -54,18 +54,19 @@ export function Gradebook() {
     return allColumns.filter((column) => column.teachingAssignment?.id === subjectFilter);
   }, [allColumns, subjectFilter]);
 
-  const load = useCallback(async (selectedId = classId) => {
+  const load = useCallback(async (selectedId: string) => {
     const response = await fetch(selectedId ? `/api/gradebook?classId=${encodeURIComponent(selectedId)}` : "/api/gradebook");
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.error || "โหลดสมุดคะแนนไม่สำเร็จ");
     const data = body as Payload;
     setPayload(data);
-    if (!selectedId && data.classes[0]) setClassId(data.classes[0].id);
+    if (!selectedId && data.classroom?.id) setClassId(data.classroom.id);
     setDraft({});
-  }, [classId]);
+  }, []);
 
-  useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, []);
-  useEffect(() => { if (classId) void load(classId).catch((error) => setMessage(error.message)); }, [classId]);
+  // The API selects the first classroom on an initial request; changing classrooms
+  // explicitly triggers the next load, avoiding a duplicate mount-time request.
+  useEffect(() => { void load("").catch((error) => setMessage(error.message)); }, [load]);
   useEffect(() => {
     if (payload?.classroom?.id !== classId || subjectFilter !== "__auto__") return;
     const firstLinked = teachingAssignments.find((item) =>
@@ -84,7 +85,14 @@ export function Gradebook() {
   const matchingStudents = payload?.matchingStudents || sortedStudents.map((student) => ({ ...student, className: payload?.classroom?.name || "" }));
   const periodColumns = useMemo(() => columns.filter((column) => column.period === period), [columns, period]);
   const unmatchedFormScores = useMemo(() => columns.flatMap((column) => column.pendingFormScores.map((pending) => ({ column, pending }))), [columns]);
-  const scoreAt = (column: Column, studentId: string) => column.scores.find((score) => score.studentId === studentId)?.score ?? null;
+  const scoreLookup = useMemo(() => {
+    const lookup = new Map<string, number | null>();
+    for (const column of allColumns) {
+      for (const score of column.scores) lookup.set(keyOf(column.id, score.studentId), score.score);
+    }
+    return lookup;
+  }, [allColumns]);
+  const scoreAt = (column: Column, studentId: string) => scoreLookup.get(keyOf(column.id, studentId)) ?? null;
   const scoreValue = (column: Column, studentId: string) => draft[keyOf(column.id, studentId)] ?? (scoreAt(column, studentId)?.toString() ?? "");
   const sum = (student: Student, subset: Column[]) => subset.reduce(
     (total, column) => total + Math.min(Math.max(scoreAt(column, student.id) ?? 0, 0), column.maxScore),
@@ -317,7 +325,7 @@ export function Gradebook() {
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold">สมุดคะแนนออนไลน์</h1><p className="mt-2 text-sm text-slate-600">บันทึกคะแนนงาน/บทในช่วงกลางภาคหรือหลังกลางภาค พร้อมรวมคะแนนตามช่องใน SGS</p></div><div className="flex flex-wrap gap-2"><button onClick={exportCsv} disabled={!students.length} className="inline-flex items-center rounded-lg border px-3 py-2 text-sm disabled:opacity-50"><Download className="mr-2 h-4 w-4" />ส่งออกคะแนน</button><Link href="/dashboard/classes" className="rounded-lg border px-3 py-2 text-sm">จัดการห้องเรียน</Link></div></div>
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:items-end">
         <label className="grid min-w-0 gap-1 text-xs font-semibold text-slate-600">ห้องเรียน
-          <select className={inputClass} value={classId} onChange={(event) => { setClassId(event.target.value); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); }}>
+          <select className={inputClass} value={classId} onChange={(event) => { const nextClassId = event.target.value; setClassId(nextClassId); setTeachingAssignmentId(""); setSubjectFilter("__auto__"); setSelectedColumns([]); if (nextClassId) void load(nextClassId).catch((error) => setMessage(error.message)); }}>
             <option value="">เลือกห้องเรียน</option>{payload?.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>

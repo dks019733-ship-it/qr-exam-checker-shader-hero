@@ -13,32 +13,50 @@ export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const ownerId = session.user.id;
-  const classId = new URL(request.url).searchParams.get("classId");
-  const [classes, exams, googleForms] = await Promise.all([
-    prisma.class.findMany({ where: { ownerId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    prisma.exam.findMany({ where: { ownerId, ...(classId ? { classId } : {}) }, select: { id: true, title: true, subject: true, classId: true, gradeColumn: { select: { id: true } }, _count: { select: { questions: true } } }, orderBy: { updatedAt: "desc" } }),
-    prisma.googleForm.findMany({ where: { ownerId }, include: { material: { select: { title: true, subject: true } }, gradeColumn: { select: { id: true } } }, orderBy: { createdAt: "desc" } }),
-  ]);
-  if (!classId) return NextResponse.json({ classes, exams, googleForms });
+  const requestedClassId = new URL(request.url).searchParams.get("classId");
+  const classes = await prisma.class.findMany({
+    where: { ownerId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  // Select the first owned classroom on the initial request so the client can render
+  // the gradebook in one round trip instead of fetching the class list and then refetching.
+  const classId = requestedClassId || classes[0]?.id || "";
   const classroom = classes.find((item) => item.id === classId);
+  if (!classId) return NextResponse.json({ classes, exams: [], googleForms: [] });
   if (!classroom) return NextResponse.json({ error: "ไม่พบห้องเรียนหรือไม่มีสิทธิ์" }, { status: 404 });
-  const [students, columns, matchingStudents, teachingAssignments] = await Promise.all([
-    prisma.student.findMany({ where: { classId, isActive: true }, select: { id: true, rollNo: true, studentNo: true, name: true } }),
+
+  const [exams, googleForms] = await Promise.all([
+    prisma.exam.findMany({
+      where: { ownerId, classId },
+      select: { id: true, title: true, subject: true, classId: true, gradeColumn: { select: { id: true } }, _count: { select: { questions: true } } },
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.googleForm.findMany({
+      where: { ownerId },
+      select: { id: true, material: { select: { title: true, subject: true } }, gradeColumn: { select: { id: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const [students, columns, teachingAssignments] = await Promise.all([
+    prisma.student.findMany({
+      where: { classId, isActive: true },
+      select: { id: true, rollNo: true, studentNo: true, name: true },
+    }),
     prisma.gradeColumn.findMany({
       where: { ownerId, classId },
       include: {
-        scores: true,
-        pendingFormScores: { orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }] },
+        scores: { select: { studentId: true, score: true } },
+        pendingFormScores: {
+          select: { id: true, responseId: true, rollNo: true, studentName: true, room: true, manualReviewRequired: true, score: true, submittedAt: true },
+          orderBy: [{ submittedAt: "asc" }, { createdAt: "asc" }],
+        },
         exam: { select: { title: true } },
-        googleForm: { include: { material: { select: { title: true } } } },
-        teachingAssignment: { include: { subject: { select: { id: true, code: true, name: true } } } },
+        googleForm: { select: { material: { select: { title: true } } } },
+        teachingAssignment: { select: { id: true, subject: { select: { id: true, code: true, name: true } } } },
       },
       orderBy: { createdAt: "asc" },
-    }),
-    prisma.student.findMany({
-      where: { class: { ownerId }, isActive: true },
-      include: { class: { select: { name: true } } },
-      orderBy: [{ class: { name: "asc" } }],
     }),
     prisma.teachingAssignment.findMany({
       where: { ownerId, classId },
@@ -46,7 +64,24 @@ export async function GET(request: Request) {
       orderBy: { subject: { code: "asc" } },
     }),
   ]);
+
   students.sort(compareByRollNo);
+  // Cross-class student matching is only needed when unresolved form scores exist.
+  // Avoid loading the teacher's entire active roster on normal gradebook visits.
+  const hasPendingFormScores = columns.some((column) => column.pendingFormScores.length > 0);
+  const matchingStudents = hasPendingFormScores
+    ? await prisma.student.findMany({
+        where: { class: { ownerId }, isActive: true },
+        select: {
+          id: true,
+          rollNo: true,
+          studentNo: true,
+          name: true,
+          class: { select: { name: true } },
+        },
+        orderBy: [{ class: { name: "asc" } }],
+      })
+    : [];
   const sortedMatchingStudents = [...matchingStudents].sort((a, b) =>
     a.class.name.localeCompare(b.class.name, "th", { numeric: true }) || compareByRollNo(a, b),
   );
