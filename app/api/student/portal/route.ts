@@ -152,12 +152,15 @@ export async function GET() {
         subject: string;
         teacher: string;
         courseworkScore: number;
+        courseworkBonus: number;
         courseworkMax: number;
         courseworkItems: {
           id: string;
           title: string;
           period: string;
           score: number | null;
+          earnedScore: number;
+          bonusScore: number;
           maxScore: number;
         }[];
       }
@@ -193,21 +196,27 @@ export async function GET() {
           subject: subjectLabel,
           teacher: teacherName,
           courseworkScore: 0,
+          courseworkBonus: 0,
           courseworkMax: 0,
           courseworkItems: [],
         });
       }
 
       const entry = subjectMap.get(subjectKey)!;
-      // The gradebook defines the complete coursework denominator. Missing scores
-      // contribute zero earned points but retain the full column maximum.
-      entry.courseworkScore += studentScore ?? 0;
+      // Keep the entered score unchanged in storage, but cap earned coursework at
+      // the column maximum and classify only the excess as separate bonus points.
+      const earnedScore = Math.min(Math.max(studentScore ?? 0, 0), col.maxScore);
+      const bonusScore = Math.max((studentScore ?? 0) - col.maxScore, 0);
+      entry.courseworkScore += earnedScore;
+      entry.courseworkBonus += bonusScore;
       entry.courseworkMax += col.maxScore;
       entry.courseworkItems.push({
         id: col.id,
         title: col.title,
         period: col.period,
         score: studentScore,
+        earnedScore,
+        bonusScore,
         maxScore: col.maxScore,
       });
     }
@@ -219,6 +228,7 @@ export async function GET() {
         ? `${Number(item.courseworkScore.toFixed(2))}/${Number(item.courseworkMax.toFixed(2))}`
         : "—",
       courseworkScore: Number(item.courseworkScore.toFixed(2)),
+      courseworkBonus: Number(item.courseworkBonus.toFixed(2)),
       courseworkMax: Number(item.courseworkMax.toFixed(2)),
       courseworkItems: item.courseworkItems,
     }));
@@ -228,7 +238,14 @@ export async function GET() {
     const totalTasks = courseworkColumns.length;
     const pendingTasks = courseworkColumns.filter((column) => column.scores[0]?.score == null).length;
     const submittedTasks = totalTasks - pendingTasks;
-    const totalEarned = courseworkColumns.reduce((sum, column) => sum + (column.scores[0]?.score ?? 0), 0);
+    const totalEarned = courseworkColumns.reduce(
+      (sum, column) => sum + Math.min(Math.max(column.scores[0]?.score ?? 0, 0), column.maxScore),
+      0,
+    );
+    const totalBonus = courseworkColumns.reduce(
+      (sum, column) => sum + Math.max((column.scores[0]?.score ?? 0) - column.maxScore, 0),
+      0,
+    );
     const totalMax = courseworkColumns.reduce((sum, column) => sum + column.maxScore, 0);
 
     // Dynamic announcements
@@ -279,12 +296,14 @@ export async function GET() {
             ? `${Number(earned.toFixed(2))}/${Number(maximum.toFixed(2))}`
             : "—";
         })(),
+        courseworkBonusScore: Number(scores.reduce((sum, item) => sum + item.courseworkBonus, 0).toFixed(2)).toString(),
       },
       summary: {
         totalTasks,
         pendingCount: pendingTasks,
         submittedCount: submittedTasks,
         totalScore: Number(totalEarned.toFixed(2)),
+        bonusScore: Number(totalBonus.toFixed(2)),
         maxScore: Number(totalMax.toFixed(2)),
       },
       subjects: ["ทั้งหมด", ...uniqueSubjects],
