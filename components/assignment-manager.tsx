@@ -67,6 +67,7 @@ export function AssignmentManager() {
   const [description, setDescription] = useState("");
   const [mode, setMode] = useState<"TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM">("TEACHER_CHECK");
   const [googleFormUrl, setGoogleFormUrl] = useState("");
+  const [resourceUrl, setResourceUrl] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [autoMarkAttendance, setAutoMarkAttendance] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState("");
@@ -203,6 +204,7 @@ export function AssignmentManager() {
             mode,
             status: "DRAFT",
             googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : "",
+            resourceUrl,
             dueAt: dueAt ? new Date(dueAt).toISOString() : null,
             autoMarkAttendance,
             attendanceSessionId: linkedSessionId,
@@ -252,6 +254,7 @@ export function AssignmentManager() {
       setTargetTeachingAssignmentIds([teachingAssignmentId]);
       setDescription("");
       setGoogleFormUrl("");
+      setResourceUrl("");
       setDueAt("");
       setFiles([]);
       setAutoMarkAttendance(false);
@@ -382,6 +385,12 @@ export function AssignmentManager() {
               <label className="block">
                 <span className={labelClass}>รายละเอียด / คำชี้แจง</span>
                 <textarea maxLength={5000} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="อธิบายสิ่งที่นักเรียนต้องทำอย่างละเอียด..." className="w-full resize-y rounded-[1.25rem] border border-[#EAE8E3] bg-[#F9F9F8] px-5 py-4 text-sm font-medium leading-6 text-[#1A1A1A] outline-none transition hover:bg-white focus:border-[#166534] focus:bg-white focus:ring-2 focus:ring-[#166534]/10" />
+              </label>
+
+              <label className="block">
+                <span className={labelClass}><Link2 className="mr-1 inline h-3.5 w-3.5 text-[#166534]" /> ลิงก์ประกอบงาน (ไม่บังคับ)</span>
+                <input type="url" inputMode="url" maxLength={2048} value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://..." className={fieldClass} aria-describedby="assignment-resource-url-help" />
+                <span id="assignment-resource-url-help" className="mt-2 block text-xs leading-5 text-[#777777]">ใส่ลิงก์เอกสาร วิดีโอ หรือเว็บไซต์ประกอบงานได้ โดยนักเรียนจะเห็นปุ่มเปิดลิงก์ในรายละเอียดงาน</span>
               </label>
 
               {mode === "GOOGLE_FORM" && (

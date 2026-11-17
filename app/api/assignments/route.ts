@@ -7,6 +7,15 @@ import { isObjectStorageConfigured } from "@/lib/object-storage";
 
 const MODES = new Set(["TEACHER_CHECK", "SYSTEM_UPLOAD", "GOOGLE_FORM"]);
 
+function isAllowedResourceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedGoogleFormUrl(value: string) {
   try {
     const url = new URL(value);
@@ -61,6 +70,7 @@ export async function POST(request: Request) {
   const mode = typeof body?.mode === "string" ? body.mode : "";
   const status = body?.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT";
   const googleFormUrl = typeof body?.googleFormUrl === "string" ? body.googleFormUrl.trim() : "";
+  const resourceUrl = typeof body?.resourceUrl === "string" ? body.resourceUrl.trim() : "";
   const dueAt = body?.dueAt ? new Date(body.dueAt) : null;
   const autoMarkAttendance = body?.autoMarkAttendance === true;
   const attendanceSessionId = typeof body?.attendanceSessionId === "string" ? body.attendanceSessionId : null;
@@ -69,7 +79,7 @@ export async function POST(request: Request) {
   if (
     !teachingAssignmentId || !gradeColumnId || invalidTarget || !targetIds.length ||
     targetIds.length > 30 || !targetIds.includes(teachingAssignmentId) ||
-    description.length > 5000 || !MODES.has(mode)
+    description.length > 5000 || resourceUrl.length > 2048 || !MODES.has(mode)
   ) {
     return NextResponse.json({ error: "กรุณาเลือกรายวิชา ช่องคะแนน และห้องเรียนที่ต้องการมอบหมายให้ถูกต้อง" }, { status: 400 });
   }
@@ -87,6 +97,9 @@ export async function POST(request: Request) {
       { error: "ระบบจัดเก็บไฟล์ยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแลระบบก่อนสร้างงานแบบส่งไฟล์" },
       { status: 503 },
     );
+  }
+  if (resourceUrl && !isAllowedResourceUrl(resourceUrl)) {
+    return NextResponse.json({ error: "ลิงก์ประกอบงานต้องเป็น URL ที่ขึ้นต้นด้วย https:// และไม่มีข้อมูลบัญชีฝังอยู่ในลิงก์" }, { status: 400 });
   }
   if (mode === "GOOGLE_FORM" && !isAllowedGoogleFormUrl(googleFormUrl)) {
     return NextResponse.json({ error: "ลิงก์ต้องเป็น Google Forms ที่ปลอดภัย (forms.gle หรือ docs.google.com/forms)" }, { status: 400 });
@@ -212,6 +225,7 @@ export async function POST(request: Request) {
             mode: mode as "TEACHER_CHECK" | "SYSTEM_UPLOAD" | "GOOGLE_FORM",
             status,
             googleFormUrl: mode === "GOOGLE_FORM" ? googleFormUrl : null,
+            resourceUrl: resourceUrl || null,
             dueAt,
             maxScore: target.gradeColumn.maxScore,
             autoMarkAttendance,

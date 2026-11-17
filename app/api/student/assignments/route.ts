@@ -107,6 +107,7 @@ export async function GET() {
         dueAt: assignment.dueAt?.toISOString() ?? null,
         maxScore: assignment.gradeColumn?.maxScore ?? assignment.maxScore,
         googleFormUrl: assignment.googleFormUrl,
+        resourceUrl: assignment.resourceUrl,
         subject: assignment.teachingAssignment.subject,
         teacher: assignment.teachingAssignment.owner.name || "ครูผู้สอน",
         files: assignment.files,
