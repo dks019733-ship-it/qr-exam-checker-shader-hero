@@ -152,7 +152,8 @@ export async function GET(request: Request) {
       className: classroom.name,
       students,
       sourceLastModified: response.headers.get("last-modified"),
-      source: "MKS school roster",\n      sourceUrl,
+      source: "MKS school roster",
+      sourceUrl,
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ไม่สามารถอ่านไฟล์รายชื่อนักเรียนได้";
