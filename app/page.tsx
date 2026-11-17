@@ -74,12 +74,6 @@ const tools: ToolCard[] = [
     icon: FileCheck2,
   },
   {
-    title: "รายงานคะแนน",
-    description: "ดูผลสอบ ยืนยันคะแนน และส่งออกข้อมูลสำหรับชั้นเรียน",
-    href: "/dashboard/reports",
-    icon: BarChart3,
-  },
-  {
     title: "สมุดคะแนนออนไลน์",
     description: "รวมคะแนนงานและข้อสอบ พร้อมจัดการคะแนนของแต่ละห้องเรียน",
     href: "/dashboard/gradebook",
@@ -117,7 +111,7 @@ const workflow = [
   },
   {
     title: "ดูผลและจัดการคะแนน",
-    description: "ติดตามคะแนนในรายงานและสมุดคะแนน พร้อมจัดการข้อมูลต่อได้",
+    description: "ติดตามผลสอบในแท็บสรุปคะแนนภายในหน้าจัดการข้อสอบ และจัดการคะแนนต่อในสมุดคะแนน",
     icon: BarChart3,
   },
 ] as const;
@@ -219,7 +213,7 @@ export default async function HomePage() {
                 </h1>
               </div>
               <p className="max-w-xl text-sm leading-7 text-[#5e6d5b] sm:text-base">
-                จัดการห้องเรียนและข้อสอบ สร้างกระดาษคำตอบพร้อม QR ตรวจคะแนน และดูรายงานได้ในที่เดียว พร้อมผู้ช่วย AI สำหรับงานสอน
+                จัดการห้องเรียนและข้อสอบ สร้างกระดาษคำตอบพร้อม QR ตรวจคะแนน และดูรายงานในหน้าจัดการข้อสอบ พร้อมผู้ช่วย AI สำหรับงานสอน
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <WorkspaceLink
