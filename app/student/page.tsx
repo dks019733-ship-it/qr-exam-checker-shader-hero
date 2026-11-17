@@ -79,6 +79,7 @@ interface AssignmentItem {
   dueDate: string;
   status: "pending" | "submitted";
   score?: string;
+  bonusScore?: number;
   rawScore?: number | null;
   maxScore: number | null;
   points: string;
@@ -831,6 +832,7 @@ export default function StudentPortalPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100/80 px-3.5 py-1.5 rounded-xl border border-emerald-200">
                                 <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> ส่งแล้ว ({item.score})
+                                {item.bonusScore && item.bonusScore > 0 ? <span className="ml-1 text-[10px] font-bold text-amber-700">· คะแนนพิเศษ +{item.bonusScore}</span> : null}
                               </span>
                               <button
                                 type="button"
