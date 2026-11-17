@@ -156,6 +156,7 @@ export function ClassroomManager() {
 
   useEffect(() => {
     setSelectedStudentIds([]);
+    setSchoolRoster([]);
     loadStudents(classId).catch((error) => setNotice(error.message || "โหลดรายชื่อนักเรียนไม่สำเร็จ"));
   // Keep the chosen student when a row list refreshes; class changes always reload from the server.
   // eslint-disable-next-line react-hooks/exhaustive-deps
