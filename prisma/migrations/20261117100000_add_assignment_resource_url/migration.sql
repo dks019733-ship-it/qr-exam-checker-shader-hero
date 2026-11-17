@@ -1,1 +1,1 @@
-ALTER TABLE "Assignment" ADD COLUMN "resourceUrl" TEXT;
+ALTER TABLE "Assignment" ADD COLUMN IF NOT EXISTS "resourceUrl" TEXT;
