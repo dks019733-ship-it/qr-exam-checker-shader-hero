@@ -225,6 +225,12 @@ export default function StudentPortalPage() {
           );
           const maxScore = typeof task.maxScore === "number" ? task.maxScore : null;
           const score = task.submission?.score;
+          const earnedScore = typeof score === "number" && maxScore !== null
+            ? Math.min(Math.max(score, 0), maxScore)
+            : score;
+          const bonusScore = typeof score === "number" && maxScore !== null
+            ? Math.max(score - maxScore, 0)
+            : 0;
           const subject = task.subject?.code ? task.subject.code + " · " + task.subject.name : task.subject?.name || "วิชาทั่วไป";
           const type = task.mode === "TEACHER_CHECK" ? "ตรวจงานกับครู" : task.mode === "SYSTEM_UPLOAD" ? "ส่งในระบบ" : "Google Forms";
           return {
@@ -240,7 +246,8 @@ export default function StudentPortalPage() {
             dueAt: task.dueAt,
             period: task.period || undefined,
             status: submitted ? "submitted" : "pending",
-            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : score !== null && score !== undefined ? (maxScore === null ? String(score) + " คะแนน" : String(score) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
+            score: !submitted ? undefined : task.submission.status === "RETURNED" ? "ส่งกลับแก้ไข" : earnedScore !== null && earnedScore !== undefined ? (maxScore === null ? String(earnedScore) + " คะแนน" : String(earnedScore) + "/" + String(maxScore)) : task.submission.status === "REVIEWED" ? "ตรวจแล้ว" : "รอตรวจ",
+            bonusScore,
             rawScore: score ?? null,
             maxScore,
             points: maxScore !== null ? String(maxScore) + " คะแนน" : "งานที่มอบหมาย",
