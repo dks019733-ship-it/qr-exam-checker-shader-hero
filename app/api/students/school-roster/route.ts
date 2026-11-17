@@ -11,17 +11,17 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_STUDENTS = 500;
 
 function normalize(value: string) {
-  return value.toLocaleLowerCase("th-TH").replace(/[\\s_\\-–—./()]/g, "");
+  return value.toLocaleLowerCase("th-TH").replace(/[\s_\-–—./()]/g, "");
 }
 
 function classKey(value: string) {
   const clean = value.trim();
-  const match = clean.match(/(?:มัธยมศึกษาปีที่|ชั้นมัธยมศึกษาปีที่|มัธยม|ชั้น|ห้อง|ม\\.?\\s*)?\\s*([1-6])\\s*[/.\\-]\\s*(\\d+)/u);
+  const match = clean.match(/(?:มัธยมศึกษาปีที่|ชั้นมัธยมศึกษาปีที่|มัธยม|ชั้น|ห้อง|ม\.?\s*)?\s*([1-6])\s*[/.\-]\s*(\d+)/u);
   return match ? `${match[1]}/${match[2]}` : "";
 }
 
 function classKeyFromClassName(value: string) {
-  return classKey(value) || classKey(value.replace(/^ม\\.?\\s*/u, ""));
+  return classKey(value) || classKey(value.replace(/^ม\.?\s*/u, ""));
 }
 
 async function resolveSourceWorkbookUrl() {
@@ -33,7 +33,7 @@ async function resolveSourceWorkbookUrl() {
   if (!page.ok) throw new Error(`เปิดหน้าแหล่งข้อมูลโรงเรียนไม่สำเร็จ (HTTP ${page.status})`);
   const html = await page.text();
   if (html.length > 2 * 1024 * 1024) throw new Error("หน้าแหล่งข้อมูลมีขนาดใหญ่เกินกำหนด");
-  const links = [...html.matchAll(/href\\s*=\\s*(["'])([^"']+\\.xlsx(?:\\?[^"']*)?)\\1/giu)];
+  const links = [...html.matchAll(/href\s*=\s*(["'])([^"']+\.xlsx(?:\?[^"']*)?)\1/giu)];
   for (const match of links) {
     const href = match[2].replace(/&amp;/gu, "&");
     const candidate = new URL(href, SOURCE_PAGE_URL);
@@ -75,7 +75,7 @@ function parseRoster(buffer: Buffer, requestedClass: string) {
         continue;
       }
 
-      const headingCell = row.find((cell) => /(?:มัธยมศึกษาปีที่|ชั้นมัธยมศึกษาปีที่|มัธยม|ชั้น|ห้อง|ม\\.?\\s*)/u.test(cell) && classKey(cell));
+      const headingCell = row.find((cell) => /(?:มัธยมศึกษาปีที่|ชั้นมัธยมศึกษาปีที่|มัธยม|ชั้น|ห้อง|ม\.?\s*)/u.test(cell) && classKey(cell));
       if (headingCell) {
         activeClass = classKey(headingCell);
         continue;
@@ -86,9 +86,9 @@ function parseRoster(buffer: Buffer, requestedClass: string) {
 
       const rollNo = (row[rollIndex] || "").trim();
       const studentNo = (row[idIndex] || "").trim();
-      const name = (row[nameIndex] || "").replace(/\\s+/gu, " ").trim();
+      const name = (row[nameIndex] || "").replace(/\s+/gu, " ").trim();
       if (!rollNo || !studentNo || !name) continue;
-      if (!/^\\d{1,3}$/u.test(rollNo) || !/^\\d{3,20}$/u.test(studentNo)) continue;
+      if (!/^\d{1,3}$/u.test(rollNo) || !/^\d{3,20}$/u.test(studentNo)) continue;
       if (/^(เลขที่|เลขประจำตัว|ชื่อ|ชื่อ นามสกุล)$/u.test(name)) continue;
       found.push({ rollNo, studentNo, name });
     }
