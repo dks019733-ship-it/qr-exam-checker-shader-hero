@@ -122,6 +122,8 @@ model Exam {
   id          String       @id @default(cuid())
   title       String
   subject     String       @default("")
+  choiceCount Int          @default(4)
+  choiceLabelStyle String  @default("LATIN")
   ownerId     String
   classId     String?
   owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
