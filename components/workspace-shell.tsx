@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2,
-  FileSpreadsheet, GraduationCap, Home, Menu, PanelLeftClose, PanelLeftOpen,
-  ScanLine, Sparkles, Users, X,
+  GraduationCap, Home, Menu, PanelLeftClose, PanelLeftOpen,
+  Sparkles, Users, X,
 } from "lucide-react";
 
 type WorkspaceNavItem = { href: string; label: string; icon: typeof Home };
@@ -20,10 +20,8 @@ const sections: { title: string; items: WorkspaceNavItem[] }[] = [
     { href: "/dashboard/subjects", label: "รายวิชาที่สอน", icon: BookOpen },
   ] },
   { title: "ข้อสอบและคะแนน", items: [
-    { href: "/dashboard/exams", label: "จัดการข้อสอบ", icon: FileCheck2 },
-    { href: "/dashboard/scan", label: "ตรวจข้อสอบด้วย QR", icon: ScanLine },
-    { href: "/dashboard/answer-sheet", label: "กระดาษคำตอบ", icon: FileSpreadsheet },
-    { href: "/dashboard/gradebook", label: "สมุดคะแนน", icon: BookOpen },
+    { href: "/dashboard/exams", label: "ศูนย์จัดการข้อสอบ", icon: FileCheck2 },
+    { href: "/dashboard/gradebook", label: "สมุดคะแนนออนไลน์", icon: BookOpen },
   ] },
   { title: "เครื่องมือเสริม", items: [{ href: "/dashboard/ai", label: "ผู้ช่วย AI สำหรับครู", icon: Sparkles }] },
 ];
@@ -36,7 +34,9 @@ const quickLinks: WorkspaceNavItem[] = [
 ];
 
 function isActivePath(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === "/") return pathname === "/";
+  if (href === "/dashboard/exams" && ["/dashboard/exams", "/dashboard/scan", "/dashboard/answer-sheet"].some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
