@@ -32,7 +32,7 @@ export function ExamWorkspaceNav({ active, onNavigate }: { active: ExamWorkspace
             </span>
             <span className="min-w-0">
               <span className="block text-xs font-semibold leading-5 sm:text-sm">{item.label}</span>
-              <span className="mt-0.5 block text-[10px] leading-4 text-[#d5e6d9] sm:text-xs">{item.description}</span>
+              <span className={`mt-0.5 block text-[10px] leading-4 sm:text-xs ${selected ? "text-[#d5e6d9]" : "text-[#7a8577]"}`}>{item.description}</span>
             </span>
           </Link>
         );
