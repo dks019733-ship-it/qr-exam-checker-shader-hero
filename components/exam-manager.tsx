@@ -116,7 +116,7 @@ export function ExamManager() {
       <h1 className="text-2xl font-bold text-[#26382b]">ศูนย์จัดการข้อสอบ</h1>
       <p className="mt-2 text-sm text-[#697568]">สร้างข้อสอบ จัดการกระดาษคำตอบ ตรวจผล และติดตามคะแนนจากพื้นที่เดียว</p>
     </header>
-    <ExamWorkspaceNav active={activeTab === "scores" ? "scores" : "exams"} />
+    <ExamWorkspaceNav active={activeTab === "scores" ? "scores" : "exams"} onNavigate={(section) => { if (section === "scores") setActiveTab("scores"); if (section === "exams") setActiveTab("work"); }} />
     <div className="mt-4 rounded-2xl border border-[#e6e5dc] bg-white p-1.5 shadow-sm">
       <div role="tablist" aria-label="ส่วนจัดการข้อสอบและคะแนน" className="grid grid-cols-2 gap-1">
         <button
