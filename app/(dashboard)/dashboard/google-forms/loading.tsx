@@ -1,3 +1,0 @@
-export default function Loading() {
-  return <main className="min-h-screen bg-[#f3f7f3] p-4 sm:p-7"><div className="mx-auto max-w-6xl"><header className="rounded-[28px] border border-[#dce9df] bg-white p-6 shadow-sm"><p className="text-[10px] font-semibold tracking-[.18em] text-[#6b8974]">ONLINE ASSESSMENT</p><h1 className="mt-3 text-2xl font-semibold text-[#1d422e]">Google Forms</h1><p className="mt-2 text-sm text-[#78877c]">กำลังเตรียมรายการแบบทดสอบออนไลน์</p></header><div className="mt-6 space-y-3 rounded-2xl border border-[#dce9df] bg-white p-5">{[1,2,3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl bg-[#f0f5f0]" />)}</div></div></main>;
-}
