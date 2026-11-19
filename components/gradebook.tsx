@@ -46,6 +46,10 @@ export function Gradebook() {
   const [importRows, setImportRows] = useState<SheetRow[]>([]);
   const [importFile, setImportFile] = useState("");
   const [pendingAssignments, setPendingAssignments] = useState<Record<string, string>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [loadedWidthStorageKey, setLoadedWidthStorageKey] = useState("");
+  const [resizingColumn, setResizingColumn] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
+  const columnWidthStorageKey = `gradebook-column-widths:${classId}:${period}:${subjectFilter}`;
   const teachingAssignments = useMemo(() => payload?.teachingAssignments || [], [payload?.teachingAssignments]);
   const allColumns = payload?.columns || [];
   const columns = useMemo(() => {
@@ -78,6 +82,32 @@ export function Gradebook() {
       setTeachingAssignmentId(teachingAssignments.length === 1 ? teachingAssignments[0].id : "");
     }
   }, [teachingAssignments, teachingAssignmentId]);
+  useEffect(() => {
+    let savedWidths: Record<string, number> = {};
+    try {
+      const raw = window.localStorage.getItem(columnWidthStorageKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : {};
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        savedWidths = Object.fromEntries(
+          Object.entries(parsed).filter((entry): entry is [string, number] =>
+            typeof entry[1] === "number" && Number.isFinite(entry[1]) && entry[1] >= 112 && entry[1] <= 420,
+          ),
+        );
+      }
+    } catch {
+      savedWidths = {};
+    }
+    setColumnWidths(savedWidths);
+    setLoadedWidthStorageKey(columnWidthStorageKey);
+  }, [columnWidthStorageKey]);
+  useEffect(() => {
+    if (loadedWidthStorageKey !== columnWidthStorageKey) return;
+    try {
+      window.localStorage.setItem(columnWidthStorageKey, JSON.stringify(columnWidths));
+    } catch {
+      // Keep the gradebook usable when browser storage is unavailable or full.
+    }
+  }, [columnWidths, loadedWidthStorageKey, columnWidthStorageKey]);
 
   const students = payload?.students || [];
   const sortedStudents = useMemo(() => [...students].sort(compareByRollNo), [students]);
@@ -399,12 +429,43 @@ export function Gradebook() {
             </article>
           ))}
         </div>
-        <div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block"><table className="min-w-max border-separate border-spacing-0 text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-20 w-14 min-w-14 max-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-20 w-48 min-w-48 max-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} className="min-w-32 border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
+        <p className="hidden px-3 pt-3 text-[11px] text-slate-500 lg:block">ลากขอบด้านขวาของหัวคอลัมน์คะแนนเพื่อปรับความกว้าง ระบบจะจำขนาดแยกตามห้อง ช่วงคะแนน และรายวิชา</p>
+        <div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block"><table className="min-w-max border-separate border-spacing-0 text-left text-sm"><thead><tr className="bg-slate-50 text-xs text-slate-600"><th className="sticky left-0 z-20 w-14 min-w-14 max-w-14 bg-slate-50 p-3">เลขที่</th><th className="sticky left-14 z-20 w-48 min-w-48 max-w-48 bg-slate-50 p-3">นักเรียน</th>{periodColumns.map((column) => <th key={column.id} style={{ width: columnWidths[column.id] ?? 160, minWidth: 112, maxWidth: 420 }} className="relative border-l p-3"><div className="flex items-start justify-between gap-2"><label className="flex items-center gap-2"><input type="checkbox" className="!w-4 !min-w-4 !p-0 !m-0 shrink-0" checked={selectedColumns.includes(column.id)} onChange={(event) => setSelectedColumns((current) => event.target.checked ? [...new Set([...current, column.id])] : current.filter((id) => id !== column.id))} aria-label={`เลือกช่องคะแนน ${column.title}`} /><span>{column.title}</span></label><button title="ลบช่องคะแนน" onClick={() => void deleteColumn(column)} className="text-slate-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button></div>
                   <select aria-label={"รายวิชาของ " + column.title} className="mt-2 w-full rounded-lg border border-[#ddd7c9] bg-white px-2 py-1.5 text-[11px] font-normal" value={column.teachingAssignment?.id || ""} onChange={(event) => void updateColumnSubject(column, event.target.value)} disabled={busy || !teachingAssignments.length}>
                     <option value="">ยังไม่ผูกกับรายวิชา</option>
                     {teachingAssignments.map((item) => <option key={item.id} value={item.id}>{item.subject.code} · {item.subject.name}</option>)}
                   </select>
-                  <div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}</th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th><th className="min-w-28 border-l bg-amber-50 p-3">คะแนนพิเศษ</th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 z-10 w-14 min-w-14 max-w-14 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 z-10 w-48 min-w-48 max-w-48 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td><td className="border-l bg-amber-50/50 p-3 font-bold tabular-nums text-amber-800">{bonusSum(student, columns).toFixed(2).replace(/\.00$/, "")}</td></tr>)}</tbody></table></div></>}
+                  <div className="mt-1 font-normal">เต็ม {column.maxScore}</div>{column.googleFormId && <><button onClick={() => void syncForm(column)} disabled={busy} className="mt-2 inline-flex items-center text-[11px] font-medium text-blue-700"><RefreshCw className="mr-1 h-3 w-3" />ซิงก์ฟอร์ม</button><Link href={`/dashboard/gradebook/review/${column.id}`} className="mt-1 block text-[11px] font-medium text-emerald-700 hover:underline">ตรวจคำตอบรายคน</Link></>}{column.examId && <div className="mt-2 text-[11px] font-normal text-emerald-700">เชื่อมข้อสอบแล้ว</div>}
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={`ปรับความกว้างช่องคะแนน ${column.title}`}
+                    title="ลากเพื่อปรับความกว้าง"
+                    className="absolute right-0 top-0 z-10 h-full w-2 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-[#9b8050]/20 active:bg-[#9b8050]/40"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      const header = event.currentTarget.parentElement;
+                      const startWidth = columnWidths[column.id] ?? header?.getBoundingClientRect().width ?? 160;
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      setResizingColumn({ columnId: column.id, startX: event.clientX, startWidth });
+                    }}
+                    onPointerMove={(event) => {
+                      if (resizingColumn?.columnId !== column.id) return;
+                      const nextWidth = Math.min(420, Math.max(112, resizingColumn.startWidth + event.clientX - resizingColumn.startX));
+                      setColumnWidths((current) => ({ ...current, [column.id]: nextWidth }));
+                    }}
+                    onPointerUp={() => setResizingColumn((current) => current?.columnId === column.id ? null : current)}
+                    onPointerCancel={() => setResizingColumn((current) => current?.columnId === column.id ? null : current)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                      event.preventDefault();
+                      const currentWidth = columnWidths[column.id] ?? 160;
+                      const delta = event.key === "ArrowRight" ? 12 : -12;
+                      setColumnWidths((current) => ({ ...current, [column.id]: Math.min(420, Math.max(112, currentWidth + delta)) }));
+                    }}
+                    tabIndex={0}
+                  />
+                </th>)}<th className="min-w-28 border-l bg-amber-50 p-3">รวมช่วงนี้<br /><span className="font-normal">/{maxSum(periodColumns)}</span></th><th className="min-w-28 border-l bg-slate-100 p-3">รวมทั้งหมด<br /><span className="font-normal">/{maxSum(columns)}</span></th><th className="min-w-28 border-l bg-amber-50 p-3">คะแนนพิเศษ</th></tr></thead><tbody>{sortedStudents.map((student) => <tr key={student.id} className="border-t hover:bg-slate-50/70"><td className="sticky left-0 z-10 w-14 min-w-14 max-w-14 bg-white p-3">{student.rollNo || student.studentNo}</td><td className="sticky left-14 z-10 w-48 min-w-48 max-w-48 bg-white p-3"><div className="font-medium">{student.name}</div><div className="text-xs text-slate-500">{student.studentNo}</div></td>{periodColumns.map((column) => <td key={column.id} style={{ width: columnWidths[column.id] ?? 160, minWidth: 112, maxWidth: 420 }} className="border-l p-2"><input aria-label={`${student.name} ${column.title}`} type="number" min="0" step="0.01" className={`${inputClass} w-24 text-center`} value={scoreValue(column, student.id)} onChange={(event) => setDraft((current) => ({ ...current, [keyOf(column.id, student.id)]: event.target.value }))} onBlur={() => void saveScore(column, student)} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /></td>)}<td className="border-l bg-amber-50/50 p-3 font-semibold">{sum(student, periodColumns).toFixed(2).replace(/\.00$/, "")} / {maxSum(periodColumns)}</td><td className="border-l bg-slate-50 p-3 font-semibold">{sum(student, columns).toFixed(2).replace(/\.00$/, "")} / {maxSum(columns)}</td><td className="border-l bg-amber-50/50 p-3 font-bold tabular-nums text-amber-800">{bonusSum(student, columns).toFixed(2).replace(/\.00$/, "")}</td></tr>)}</tbody></table></div></>}
         <div className="border-t bg-slate-50 px-4 py-3 text-xs text-slate-500">คะแนนที่กรอกเกินคะแนนเต็มจะถูกแยกเป็นคะแนนพิเศษ ไม่รวมในคะแนนเก็บปกติ · คลิกคะแนนเพื่อแก้ไข ระบบบันทึกเมื่อออกจากช่อง</div>
       </section>
       <p className="mt-3 text-xs text-slate-500">เลือกช่วงให้ตรงกับ SGS แล้วเพิ่มช่องงาน/บทพร้อมคะแนนเต็มแต่ละช่อง ยอดรวมแสดงตรง ๆ เช่น 3 งาน งานละ 10 คะแนน รวม 30 · คะแนนข้อสอบเข้าหลังครูยืนยัน · Google Forms จับคู่ด้วยเลขที่ ห้อง และชื่อ</p>

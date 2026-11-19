@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { AnswerSheetPreview } from "@/components/answer-sheet-editor";
 
 type Student = { id: string; rollNo: string; studentNo: string; name: string; qrToken: string };
-type Template = { schoolName: string; logoDataUrl: string | null; examTitle: string; subject: string; questionCount: number; classLabel: string };
+type Template = { schoolName: string; logoDataUrl: string | null; examTitle: string; subject: string; questionCount: number; choiceCount: number; choiceLabelStyle: string; classLabel: string };
 
-const fallbackTemplate: Template = { schoolName: "โรงเรียนตัวอย่างวิทยา", logoDataUrl: "/school-logo-reference.png", examTitle: "แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน", subject: "", questionCount: 40, classLabel: "" };
+const fallbackTemplate: Template = { schoolName: "โรงเรียนตัวอย่างวิทยา", logoDataUrl: "/school-logo-reference.png", examTitle: "แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน", subject: "", questionCount: 40, choiceCount: 4, choiceLabelStyle: "LATIN", classLabel: "" };
 
 export function PrintClassSheets() {
   const classId = useSearchParams().get("classId") ?? "";
