@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, CheckCircle2, ExternalLink, FileSpreadsheet, Loader2, Plus, RefreshCw } from "lucide-react";
 import { GeneratedMaterial, materialsApi } from "@/lib/ai-api";
 
@@ -13,7 +13,7 @@ export function GoogleFormsManager() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  async function load(silent = false) {
+  const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
     setError("");
     try {
@@ -25,9 +25,9 @@ export function GoogleFormsManager() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   async function createForm(material: GeneratedMaterial) {
     setCreatingId(material.id);
