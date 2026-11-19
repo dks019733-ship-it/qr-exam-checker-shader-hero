@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BarChart3, BookOpen, FileText, Loader2, Save, Plus } from "lucide-react";
 import { ScoreReport } from "@/components/score-report";
+import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; status: string; questions?: { number: number; answer: string }[]; _count?: { attempts: number } };
@@ -113,8 +114,9 @@ export function ExamManager() {
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border border-[#e6e5dc] bg-white p-5 shadow-sm sm:p-6">
       <h1 className="text-2xl font-bold text-[#26382b]">ศูนย์จัดการข้อสอบ</h1>
-      <p className="mt-2 text-sm text-[#697568]">สร้างชุดข้อสอบ กำหนดเฉลย และติดตามผลคะแนนในพื้นที่เดียว</p>
+      <p className="mt-2 text-sm text-[#697568]">สร้างข้อสอบ จัดการกระดาษคำตอบ ตรวจผล และติดตามคะแนนจากพื้นที่เดียว</p>
     </header>
+    <ExamWorkspaceNav active={activeTab === "scores" ? "scores" : "exams"} />
     <div className="mt-4 rounded-2xl border border-[#e6e5dc] bg-white p-1.5 shadow-sm">
       <div role="tablist" aria-label="ส่วนจัดการข้อสอบและคะแนน" className="grid grid-cols-2 gap-1">
         <button
