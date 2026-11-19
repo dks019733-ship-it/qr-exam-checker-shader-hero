@@ -49,8 +49,10 @@ main.min-h-screen { background-color: #f3f1e9; color: #303832; }
 
 
 @media print {
-  @page { size: A4 portrait; margin: 0; }
+  @page { size: A4 portrait; margin: 14mm 15mm; }
   body { background: #fff !important; }
+  .omr-answer-sheet { page: omr-answer-sheet; }
+  @page omr-answer-sheet { size: A4 portrait; margin: 0; }
 }
 
 input, select, textarea {
@@ -124,7 +126,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-bottom-color: #abb9ad;
 }
 @media print {
-  @page { size: A4 portrait; margin: 0; }
   .worksheet-paper-cute,
   .worksheet-paper-cute .worksheet-cute-top,
   .worksheet-paper-cute .worksheet-section-cute,
