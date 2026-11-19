@@ -6,7 +6,6 @@ const items = [
   ["นักเรียน", "/dashboard/answer-sheet"],
   ["ข้อสอบ", "/dashboard/exams"],
   ["ตรวจข้อสอบ", "/dashboard/scan"],
-  ["รายงาน", "/dashboard/reports"],
 ] as const;
 
 export function HeroNavigation({ signedIn }: { signedIn: boolean }) {

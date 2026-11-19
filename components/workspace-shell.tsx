@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowUpRight, BarChart3, BookOpen, CalendarCheck, ClipboardList, FileCheck2,
+  ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2,
   FileSpreadsheet, GraduationCap, Home, Menu, PanelLeftClose, PanelLeftOpen,
   ScanLine, Sparkles, Users, X,
 } from "lucide-react";
@@ -24,7 +24,6 @@ const sections: { title: string; items: WorkspaceNavItem[] }[] = [
     { href: "/dashboard/scan", label: "ตรวจข้อสอบด้วย QR", icon: ScanLine },
     { href: "/dashboard/answer-sheet", label: "กระดาษคำตอบ", icon: FileSpreadsheet },
     { href: "/dashboard/gradebook", label: "สมุดคะแนน", icon: BookOpen },
-    { href: "/dashboard/reports", label: "รายงานคะแนน", icon: BarChart3 },
   ] },
   { title: "เครื่องมือเสริม", items: [{ href: "/dashboard/ai", label: "ผู้ช่วย AI สำหรับครู", icon: Sparkles }] },
 ];
