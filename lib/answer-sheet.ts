@@ -6,6 +6,8 @@ export const answerSheetTemplateSchema = z.object({
   examTitle: z.string().trim().min(1).max(200),
   subject: z.string().trim().max(200),
   questionCount: z.number().int().min(1).max(100),
+  choiceCount: z.union([z.literal(4), z.literal(5)]).default(4),
+  choiceLabelStyle: z.enum(["LATIN", "THAI", "NUMERIC"]).default("LATIN"),
   classLabel: z.string().trim().max(100),
 });
 
