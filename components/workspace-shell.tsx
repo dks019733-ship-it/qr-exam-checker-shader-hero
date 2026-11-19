@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2, FileSpreadsheet, BarChart3,
+  ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2, FileSpreadsheet,
   GraduationCap, Home, Menu, PanelLeftClose, PanelLeftOpen,
   Sparkles, Users, X,
 } from "lucide-react";
