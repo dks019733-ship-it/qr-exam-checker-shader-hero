@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { compareByRollNo } from "@/lib/student-sort";
 
 type Context = { params: Promise<{ id: string }> };
-const choices = new Set(["A", "B", "C", "D"]);
+const choiceKeys = ["A", "B", "C", "D", "E"];
 
 export async function GET(_request: Request, context: Context) {
   const unavailable = await featureAvailabilityResponse("exams");
@@ -43,10 +43,11 @@ export async function POST(request: Request, context: Context) {
   if (!studentId || !answers || typeof answers !== "object" || Array.isArray(answers)) return NextResponse.json({ error: "ข้อมูลคำตอบไม่ครบ" }, { status: 400 });
   const student = await prisma.student.findFirst({ where: { id: studentId, classId: exam.classId, class: { ownerId: session.user.id } }, select: { id: true } });
   if (!student) return NextResponse.json({ error: "นักเรียนไม่ได้อยู่ในห้องของข้อสอบนี้" }, { status: 400 });
+  const choices = new Set(choiceKeys.slice(0, exam.choiceCount === 5 ? 5 : 4));
   const normalized: Record<string, string> = {};
   for (const question of exam.questions) {
     const answer = answers[String(question.number)];
-    if (answer !== "" && answer !== null && !choices.has(answer)) return NextResponse.json({ error: "รูปแบบคำตอบไม่ถูกต้อง" }, { status: 400 });
+    if (answer !== "" && answer !== null && (typeof answer !== "string" || !choices.has(answer))) return NextResponse.json({ error: "รูปแบบคำตอบไม่ถูกต้อง" }, { status: 400 });
     normalized[String(question.number)] = answer || "";
   }
   const score = exam.questions.reduce((sum, q) => sum + (normalized[String(q.number)] === q.answer ? 1 : 0), 0);
