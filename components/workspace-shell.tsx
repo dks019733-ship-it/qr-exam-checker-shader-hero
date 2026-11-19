@@ -72,7 +72,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           ? `flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${active ? "bg-[#1d4b35] text-white" : "text-slate-500 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`
           : collapsed
             ? `mx-auto flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${active ? "bg-[#1d4b35] text-white shadow-inner" : "text-slate-500 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`
-            : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${active ? "bg-[#e6ece2] font-semibold text-[#304b38] shadow-sm" : "text-slate-600 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`}
+            : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${active ? "bg-[#1d4b35] font-semibold text-white shadow-sm" : "text-slate-600 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`}
       >
         <Icon className={compact ? "h-5 w-5" : "h-[18px] w-[18px] shrink-0"} aria-hidden="true" />
         {!collapsed && <span className={compact ? "truncate" : "min-w-0 flex-1"}>{item.label}</span>}
