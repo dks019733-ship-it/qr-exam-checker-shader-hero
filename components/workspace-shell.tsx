@@ -69,9 +69,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         aria-label={collapsed ? item.label : undefined}
         title={collapsed ? item.label : undefined}
         className={compact
-          ? `flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${active ? "bg-[#e9eee5] text-[#304b38]" : "text-slate-500 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`
+          ? `flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${active ? "bg-[#e7f1e8] text-[#304b38]" : "text-slate-500 hover:bg-[#f1f7f2] hover:text-[#263a2d]"}`
           : collapsed
-            ? `mx-auto flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${active ? "bg-[#e6ece2] text-[#304b38] shadow-inner" : "text-slate-500 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`
+            ? `mx-auto flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${active ? "bg-[#e7f1e8] text-[#304b38] shadow-inner" : "text-slate-500 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`
             : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${active ? "bg-[#e6ece2] font-semibold text-[#304b38] shadow-sm" : "text-slate-600 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`}
       >
         <Icon className={compact ? "h-5 w-5" : "h-[18px] w-[18px] shrink-0"} aria-hidden="true" />
@@ -82,8 +82,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f4ee]">
-      <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-[#e6e5dc] bg-[#fffefa] shadow-[8px_0_32px_-28px_rgba(28,43,32,0.35)] transition-[width] duration-200 lg:flex ${sidebarCollapsed ? "w-[5.25rem] px-2.5 py-5" : "w-64 px-4 py-5"}`}>
+    <div className="min-h-screen bg-[#f3f7f3]">
+      <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-[#e1eae2] bg-white shadow-[8px_0_32px_-28px_rgba(28,43,32,0.35)] transition-[width] duration-200 lg:flex ${sidebarCollapsed ? "w-[5.25rem] px-2.5 py-5" : "w-64 px-4 py-5"}`}>
         <div className={`flex items-center ${sidebarCollapsed ? "flex-col gap-3" : "justify-between gap-2"}`}>
           <Link href="/" className={`flex min-w-0 items-center ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"} py-2`} aria-label="งานของครู">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#304a38] to-[#1f3427] text-[#f8f4e9] shadow-[0_5px_14px_-7px_rgba(30,52,39,0.8)] ring-1 ring-[#9b8050]/30">
