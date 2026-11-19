@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, FileImage, ImagePlus, Loader2, Printer, Save
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AnswerSheetStudentTools } from "@/components/answer-sheet-student-tools";
+import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 import { getExamChoiceLabels } from "@/lib/exam-choices";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
@@ -75,6 +76,7 @@ export function AnswerSheetEditor() {
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-6 lg:p-8 print:bg-white print:p-0">
     <div className="mx-auto max-w-[1440px]">
+      <div className="print:hidden"><ExamWorkspaceNav active="sheets" /></div>
       <header className="mb-6 flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground"><FileImage className="h-4 w-4" />Answer sheet studio</div><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">สร้างกระดาษคำตอบ</h1><p className="mt-1 text-sm text-muted-foreground">ตั้งค่าข้อมูล แล้วดูตัวอย่างก่อนพิมพ์ได้ทันที</p></div>
         <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />พิมพ์ / PDF</Button><Button onClick={saveTemplate} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{dirty ? "บันทึกการเปลี่ยนแปลง" : "บันทึกแล้ว"}</Button></div>
