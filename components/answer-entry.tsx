@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 
 type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; questions: { number: number; answer: string }[] };
 type Student = { id: string; rollNo: string; studentNo: string; name: string };
@@ -52,6 +53,7 @@ export function AnswerEntry() {
   if (loading) return <div className="p-10"><Loader2 className="h-5 w-5 animate-spin" /></div>;
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-5xl">
+    <ExamWorkspaceNav active="scan" />
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border bg-white p-6 shadow-sm"><h1 className="text-2xl font-semibold">ตรวจและบันทึกคำตอบ</h1><p className="mt-2 text-sm text-slate-600">ตอนนี้กรอกคำตอบจากกระดาษที่ตรวจแล้ว ระบบคิดคะแนนและส่งให้ครูยืนยันก่อนประกาศ</p></header>
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
