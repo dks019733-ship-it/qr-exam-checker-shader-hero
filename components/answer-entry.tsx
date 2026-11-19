@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Save } from "lucide-react";
+import { getExamChoiceKeys, getExamChoiceLabels } from "@/lib/exam-choices";
 
-type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; questions: { number: number; answer: string }[] };
+type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; choiceCount?: number; choiceLabelStyle?: string; questions: { number: number; answer: string }[] };
 type Student = { id: string; rollNo: string; studentNo: string; name: string };
 
 export function AnswerEntry() {
@@ -18,6 +19,8 @@ export function AnswerEntry() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const eligibleExams = useMemo(() => exams.filter((item) => item.classId && item.questions?.length), [exams]);
+  const choiceKeys = getExamChoiceKeys(exam?.choiceCount || 4);
+  const choiceLabels = getExamChoiceLabels(exam?.choiceCount || 4, exam?.choiceLabelStyle || "LATIN");
 
   useEffect(() => { fetch("/api/exams").then(async (r) => { if (!r.ok) throw new Error(); return r.json(); }).then((rows: Exam[]) => setExams(rows)).catch(() => setMessage("โหลดข้อสอบไม่สำเร็จ")).finally(() => setLoading(false)); }, []);
 
@@ -57,7 +60,7 @@ export function AnswerEntry() {
     {message && <p role="status" className="mt-4 rounded-xl border bg-white p-3 text-sm">{message}</p>}
     {!eligibleExams.length ? <div className="mt-5 rounded-2xl border bg-white p-6">ยังไม่มีข้อสอบที่ตั้งเฉลยแล้ว <Link className="underline" href="/dashboard/exams">ไปสร้างข้อสอบ</Link></div> : <form onSubmit={submit} className="mt-5 rounded-2xl border bg-white p-5 shadow-sm">
       <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">ข้อสอบ<select required value={examId} onChange={(e) => setExamId(e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="">เลือกข้อสอบ</option>{eligibleExams.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.class?.name || "ห้องเรียน"}</option>)}</select></label><label className="text-sm">นักเรียน<select required value={studentId} onChange={(e) => setStudentId(e.target.value)} disabled={!exam} className="mt-1 w-full rounded-lg border p-2"><option value="">เลือกนักเรียน</option>{students.map((student) => <option key={student.id} value={student.id}>เลขที่ {student.rollNo} · รหัส {student.studentNo} — {student.name}</option>)}</select></label></div>
-      {exam && <><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{exam.questions.map((question) => <fieldset key={question.number} className="rounded-lg border p-3"><legend className="px-1 text-sm font-medium">ข้อ {question.number}</legend><div className="flex justify-between gap-1">{["A","B","C","D"].map((choice) => <label key={choice} className="flex cursor-pointer items-center gap-1 text-sm"><input required type="radio" name={"q-" + question.number} checked={answers[String(question.number)] === choice} onChange={() => setAnswers((current) => ({ ...current, [String(question.number)]: choice }))} />{choice}</label>)}</div></fieldset>)}</div><button disabled={saving || !students.length} className="mt-5 inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50"><Save className="mr-2 h-4 w-4" />{saving ? "กำลังบันทึก..." : "คิดคะแนนและบันทึก"}</button></>}
+      {exam && <><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{exam.questions.map((question) => <fieldset key={question.number} className="rounded-lg border p-3"><legend className="px-1 text-sm font-medium">ข้อ {question.number}</legend><div className="flex justify-between gap-1">{choiceKeys.map((key, index) => <label key={key} className="flex cursor-pointer items-center gap-1 text-sm"><input required type="radio" name={"q-" + question.number} checked={answers[String(question.number)] === key} onChange={() => setAnswers((current) => ({ ...current, [String(question.number)]: key }))} />{choiceLabels[index]}</label>)}</div></fieldset>)}</div><button disabled={saving || !students.length} className="mt-5 inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50"><Save className="mr-2 h-4 w-4" />{saving ? "กำลังบันทึก..." : "คิดคะแนนและบันทึก"}</button></>}
     </form>}
   </div></main>;
 }
