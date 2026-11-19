@@ -7,7 +7,7 @@ Newly generated answer sheets use a fixed A4 portrait layout intended to support
 ## Printed layout contract
 
 - Paper: A4 portrait, printed at 100% / actual size.
-- Four solid black square calibration markers are placed inside the page corners. Keep all four markers visible; do not crop, cover, write on, or punch through them.
+- Four solid black square calibration markers are placed 8 mm inside the page corners to reduce clipping on printers with non-printable edge areas. Keep all four markers visible; do not crop, cover, write on, or punch through them.
 - The answer bubbles are blank circles. Choice labels remain in the table header so an unmarked bubble does not contain printed text that could be mistaken for pencil shading.
 - The QR code identifies the student only. It is not an answer key and does not indicate correctness.
 - The school logo/seal remains configurable through the existing PNG, JPEG, or WebP upload control and is retained in the saved answer-sheet template.
