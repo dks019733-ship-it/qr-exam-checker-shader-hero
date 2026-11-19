@@ -12,7 +12,7 @@ const items: { id: ExamWorkspaceSection; href: string; label: string; descriptio
   { id: "scores", href: "/dashboard/exams?tab=scores", label: "รายงานคะแนน", description: "ตรวจยืนยันและดูผลสอบ", icon: BarChart3 },
 ];
 
-export function ExamWorkspaceNav({ active }: { active: ExamWorkspaceSection }) {
+export function ExamWorkspaceNav({ active, onNavigate }: { active: ExamWorkspaceSection; onNavigate?: (section: ExamWorkspaceSection) => void }) {
   return (
     <nav aria-label="เมนูศูนย์จัดการข้อสอบ" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
       {items.map((item) => {
@@ -23,6 +23,7 @@ export function ExamWorkspaceNav({ active }: { active: ExamWorkspaceSection }) {
             key={item.id}
             href={item.href}
             aria-current={selected ? "page" : undefined}
+            onClick={() => onNavigate?.(item.id)}
             className={`group flex min-h-[76px] min-w-0 items-start gap-2.5 rounded-2xl border px-3 py-3 transition sm:min-h-[88px] sm:gap-3 sm:px-4 ${selected ? "border-[#cbd8c5] bg-[#eaf0e6] text-[#294332] shadow-sm" : "border-[#e6e5dc] bg-white text-[#536052] hover:border-[#cbd4c5] hover:bg-[#fbfcf9]"}`}
           >
             <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${selected ? "bg-white text-[#304a38]" : "bg-[#f3f4ef] text-[#71806f] group-hover:bg-[#eaf0e6]"}`}>
