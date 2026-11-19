@@ -81,7 +81,7 @@ jobs:
             20261108_attendance_assignments \
             20261108_feature_availability \
             20261111100000_submission_files_google_drive \
-            20261112100000_student_welcome_dismissal
+            20261112100000_student_welcome_dismissal \
             20261119000000_exam_choice_configuration
           do
             npx prisma migrate resolve --applied "$migration"
