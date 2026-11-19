@@ -23,7 +23,6 @@ export function AnswerSheetEditor() {
   const [studentPreview, setStudentPreview] = useState({ rollNo: "", studentNo: "", name: "", qrToken: "" });
   const [studentSearch, setStudentSearch] = useState("");
   const [status, setStatus] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [sheetMode, setSheetMode] = useState<"qr" | "plain">("qr");
@@ -41,7 +40,7 @@ export function AnswerSheetEditor() {
       const uniqueClasses = Array.isArray(classes) ? [...new Map((classes as Classroom[]).map((classroom) => [classroom.id, classroom])).values()] : [];
       setClassrooms(uniqueClasses);
       if (uniqueClasses[0]) setClassId(uniqueClasses[0].id);
-    }).catch(() => setStatus({ type: "error", text: "โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่" })).finally(() => setLoading(false));
+    }).catch(() => setStatus({ type: "error", text: "โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่" }));
   }, []);
 
   useEffect(() => {
