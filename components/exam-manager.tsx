@@ -6,7 +6,7 @@ import { ArrowLeft, BarChart3, BookOpen, FileText, Loader2, Save, Plus } from "l
 import { ScoreReport } from "@/components/score-report";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
-type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; status: string; questions?: { number: number; answer: string }[]; _count?: { attempts: number } };
+type Exam = { id: string; title: string; subject: string; classId: string | null; class?: { name: string } | null; status: string; choiceCount?: number; choiceLabelStyle?: string; questions?: { number: number; answer: string }[]; _count?: { attempts: number } };
 
 export function ExamManager() {
   const [classes, setClasses] = useState<Classroom[]>([]);
@@ -17,6 +17,8 @@ export function ExamManager() {
   const [classId, setClassId] = useState("");
   const [count, setCount] = useState(10);
   const [answers, setAnswers] = useState<string[]>(Array(10).fill(""));
+  const [choiceCount, setChoiceCount] = useState<4 | 5>(4);
+  const [choiceLabelStyle, setChoiceLabelStyle] = useState<"LATIN" | "THAI" | "NUMERIC">("LATIN");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -54,6 +56,8 @@ export function ExamManager() {
       const saved = exam.questions || [];
       const nextCount = saved.length || 10;
       setCount(nextCount); setAnswers(Array.from({ length: nextCount }, (_, i) => saved[i]?.answer || ""));
+      setChoiceCount(exam.choiceCount === 5 ? 5 : 4);
+      setChoiceLabelStyle(exam.choiceLabelStyle === "THAI" || exam.choiceLabelStyle === "NUMERIC" ? exam.choiceLabelStyle : "LATIN");
       setMessage("");
     }).catch((error) => { if (!cancelled) setMessage(error instanceof Error ? error.message : "เปิดข้อสอบไม่สำเร็จ"); });
     return () => { cancelled = true; };
@@ -80,7 +84,7 @@ export function ExamManager() {
     if (answers.some((answer) => !answer)) return setMessage("เลือกเฉลยให้ครบทุกข้อก่อนบันทึก");
     setSaving(true);
     try {
-      const response = await fetch("/api/exams/" + selectedId, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, subject, classId, questions: answers.map((answer, i) => ({ number: i + 1, answer })) }) });
+      const response = await fetch("/api/exams/" + selectedId, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, subject, classId, choiceCount, choiceLabelStyle, questions: answers.map((answer, i) => ({ number: i + 1, answer })) }) });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "บันทึกไม่สำเร็จ");
       setExams((current) => current.map((exam) => exam.id === body.id ? { ...exam, ...body } : exam));
@@ -107,6 +111,19 @@ export function ExamManager() {
   function changeCount(value: number) {
     const next = Math.min(100, Math.max(1, value || 1));
     setCount(next); setAnswers((current) => Array.from({ length: next }, (_, i) => current[i] || ""));
+  }
+
+  const choiceKeys = ["A", "B", "C", "D", "E"].slice(0, choiceCount);
+  const choiceLabels = choiceLabelStyle === "THAI"
+    ? ["ก", "ข", "ค", "ง", "จ"].slice(0, choiceCount)
+    : choiceLabelStyle === "NUMERIC"
+      ? ["1", "2", "3", "4", "5"].slice(0, choiceCount)
+      : choiceKeys;
+
+  function changeChoiceCount(value: 4 | 5) {
+    setChoiceCount(value);
+    const allowed = new Set(["A", "B", "C", "D", "E"].slice(0, value));
+    setAnswers((current) => current.map((answer) => allowed.has(answer) ? answer : ""));
   }
 
   return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-8"><div className="mx-auto max-w-6xl">
@@ -162,7 +179,11 @@ export function ExamManager() {
           <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">ชื่อข้อสอบ<input required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label><label className="text-sm">วิชา<input maxLength={200} value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1 w-full rounded-lg border p-2" /></label></div>
           <label className="mt-3 block text-sm">ห้องเรียน<select value={classId} onChange={(e) => setClassId(e.target.value)} className="mt-1 w-full rounded-lg border p-2">{classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
           <label className="mt-3 block text-sm">จำนวนข้อ<select value={count} disabled={Boolean(selected._count?.attempts)} onChange={(e) => changeCount(Number(e.target.value))} className="mt-1 rounded-lg border p-2">{[5,10,15,20,30,40,50,60,80,100].map((n) => <option key={n} value={n}>{n} ข้อ</option>)}</select></label>
-          {selected._count?.attempts ? <p className="mt-3 text-sm text-amber-700">ข้อสอบมีผลสอบแล้ว จึงล็อกเฉลยไว้</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{answers.map((answer, i) => <label key={i} className="flex items-center gap-2 rounded-lg border p-2 text-sm"><span className="w-10">ข้อ {i + 1}</span><select required aria-label={"เฉลยข้อ " + (i + 1)} value={answer} onChange={(e) => setAnswers((current) => current.map((item, index) => index === i ? e.target.value : item))} className="min-w-0 flex-1 rounded border p-1"><option value="">เลือก</option>{["A","B","C","D"].map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select></label>)}</div>}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">จำนวนตัวเลือก<select value={choiceCount} disabled={Boolean(selected._count?.attempts)} onChange={(e) => changeChoiceCount(Number(e.target.value) as 4 | 5)} className="mt-1 w-full rounded-lg border p-2"><option value={4}>4 ตัวเลือก</option><option value={5}>5 ตัวเลือก</option></select></label>
+            <label className="block text-sm">รูปแบบตัวเลือก<select value={choiceLabelStyle} disabled={Boolean(selected._count?.attempts)} onChange={(e) => setChoiceLabelStyle(e.target.value as "LATIN" | "THAI" | "NUMERIC")} className="mt-1 w-full rounded-lg border p-2"><option value="LATIN">A, B, C, D, E</option><option value="THAI">ก, ข, ค, ง, จ</option><option value="NUMERIC">1, 2, 3, 4, 5</option></select></label>
+          </div>
+          {selected._count?.attempts ? <p className="mt-3 text-sm text-amber-700">ข้อสอบมีผลสอบแล้ว จึงล็อกเฉลยไว้</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{answers.map((answer, i) => <label key={i} className="flex items-center gap-2 rounded-lg border p-2 text-sm"><span className="w-10">ข้อ {i + 1}</span><select required aria-label={"เฉลยข้อ " + (i + 1)} value={answer} onChange={(e) => setAnswers((current) => current.map((item, index) => index === i ? e.target.value : item))} className="min-w-0 flex-1 rounded border p-1"><option value="">เลือก</option>{choiceKeys.map((key, index) => <option key={key} value={key}>{choiceLabels[index]}</option>)}</select></label>)}</div>}
           {!selected._count?.attempts && <button disabled={saving} className="mt-5 inline-flex items-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm text-white disabled:opacity-50"><Save className="mr-2 h-4 w-4" />{saving ? "กำลังบันทึก..." : "บันทึกข้อสอบและเฉลย"}</button>}
         </form>}
       </section>
