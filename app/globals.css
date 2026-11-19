@@ -124,7 +124,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   border-bottom-color: #abb9ad;
 }
 @media print {
-  @page { size: A4 portrait; margin: 14mm 15mm; }
+  @page { size: A4 portrait; margin: 0; }
   .worksheet-paper-cute,
   .worksheet-paper-cute .worksheet-cute-top,
   .worksheet-paper-cute .worksheet-section-cute,
