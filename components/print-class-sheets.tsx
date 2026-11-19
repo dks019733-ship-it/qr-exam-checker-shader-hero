@@ -12,7 +12,9 @@ type Template = { schoolName: string; logoDataUrl: string | null; examTitle: str
 const fallbackTemplate: Template = { schoolName: "โรงเรียนตัวอย่างวิทยา", logoDataUrl: "/school-logo-reference.png", examTitle: "แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน", subject: "", questionCount: 40, choiceCount: 4, choiceLabelStyle: "LATIN", classLabel: "" };
 
 export function PrintClassSheets() {
-  const classId = useSearchParams().get("classId") ?? "";
+  const searchParams = useSearchParams();
+  const classId = searchParams.get("classId") ?? "";
+  const plainMode = searchParams.get("mode") === "plain";
   const [template, setTemplate] = useState<Template>(fallbackTemplate);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ export function PrintClassSheets() {
   return (
     <div className="bg-[#f6f7f9] print:bg-white">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-4 shadow-sm print:hidden">
-        <div className="text-sm text-muted-foreground">พร้อมพิมพ์ {students.length} แผ่น (แต่ละคนมี QR ประจำตัวของตัวเอง) — ใช้ &quot;บันทึกเป็น PDF&quot; ในกล่องพิมพ์ของเบราว์เซอร์เพื่อได้ไฟล์ PDF</div>
+        <div className="text-sm text-muted-foreground">พร้อมพิมพ์ {students.length} แผ่น ({plainMode ? "แบบธรรมดา ไม่มี QR" : "แบบ QR ประจำตัวนักเรียน"}) — ใช้ &quot;บันทึกเป็น PDF&quot; ในกล่องพิมพ์ของเบราว์เซอร์เพื่อได้ไฟล์ PDF</div>
         <Button onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />พิมพ์ / บันทึกเป็น PDF</Button>
       </div>
       <div className="py-6">
@@ -51,7 +53,8 @@ export function PrintClassSheets() {
               template={template}
               student={{ rollNo: s.rollNo, studentNo: s.studentNo, name: s.name }}
               questions={questions}
-              qrUrl={`/api/students/${s.id}/qr`}
+              qrUrl={plainMode ? undefined : `/api/students/${s.id}/qr`}
+              showQr={!plainMode}
             />
           </div>
         ))}
