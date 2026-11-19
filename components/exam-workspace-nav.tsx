@@ -22,6 +22,7 @@ export function ExamWorkspaceNav({ active, onNavigate }: { active: ExamWorkspace
           <Link
             key={item.id}
             href={item.href}
+            prefetch
             aria-current={selected ? "page" : undefined}
             onClick={() => onNavigate?.(item.id)}
             className={`group flex min-h-[76px] min-w-0 items-start gap-2.5 rounded-2xl border px-3 py-3 transition sm:min-h-[88px] sm:gap-3 sm:px-4 ${selected ? "border-[#cbd8c5] bg-[#eaf0e6] text-[#294332] shadow-sm" : "border-[#e6e5dc] bg-white text-[#536052] hover:border-[#cbd4c5] hover:bg-[#fbfcf9]"}`}
