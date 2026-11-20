@@ -7,10 +7,9 @@ import QRCode from "qrcode";
  * "use client" component's bundle.
  *
  * Every student QR encodes a namespaced version of their unique
- * `qrToken` (see prisma/schema.prisma Student.qrToken). The prefix lets
- * the future OMR scanner tell "this is one of our student QR codes"
- * apart from any other QR that might appear in a scanned image, before
- * looking the token up in the database.
+ * `qrToken` (see prisma/schema.prisma Student.qrToken). QEC2 identifies
+ * the fixed OMR V2 sheet layout. QEC1 remains accepted for legacy
+ * identity-only sheets.
  */
 const QR_PREFIX = "QEC2:";
 const LEGACY_QR_PREFIX = "QEC1:";
