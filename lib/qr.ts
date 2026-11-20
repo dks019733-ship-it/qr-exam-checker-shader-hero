@@ -12,7 +12,8 @@ import QRCode from "qrcode";
  * apart from any other QR that might appear in a scanned image, before
  * looking the token up in the database.
  */
-const QR_PREFIX = "QEC1:";
+const QR_PREFIX = "QEC2:";
+const LEGACY_QR_PREFIX = "QEC1:";
 
 export function studentQrPayload(qrToken: string): string {
   return `${QR_PREFIX}${qrToken}`;
@@ -20,8 +21,9 @@ export function studentQrPayload(qrToken: string): string {
 
 /** Extracts the qrToken back out of a scanned QR payload, or null if it's not ours. */
 export function parseStudentQrPayload(payload: string): string | null {
-  if (!payload.startsWith(QR_PREFIX)) return null;
-  const token = payload.slice(QR_PREFIX.length).trim();
+  const prefix = payload.startsWith(QR_PREFIX) ? QR_PREFIX : payload.startsWith(LEGACY_QR_PREFIX) ? LEGACY_QR_PREFIX : null;
+  if (!prefix) return null;
+  const token = payload.slice(prefix.length).trim();
   return token.length > 0 ? token : null;
 }
 
