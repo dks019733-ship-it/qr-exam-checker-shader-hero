@@ -34,6 +34,7 @@ async function inlineComputedStyles(source: Element, target: Element): Promise<v
     target.src = await imageToDataUrl(source);
     target.removeAttribute("srcset");
     target.style.objectFit = computed.objectFit;
+    await target.decode();
   }
 
   const sourceChildren = Array.from(source.children);
@@ -49,7 +50,10 @@ async function renderSheetToPng(element: HTMLElement): Promise<Uint8Array> {
   await document.fonts?.ready;
   const images = Array.from(element.querySelectorAll("img"));
   await Promise.all(images.map(async (image) => {
-    if (image.complete && image.naturalWidth > 0) return;
+    if (image.complete) {
+      if (image.naturalWidth === 0) throw new Error("โหลด QR Code หรือโลโก้ไม่สำเร็จ");
+      return;
+    }
     await new Promise<void>((resolve, reject) => {
       image.addEventListener("load", () => resolve(), { once: true });
       image.addEventListener("error", () => reject(new Error("โหลด QR Code หรือโลโก้ไม่สำเร็จ")), { once: true });
