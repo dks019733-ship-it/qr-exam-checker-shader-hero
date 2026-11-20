@@ -17,7 +17,7 @@ export const OMR_GRID = {
   rowTop: 306,
   rowHeight: 14,
   rowsPerColumn: 50,
-  choicesWidth: 303,
+  choicesWidth: 301,
 } as const;
 
 export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, choiceCount: number) {
