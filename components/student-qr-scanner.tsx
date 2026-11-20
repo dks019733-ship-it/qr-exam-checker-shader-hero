@@ -20,7 +20,16 @@ type Props = {
   onAnswersDetected: (answers: Record<string, string>, issues: OmrIssue[]) => void;
 };
 
-const QR_PREFIX = "QEC1:";
+const QR_PREFIX_V2 = "QEC2:";
+const QR_PREFIX_V1 = "QEC1:";
+
+function parseStudentQr(payload: string) {
+  const normalized = payload.trim();
+  const prefix = normalized.startsWith(QR_PREFIX_V2) ? QR_PREFIX_V2 : normalized.startsWith(QR_PREFIX_V1) ? QR_PREFIX_V1 : null;
+  if (!prefix) return null;
+  const token = normalized.slice(prefix.length).trim();
+  return token ? { token, version: prefix === QR_PREFIX_V2 ? 2 : 1 } : null;
+}
 
 export function StudentQrScanner({ students, onStudentDetected, resumeSignal, questionCount, choiceKeys, omrEnabled, onAnswersDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -38,6 +47,8 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("เปิดกล้องเพื่ออ่าน QR และคำตอบบนกระดาษ");
   const [omrBusy, setOmrBusy] = useState(false);
+  const [legacySheetDetected, setLegacySheetDetected] = useState(false);
+  const canReadOmr = omrEnabled && !legacySheetDetected;
   const [omrSummary, setOmrSummary] = useState<{ recognizedCount: number; questionCount: number; issues: OmrIssue[] } | null>(null);
 
   useEffect(() => { studentsRef.current = students; }, [students]);
@@ -69,13 +80,10 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       try {
         const results = await detectorRef.current.detect(video);
         for (const result of results) {
-          const payload = result.rawValue.trim();
-          if (!payload.startsWith(QR_PREFIX)) continue;
+          const qrCode = parseStudentQr(result.rawValue);
+          if (!qrCode) continue;
 
-          const token = payload.slice(QR_PREFIX.length).trim();
-          if (!token) continue;
-
-          const student = studentsRef.current.find((item) => item.qrToken === token);
+          const student = studentsRef.current.find((item) => item.qrToken === qrCode.token);
           if (!student) {
             setError("QR นี้ไม่ตรงกับรายชื่อนักเรียนในห้องของข้อสอบที่เลือก");
             continue;
@@ -84,8 +92,9 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
           pausedRef.current = true;
           setWaitingForNext(true);
           setOmrSummary(null);
-          setError("");
-          setNotice("อ่าน QR สำเร็จ: เลขที่ " + student.rollNo + " · " + student.name);
+          setLegacySheetDetected(qrCode.version === 1);
+          setError(qrCode.version === 1 ? "กระดาษนี้เป็น QR รุ่น V1 ใช้ระบุตัวนักเรียนได้ แต่ไม่รองรับการอ่าน OMR อัตโนมัติ กรุณาพิมพ์แบบ V2 ใหม่" : "");
+          setNotice((qrCode.version === 1 ? "พบกระดาษรุ่น V1 · " : "อ่าน QR V2 สำเร็จ · ") + "เลขที่ " + student.rollNo + " · " + student.name);
           onDetectedRef.current(student.id);
           break;
         }
@@ -103,6 +112,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
     if (startingRef.current || cameraOpen) return;
 
     setError("");
+    setLegacySheetDetected(false);
     const Detector = (window as BarcodeWindow).BarcodeDetector;
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setError("การใช้กล้องต้องเปิดเว็บไซต์ผ่าน HTTPS และใช้เบราว์เซอร์ที่อนุญาตการเข้าถึงกล้อง");
@@ -180,6 +190,10 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       setError("แม่แบบกระดาษคำตอบไม่ตรงกับจำนวนข้อหรือตัวเลือกของข้อสอบที่เลือก");
       return;
     }
+    if (legacySheetDetected) {
+      setError("กระดาษ OMR V1 ไม่รองรับการอ่านวงกลม กรุณาพิมพ์แบบ V2 ใหม่");
+      return;
+    }
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || omrBusy) {
       setError("กล้องยังจับภาพไม่พร้อม กรุณารอสักครู่แล้วลองใหม่");
       return;
@@ -193,15 +207,19 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       if (detectorRef.current) {
         try {
           const qrResults = await detectorRef.current.detect(video);
-          const qrPayload = qrResults.map((item) => item.rawValue.trim()).find((value) => value.startsWith(QR_PREFIX));
-          if (qrPayload) {
-            const token = qrPayload.slice(QR_PREFIX.length).trim();
-            const matchedStudent = studentsRef.current.find((item) => item.qrToken === token);
+          const qrCode = qrResults.map((item) => parseStudentQr(item.rawValue)).find((value) => value !== null);
+          if (qrCode) {
+            if (qrCode.version === 1) {
+              setLegacySheetDetected(true);
+              throw new Error("กระดาษนี้เป็น OMR V1 ใช้ QR ระบุตัวนักเรียนได้ แต่ไม่รองรับการอ่านวงกลมอัตโนมัติ กรุณาพิมพ์กระดาษ V2 ใหม่");
+            }
+            const matchedStudent = studentsRef.current.find((item) => item.qrToken === qrCode.token);
             if (!matchedStudent) throw new Error("QR บนกระดาษไม่ตรงกับรายชื่อนักเรียนในห้องนี้");
+            setLegacySheetDetected(false);
             onDetectedRef.current(matchedStudent.id);
           }
         } catch (qrError) {
-          if (qrError instanceof Error && qrError.message.includes("QR บนกระดาษ")) throw qrError;
+          if (qrError instanceof Error && (qrError.message.includes("QR บนกระดาษ") || qrError.message.includes("OMR V1"))) throw qrError;
           // A transient QR decode failure must not block OMR when the teacher selected a student manually.
         }
       }
@@ -226,6 +244,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
     setWaitingForNext(false);
     setError("");
     setOmrSummary(null);
+    setLegacySheetDetected(false);
     setNotice("กำลังค้นหา QR ของนักเรียนคนถัดไป");
     void scanFrame();
   }
@@ -247,7 +266,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-[#203e2d]"><ScanLine className="h-4 w-4" />สแกน QR จากกระดาษคำตอบ</h2>
-          <p className="mt-1 text-xs leading-5 text-[#718276]">อ่าน QR เพื่อระบุตัวนักเรียน และอ่านวงกลมคำตอบจากกระดาษ OMR V1 จากนั้นครูตรวจทานก่อนบันทึก</p>
+          <p className="mt-1 text-xs leading-5 text-[#718276]">อ่าน QR เพื่อระบุตัวนักเรียน และอ่านวงกลมคำตอบจากกระดาษ OMR V2 จากนั้นครูตรวจทานก่อนบันทึก</p>
         </div>
         {!cameraOpen ? (
           <button type="button" disabled={cameraStarting} onClick={() => void startCamera()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:cursor-wait disabled:opacity-60">
@@ -262,14 +281,14 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       <div className={cameraOpen ? "mt-4 overflow-hidden rounded-xl border border-[#d6dfd7] bg-black" : "hidden"}>
         <video ref={videoRef} muted playsInline autoPlay className="max-h-[420px] min-h-[220px] w-full object-contain" aria-label="ภาพจากกล้องสำหรับอ่าน QR" />
       </div>
-      {cameraOpen && <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void scanAnswers()} disabled={omrBusy || !omrEnabled} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:opacity-60"><ScanSearch className="h-4 w-4" />{omrBusy ? "กำลังอ่านวงกลม..." : omrEnabled ? "อ่านคำตอบจากภาพ" : "ตั้งค่าแม่แบบให้ตรงก่อน"}</button><span className="text-[11px] text-[#718276]">{omrEnabled ? "ใช้กับกระดาษ OMR FORM V1 ที่พิมพ์จากระบบ" : "จำนวนข้อและตัวเลือกต้องตรงกับข้อสอบที่เลือก"}</span></div>}
+      {cameraOpen && <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void scanAnswers()} disabled={omrBusy || !canReadOmr} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:opacity-60"><ScanSearch className="h-4 w-4" />{omrBusy ? "กำลังอ่านวงกลม..." : legacySheetDetected ? "กระดาษ V1 ใช้ OMR ไม่ได้" : omrEnabled ? "อ่านคำตอบจากภาพ" : "ตั้งค่าแม่แบบให้ตรงก่อน"}</button><span className="text-[11px] text-[#718276]">{legacySheetDetected ? "พิมพ์กระดาษ OMR FORM V2 ใหม่เพื่ออ่านคำตอบ" : omrEnabled ? "ใช้กับกระดาษ OMR FORM V2 ที่พิมพ์จากระบบ" : "จำนวนข้อและตัวเลือกต้องตรงกับข้อสอบที่เลือก"}</span></div>}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-xs text-[#536b5b]">{notice}</p>
         {waitingForNext && <button type="button" onClick={scanNext} className="min-h-9 rounded-lg border border-[#cbd9ce] bg-white px-3 text-xs font-semibold text-[#1d4b35]">สแกนคนถัดไป</button>}
       </div>
       {omrSummary && <div className="mt-3 rounded-lg border border-[#d6dfd7] bg-white p-3 text-xs"><p className="font-semibold text-[#203e2d]">ผลการอ่าน: {omrSummary.recognizedCount}/{omrSummary.questionCount} ข้อ</p>{omrSummary.issues.length > 0 ? <p className="mt-1 leading-5 text-amber-800">ต้องตรวจทานข้อ: {omrSummary.issues.map((issue) => issue.question + (issue.reason === "MULTIPLE_MARKS" ? " (ฝนหลายตัวเลือก)" : " (รอยฝนไม่ชัด)")).join(", ")}</p> : <p className="mt-1 text-emerald-700">ไม่พบข้อที่ต้องแจ้งเตือน กรุณาตรวจทานคำตอบทั้งหมดอีกครั้ง</p>}<p className="mt-1 text-[#718276]">ระบบจะไม่เลือกคำตอบแทนในข้อที่อ่านไม่ชัดหรือฝนหลายตัวเลือก</p></div>}
       {error && <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">{error}</p>}
-      <p className="mt-3 text-[11px] leading-5 text-[#89958b]">หมายเหตุ: OMR ใช้จุดอ้างอิง 4 มุมเพื่อปรับภาพก่อนอ่านวงกลม ระบบจะแยกข้อว่าง ข้อที่ฝนหลายตัวเลือก และรอยฝนไม่ชัดให้ครูตรวจเอง ไม่ยืนยันผลสอบอัตโนมัติ</p>
+      <p className="mt-3 text-[11px] leading-5 text-[#89958b]">หมายเหตุ: OMR V2 ใช้จุดอ้างอิง 4 มุมเพื่อปรับภาพก่อนอ่านวงกลม ระบบจะแยกข้อว่าง ข้อที่ฝนหลายตัวเลือก และรอยฝนไม่ชัดให้ครูตรวจเอง ไม่ยืนยันผลสอบอัตโนมัติ</p>
     </section>
   );
 }
