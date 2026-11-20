@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Cloud,
   FileCheck2,
+  FileSpreadsheet,
   GraduationCap,
   LockKeyhole,
   ScanLine,
@@ -89,11 +90,11 @@ const tools: ToolCard[] = [
     highlight: true,
   },
   {
-    title: "AI สร้าง Google Forms",
-    description: "ให้ AI ช่วยร่างข้อสอบ แล้วครูตรวจทานก่อนสร้างแบบฟอร์ม",
-    href: "/dashboard/ai/materials?kind=exam",
+    title: "Google Forms",
+    description: "จัดการแบบทดสอบออนไลน์ สร้างฟอร์มจากข้อสอบที่ครูตรวจและอนุมัติแล้ว",
+    href: "/dashboard/google-forms",
     feature: "ai",
-    icon: ClipboardList,
+    icon: FileSpreadsheet,
     highlight: true,
   },
 ];

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2,
+  ArrowUpRight, BookOpen, CalendarCheck, ClipboardList, FileCheck2, FileSpreadsheet,
   GraduationCap, Home, Menu, PanelLeftClose, PanelLeftOpen,
   Sparkles, Users, X,
 } from "lucide-react";
@@ -20,7 +20,8 @@ const sections: { title: string; items: WorkspaceNavItem[] }[] = [
     { href: "/dashboard/subjects", label: "รายวิชาที่สอน", icon: BookOpen },
   ] },
   { title: "ข้อสอบและคะแนน", items: [
-    { href: "/dashboard/exams", label: "ศูนย์จัดการข้อสอบ", icon: FileCheck2 },
+    { href: "/dashboard/exams", label: "ข้อสอบ", icon: FileCheck2 },
+    { href: "/dashboard/google-forms", label: "Google Forms", icon: FileSpreadsheet },
     { href: "/dashboard/gradebook", label: "สมุดคะแนนออนไลน์", icon: BookOpen },
   ] },
   { title: "เครื่องมือเสริม", items: [{ href: "/dashboard/ai", label: "ผู้ช่วย AI สำหรับครู", icon: Sparkles }] },
@@ -68,24 +69,24 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         aria-label={collapsed ? item.label : undefined}
         title={collapsed ? item.label : undefined}
         className={compact
-          ? `flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${active ? "bg-[#e9eee5] text-[#304b38]" : "text-slate-500 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`
+          ? `flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-colors ${active ? "bg-[#1d4b35] text-white" : "text-slate-500 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`
           : collapsed
-            ? `mx-auto flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${active ? "bg-[#e6ece2] text-[#304b38] shadow-inner" : "text-slate-500 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`
-            : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${active ? "bg-[#e6ece2] font-semibold text-[#304b38] shadow-sm" : "text-slate-600 hover:bg-[#f1f3ed] hover:text-[#263a2d]"}`}
+            ? `mx-auto flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${active ? "bg-[#1d4b35] text-white shadow-inner" : "text-slate-500 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`
+            : `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${active ? "bg-[#1d4b35] font-semibold text-white shadow-sm" : "text-slate-600 hover:bg-[#f1f7f2] hover:text-[#1d4b35]"}`}
       >
         <Icon className={compact ? "h-5 w-5" : "h-[18px] w-[18px] shrink-0"} aria-hidden="true" />
         {!collapsed && <span className={compact ? "truncate" : "min-w-0 flex-1"}>{item.label}</span>}
-        {!compact && !collapsed && active && <span className="h-1.5 w-1.5 rounded-full bg-[#9b8050]" aria-hidden="true" />}
+        {!compact && !collapsed && active && <span className="h-1.5 w-1.5 rounded-full bg-white/80" aria-hidden="true" />}
       </Link>
     );
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f4ee]">
-      <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-[#e6e5dc] bg-[#fffefa] shadow-[8px_0_32px_-28px_rgba(28,43,32,0.35)] transition-[width] duration-200 lg:flex ${sidebarCollapsed ? "w-[5.25rem] px-2.5 py-5" : "w-64 px-4 py-5"}`}>
+    <div className="min-h-screen bg-[#f3f7f3]">
+      <aside className={`fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-[#e1eae2] bg-white shadow-[8px_0_32px_-28px_rgba(28,43,32,0.35)] transition-[width] duration-200 lg:flex ${sidebarCollapsed ? "w-[5.25rem] px-2.5 py-5" : "w-64 px-4 py-5"}`}>
         <div className={`flex items-center ${sidebarCollapsed ? "flex-col gap-3" : "justify-between gap-2"}`}>
           <Link href="/" className={`flex min-w-0 items-center ${sidebarCollapsed ? "justify-center" : "gap-3 px-2"} py-2`} aria-label="งานของครู">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#304a38] to-[#1f3427] text-[#f8f4e9] shadow-[0_5px_14px_-7px_rgba(30,52,39,0.8)] ring-1 ring-[#9b8050]/30">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1d4b35] to-[#123523] text-white shadow-[0_5px_14px_-7px_rgba(30,52,39,0.8)] ring-1 ring-white/15">
               <GraduationCap className="h-5 w-5" aria-hidden="true" />
             </span>
             {!sidebarCollapsed && <span className="min-w-0">
@@ -101,7 +102,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         <nav aria-label="เมนูระบบครู" className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden pb-4">
           {sections.map((section) => (
             <section key={section.title}>
-              {!sidebarCollapsed && <h2 className="mb-2 px-3 text-[9px] font-bold tracking-[0.17em] text-[#a09276]">{section.title}</h2>}
+              {!sidebarCollapsed && <h2 className="mb-2 px-3 text-[9px] font-bold tracking-[0.17em] text-[#78907e]">{section.title}</h2>}
               <div className={sidebarCollapsed ? "space-y-1" : "space-y-1"}>{section.items.map((item) => renderLink(item, false, sidebarCollapsed))}</div>
             </section>
           ))}
@@ -119,7 +120,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         {children}
       </div>
 
-      <nav aria-label="เมนูด่วนบนมือถือ" className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e5e5dc] bg-[#fffefa]/95 px-2 pt-1.5 pb-[max(env(safe-area-inset-bottom),0.375rem)] shadow-[0_-8px_28px_-20px_rgba(31,48,36,0.35)] backdrop-blur-xl lg:hidden">
+      <nav aria-label="เมนูด่วนบนมือถือ" className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e5e5dc] bg-white/95 px-2 pt-1.5 pb-[max(env(safe-area-inset-bottom),0.375rem)] shadow-[0_-8px_28px_-20px_rgba(31,48,36,0.35)] backdrop-blur-xl lg:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           {quickLinks.map((item) => renderLink(item, true))}
           <button type="button" aria-expanded={menuOpen} aria-controls="workspace-mobile-menu" onClick={() => setMenuOpen((open) => !open)} className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition ${menuOpen ? "bg-[#e9eee5] text-[#304b38]" : "text-slate-500 hover:bg-[#f1f3ed]"}`}>
@@ -132,7 +133,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       {menuOpen && (
         <>
           <button type="button" aria-label="ปิดเมนู" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-40 bg-[#1d2c22]/25 backdrop-blur-[2px] lg:hidden" />
-          <section id="workspace-mobile-menu" aria-label="เมนูทั้งหมด" className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 max-h-[65dvh] overflow-y-auto rounded-2xl border border-[#e7e3d8] bg-[#fffefa] p-4 shadow-[0_24px_70px_-24px_rgba(22,37,27,0.35)] lg:hidden">
+          <section id="workspace-mobile-menu" aria-label="เมนูทั้งหมด" className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 max-h-[65dvh] overflow-y-auto rounded-2xl border border-[#dce8df] bg-white p-4 shadow-[0_24px_70px_-24px_rgba(22,37,27,0.35)] lg:hidden">
             {sections.map((section) => (
               <div key={section.title} className="mb-4 last:mb-0">
                 <h2 className="mb-2 px-2 text-[9px] font-bold tracking-[0.17em] text-[#a09276]">{section.title}</h2>
