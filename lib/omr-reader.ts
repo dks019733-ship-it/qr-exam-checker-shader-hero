@@ -209,12 +209,15 @@ export async function readOmrImage(
   const width = source instanceof HTMLVideoElement ? source.videoWidth : source instanceof HTMLImageElement ? source.naturalWidth : source.width;
   const height = source instanceof HTMLVideoElement ? source.videoHeight : source instanceof HTMLImageElement ? source.naturalHeight : source.height;
   if (!width || !height) throw new Error("ยังไม่มีภาพจากกล้อง กรุณารอให้กล้องจับภาพได้ก่อน");
-  canvas.width = width;
-  canvas.height = height;
+  const imageScale = Math.min(1, 1600 / Math.max(width, height));
+  const processingWidth = Math.max(1, Math.round(width * imageScale));
+  const processingHeight = Math.max(1, Math.round(height * imageScale));
+  canvas.width = processingWidth;
+  canvas.height = processingHeight;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("เบราว์เซอร์ไม่สามารถประมวลผลภาพได้");
-  context.drawImage(source, 0, 0, width, height);
-  const sourceImage = context.getImageData(0, 0, width, height);
+  context.drawImage(source, 0, 0, processingWidth, processingHeight);
+  const sourceImage = context.getImageData(0, 0, processingWidth, processingHeight);
   const markerCenters = findMarkerCenters(sourceImage);
   const normalized = rectify(sourceImage, markerCenters);
 
