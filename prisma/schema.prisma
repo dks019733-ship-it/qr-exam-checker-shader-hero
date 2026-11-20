@@ -271,6 +271,7 @@ model AnswerSheetTemplate {
   logoDataUrl     String?  @db.Text
   examTitle       String   @default("แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน")
   subject         String   @default("")
+  subjectCode     String   @default("")
   questionCount   Int      @default(40)
   choiceCount     Int      @default(4)
   choiceLabelStyle String  @default("LATIN")
