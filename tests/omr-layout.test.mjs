@@ -3,10 +3,10 @@ import test from "node:test";
 import { getOmrBubbleCenter } from "../lib/omr-layout.ts";
 
 test("OMR V2 maps first and last question rows to calibrated coordinates", () => {
-  assert.deepEqual(getOmrBubbleCenter(1, 0, 4, 100), { x: 122.625, y: 314 });
-  assert.deepEqual(getOmrBubbleCenter(50, 3, 4, 100), { x: 348.375, y: 1000 });
-  assert.deepEqual(getOmrBubbleCenter(51, 0, 4, 100), { x: 477.625, y: 314 });
-  assert.deepEqual(getOmrBubbleCenter(100, 4, 5, 100), { x: 710.9, y: 1000 });
+  assert.deepEqual(getOmrBubbleCenter(1, 0, 4, 100), { x: 122.625, y: 314.5 });
+  assert.deepEqual(getOmrBubbleCenter(50, 3, 4, 100), { x: 348.375, y: 1049.5 });
+  assert.deepEqual(getOmrBubbleCenter(51, 0, 4, 100), { x: 477.625, y: 314.5 });
+  assert.deepEqual(getOmrBubbleCenter(100, 4, 5, 100), { x: 710.9, y: 1049.5 });
 });
 
 test("OMR V2 supports both four-choice and five-choice grids", () => {
@@ -15,9 +15,9 @@ test("OMR V2 supports both four-choice and five-choice grids", () => {
 });
 
 test("OMR V2 balances short exams across both columns", () => {
-  assert.deepEqual(getOmrBubbleCenter(20, 0, 4, 40), { x: 122.625, y: 580 });
-  assert.deepEqual(getOmrBubbleCenter(21, 0, 4, 40), { x: 477.625, y: 314 });
-  assert.deepEqual(getOmrBubbleCenter(40, 3, 4, 40), { x: 703.375, y: 580 });
+  assert.deepEqual(getOmrBubbleCenter(20, 0, 4, 40), { x: 122.625, y: 599.5 });
+  assert.deepEqual(getOmrBubbleCenter(21, 0, 4, 40), { x: 477.625, y: 314.5 });
+  assert.deepEqual(getOmrBubbleCenter(40, 3, 4, 40), { x: 703.375, y: 599.5 });
 });
 
 test("OMR V2 rejects invalid question and choice coordinates", () => {

@@ -21,11 +21,12 @@ type StudentRow = {
   note: string;
 };
 type AttendancePayload = {
-  session: { id: string; date: string; topic: string } | null;
+  session: { id: string; date: string; period: number; topic: string } | null;
   classroom: { id: string; name: string };
   subject: { code: string; name: string };
   students: StudentRow[];
 };
+type AttendanceHistoryItem = { id: string; date: string; period: number; topic: string; total: number; present: number; absent: number; leave: number; late: number };
 
 const STATUS_OPTIONS: {
   value: AttendanceStatus;
@@ -82,7 +83,11 @@ export function AttendanceManager() {
   const [assignments, setAssignments] = useState<TeachingAssignment[]>([]);
   const [assignmentId, setAssignmentId] = useState("");
   const [date, setDate] = useState(localDateValue);
+  const [period, setPeriod] = useState(1);
   const [topic, setTopic] = useState("");
+  const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -129,7 +134,7 @@ export function AttendanceManager() {
     setNotice("");
     setDirty(false);
     try {
-      const params = new URLSearchParams({ teachingAssignmentId: assignmentId, date });
+      const params = new URLSearchParams({ teachingAssignmentId: assignmentId, date, period: String(period) });
       const response = await fetch("/api/attendance?" + params.toString(), { cache: "no-store" });
       const data = await response.json() as AttendancePayload & { error?: string };
       if (!response.ok) throw new Error(data.error || "โหลดข้อมูลเช็กชื่อไม่สำเร็จ");
@@ -141,9 +146,28 @@ export function AttendanceManager() {
     } finally {
       setLoading(false);
     }
-  }, [assignmentId, date]);
+  }, [assignmentId, date, period]);
+
+  const loadHistory = useCallback(async (page = 1, append = false) => {
+    if (!assignmentId) { setHistory([]); setHistoryHasMore(false); return; }
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({ teachingAssignmentId: assignmentId, page: String(page) });
+      const response = await fetch("/api/attendance/history?" + params.toString(), { cache: "no-store" });
+      const data = await response.json() as { sessions?: AttendanceHistoryItem[]; hasMore?: boolean; error?: string };
+      if (!response.ok) throw new Error(data.error || "โหลดประวัติการเช็กชื่อไม่สำเร็จ");
+      const nextSessions = Array.isArray(data.sessions) ? data.sessions : [];
+      setHistory((current) => append ? [...current, ...nextSessions] : nextSessions);
+      setHistoryHasMore(data.hasMore === true);
+    } catch (err) {
+      if (!append) setHistory([]);
+      setHistoryHasMore(false);
+      setError(err instanceof Error ? err.message : "โหลดประวัติการเช็กชื่อไม่สำเร็จ");
+    } finally { setHistoryLoading(false); }
+  }, [assignmentId]);
 
   useEffect(() => { void loadAttendance(); }, [loadAttendance]);
+  useEffect(() => { void loadHistory(1, false); }, [loadHistory]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("th-TH");
@@ -202,6 +226,20 @@ export function AttendanceManager() {
     setShowDatePicker(false);
   }
 
+  function selectPeriod(value: string) {
+    const nextPeriod = Number(value);
+    if (!Number.isInteger(nextPeriod) || nextPeriod < 1 || nextPeriod > 8 || nextPeriod === period) return;
+    if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปลี่ยนคาบและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+    setPeriod(nextPeriod);
+  }
+
+  function openHistory(item: AttendanceHistoryItem) {
+    if (dirty && !window.confirm("มีข้อมูลเช็กชื่อที่ยังไม่ได้บันทึก ต้องการเปิดประวัติและละทิ้งการแก้ไขนี้หรือไม่?")) return;
+    setDate(item.date);
+    setPeriod(item.period);
+    setShowDatePicker(false);
+  }
+
   function chooseDate(day: number) {
     selectDate(dateValue(currentYear, currentMonth, day));
   }
@@ -218,6 +256,7 @@ export function AttendanceManager() {
         body: JSON.stringify({
           teachingAssignmentId: assignmentId,
           date,
+          period,
           topic,
           records: students.filter((student) => student.attendance).map((student) => ({
             studentId: student.id,
@@ -230,6 +269,7 @@ export function AttendanceManager() {
       if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
       setDirty(false);
       setNotice("บันทึกสถานะนักเรียน " + data.savedRecords + " คนแล้ว");
+      void loadHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
     } finally {
@@ -303,7 +343,7 @@ export function AttendanceManager() {
             ข้อมูลคาบเรียน <span className="font-semibold text-[#9A968E]">(Class Info)</span>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="grid gap-5 md:grid-cols-4">
             <label className="block min-w-0 space-y-2">
               <span className="flex items-center gap-1.5 pl-1 text-[10px] font-bold uppercase tracking-widest text-[#888888]">
                 <Hash className="h-3 w-3" /> รายวิชา / ห้องเรียน
@@ -397,6 +437,14 @@ export function AttendanceManager() {
                 </div>
               )}
             </div>
+
+            <label className="block min-w-0 space-y-2">
+              <span className="flex items-center gap-1.5 pl-1 text-[10px] font-bold uppercase tracking-widest text-[#888888]"><BookOpen className="h-3 w-3" /> คาบเรียน</span>
+              <select value={period} onChange={(event) => selectPeriod(event.target.value)} className="min-h-[50px] w-full rounded-2xl border border-[#EAE8E3] bg-[#F9F9F8] px-4 text-sm font-bold text-[#1A1A1A] shadow-inner outline-none transition focus:border-[#2C3E32] focus:bg-white focus:shadow-md">
+                {Array.from({ length: 8 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>คาบ {value}</option>)}
+              </select>
+              <p className="pl-1 text-[11px] text-[#999999]">บันทึกแยกจากคาบอื่นในวันเดียวกัน</p>
+            </label>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 border-t border-[#EAE8E3]/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -416,6 +464,26 @@ export function AttendanceManager() {
               <span className="rounded-full bg-[#F4F4F2] px-3 py-2 text-[11px] font-semibold text-[#77736C]">ยังไม่ระบุ {counts.unmarked} คน</span>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-white bg-white/85 p-5 shadow-[0_8px_40px_rgba(0,0,0,0.035)] sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="text-sm font-black tracking-tight text-[#1A1A1A]">ประวัติการเช็กชื่อ</h2><p className="mt-1 text-[11px] text-[#888888]">เลือกวันที่และคาบที่เคยบันทึก เพื่อเปิดดูหรือแก้ไขย้อนหลัง</p></div>
+            <span className="rounded-full bg-[#F4F4F2] px-3 py-1.5 text-[10px] font-bold text-[#77736C]">{history.length} รายการล่าสุด</span>
+          </div>
+          {historyLoading ? <p className="rounded-xl bg-[#F9F9F8] p-5 text-center text-xs text-[#888888]">กำลังโหลดประวัติ...</p> : history.length === 0 ? <p className="rounded-xl bg-[#F9F9F8] p-5 text-center text-xs text-[#888888]">ยังไม่มีประวัติการเช็กชื่อของรายวิชานี้</p> : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {history.map((item) => {
+                const active = item.date === date && item.period === period;
+                return <button key={item.id} type="button" onClick={() => openHistory(item)} aria-pressed={active} className={"rounded-2xl border p-4 text-left transition " + (active ? "border-[#2C3E32] bg-[#EFF5F0] shadow-sm" : "border-[#EAE8E3] bg-white hover:border-[#D1CDC4] hover:bg-[#F9F9F8]")}>
+                  <div className="flex items-center justify-between gap-2"><span className="text-xs font-black text-[#1A1A1A]">{thaiDate(item.date)}</span><span className="rounded-full bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-bold text-[#4d5f4a]">คาบ {item.period}</span></div>
+                  <p className="mt-2 truncate text-[11px] text-[#777777]">{item.topic || "ไม่ระบุหัวข้อการสอน"}</p>
+                  <p className="mt-3 text-[10px] font-semibold text-[#777777]">มา {item.present} · สาย {item.late} · ลา {item.leave} · ขาด {item.absent} · มีข้อมูล {item.total} คน</p>
+                </button>;
+              })}
+            </div>
+          )}
+          {historyHasMore && <div className="mt-4 text-center"><button type="button" onClick={() => void loadHistory(Math.floor(history.length / 100) + 1, true)} disabled={historyLoading} className="rounded-full border border-[#EAE8E3] bg-white px-5 py-2.5 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F9F9F8] disabled:opacity-50">{historyLoading ? "กำลังโหลด..." : "ดูประวัติเพิ่มเติม"}</button></div>}
         </section>
 
         <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

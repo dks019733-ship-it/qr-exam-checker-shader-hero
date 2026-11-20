@@ -82,7 +82,9 @@ jobs:
             20261108_feature_availability \
             20261111100000_submission_files_google_drive \
             20261112100000_student_welcome_dismissal \
-            20261119000000_exam_choice_configuration
+            20261119000000_exam_choice_configuration \
+            20261120_answer_sheet_subject_code \
+            20261120_secure_student_welcome_dismissal
           do
             npx prisma migrate resolve --applied "$migration"
           done
@@ -102,6 +104,9 @@ jobs:
 
       - name: OMR geometry regression tests
         run: npm run test:omr
+
+      - name: Attendance period regression tests
+        run: npm run test:attendance
 
       - name: Guardian PostgreSQL concurrency tests
         run: npm run test:guardian:integration

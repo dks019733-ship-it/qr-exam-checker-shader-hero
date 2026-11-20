@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { compareByRollNo } from "@/lib/student-sort";
+import { parseAttendancePeriod } from "@/lib/attendance-period";
 
 const STATUSES = new Set(["PRESENT", "ABSENT", "LEAVE", "LATE"]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,8 +26,9 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const teachingAssignmentId = params.get("teachingAssignmentId") || "";
   const date = parseDate(params.get("date"));
-  if (!teachingAssignmentId || !date) {
-    return NextResponse.json({ error: "กรุณาระบุรายวิชาและวันที่ให้ถูกต้อง" }, { status: 400 });
+  const period = parseAttendancePeriod(params.get("period") ?? "1");
+  if (!teachingAssignmentId || !date || period === null) {
+    return NextResponse.json({ error: "กรุณาระบุรายวิชา วันที่ และคาบเรียน 1–8 ให้ถูกต้อง" }, { status: 400 });
   }
 
   const assignment = await prisma.teachingAssignment.findFirst({
@@ -42,7 +44,7 @@ export async function GET(request: Request) {
       orderBy: [{ rollNo: "asc" }, { studentNo: "asc" }],
     }),
     prisma.attendanceSession.findUnique({
-      where: { teachingAssignmentId_date: { teachingAssignmentId, date } },
+      where: { teachingAssignmentId_date_period: { teachingAssignmentId, date, period } },
       include: { records: { select: { studentId: true, status: true, note: true, markedAt: true } } },
     }),
   ]);
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
   students.sort(compareByRollNo);
   const recordByStudent = new Map((attendance?.records ?? []).map((record) => [record.studentId, record]));
   return NextResponse.json({
-    session: attendance ? { id: attendance.id, date: params.get("date"), topic: attendance.topic } : null,
+    session: attendance ? { id: attendance.id, date: params.get("date"), period: attendance.period, topic: attendance.topic } : null,
     classroom: assignment.classroom,
     subject: assignment.subject,
     students: students.map((student) => ({
@@ -72,10 +74,11 @@ export async function PUT(request: Request) {
   const body = await request.json().catch(() => null);
   const teachingAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
   const date = parseDate(body?.date);
+  const period = parseAttendancePeriod(body?.period ?? 1);
   const topic = typeof body?.topic === "string" ? body.topic.trim().slice(0, 240) : "";
   const records = Array.isArray(body?.records) ? body.records : [];
-  if (!teachingAssignmentId || !date || records.length > 500) {
-    return NextResponse.json({ error: "ข้อมูลการเช็กชื่อไม่ถูกต้อง" }, { status: 400 });
+  if (!teachingAssignmentId || !date || period === null || records.length > 500) {
+    return NextResponse.json({ error: "ข้อมูลการเช็กชื่อหรือคาบเรียนไม่ถูกต้อง" }, { status: 400 });
   }
 
   const normalized = new Map<string, { studentId: string; status: string; note: string }>();
@@ -113,12 +116,13 @@ export async function PUT(request: Request) {
   try {
     const saved = await prisma.$transaction(async (tx) => {
       const attendance = await tx.attendanceSession.upsert({
-        where: { teachingAssignmentId_date: { teachingAssignmentId, date } },
+        where: { teachingAssignmentId_date_period: { teachingAssignmentId, date, period } },
         create: {
           ownerId: assignment.ownerId,
           classId: assignment.classId,
           teachingAssignmentId,
           date,
+          period,
           topic,
         },
         update: { topic },

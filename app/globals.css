@@ -49,7 +49,7 @@ main.min-h-screen { background-color: #f3f7f3; color: #20382a; }
 
 
 @media print {
-  @page { size: A4 portrait; margin: 14mm 15mm; }
+  @page { size: A4 portrait; margin: 0; }
   body { background: #fff !important; }
   .omr-answer-sheet { page: omr-answer-sheet; }
   @page omr-answer-sheet { size: A4 portrait; margin: 0; }

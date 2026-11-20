@@ -180,6 +180,7 @@ export async function POST(request: Request) {
           ownerId,
           teachingAssignmentId: { in: targetIds },
           date: new Date(`${attendanceDate}T00:00:00.000Z`),
+          period: 1,
         },
         select: { id: true, teachingAssignmentId: true },
       });
