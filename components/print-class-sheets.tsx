@@ -53,7 +53,7 @@ export function PrintClassSheets() {
               template={template}
               student={{ rollNo: s.rollNo, studentNo: s.studentNo, name: s.name }}
               questions={questions}
-              qrUrl={plainMode ? undefined : `/api/students/${s.id}/qr`}
+              qrUrl={plainMode ? undefined : `/api/students/${s.id}/qr?v=2`}
               showQr={!plainMode}
             />
           </div>
