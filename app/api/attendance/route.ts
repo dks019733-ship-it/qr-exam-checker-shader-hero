@@ -74,7 +74,7 @@ export async function PUT(request: Request) {
   const body = await request.json().catch(() => null);
   const teachingAssignmentId = typeof body?.teachingAssignmentId === "string" ? body.teachingAssignmentId : "";
   const date = parseDate(body?.date);
-  const period = parseAttendancePeriod(body?.period);
+  const period = parseAttendancePeriod(body?.period ?? 1);
   const topic = typeof body?.topic === "string" ? body.topic.trim().slice(0, 240) : "";
   const records = Array.isArray(body?.records) ? body.records : [];
   if (!teachingAssignmentId || !date || period === null || records.length > 500) {
