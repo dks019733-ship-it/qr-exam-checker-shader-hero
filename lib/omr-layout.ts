@@ -21,10 +21,14 @@ export const OMR_GRID = {
   bubbleDiameter: 12,
 } as const;
 
-export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, choiceCount: number) {
+export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, choiceCount: number, questionCount = 100) {
   if (!Number.isInteger(questionNumber) || questionNumber < 1 || questionNumber > 100) {
     throw new RangeError("OMR question number must be between 1 and 100");
   }
+  if (!Number.isInteger(questionCount) || questionCount < 1 || questionCount > 100) {
+    throw new RangeError("OMR question count must be between 1 and 100");
+  }
+  if (questionNumber > questionCount) throw new RangeError("OMR question number exceeds the configured question count");
   if (!Number.isInteger(choiceCount) || choiceCount < 4 || choiceCount > 5) {
     throw new RangeError("OMR choice count must be 4 or 5");
   }
@@ -33,8 +37,9 @@ export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, 
   }
 
   const zeroBased = questionNumber - 1;
-  const column = Math.floor(zeroBased / OMR_GRID.rowsPerColumn);
-  const row = zeroBased % OMR_GRID.rowsPerColumn;
+  const rowsPerColumn = Math.ceil(questionCount / 2);
+  const column = Math.floor(zeroBased / rowsPerColumn);
+  const row = zeroBased % rowsPerColumn;
   const tableLeft = OMR_GRID.left + column * (OMR_GRID.tableWidth + OMR_GRID.columnGap);
   return {
     x: tableLeft + OMR_GRID.questionColumnWidth + ((choiceIndex + 0.5) * OMR_GRID.choicesWidth) / choiceCount,
