@@ -130,7 +130,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr = true }: { template: Template; student: { rollNo: string; studentNo: string; name: string }; questions: number[]; qrUrl?: string; showQr?: boolean }) {
   const choiceLabels = getExamChoiceLabels(template.choiceCount || 4, template.choiceLabelStyle || "LATIN");
   const choiceGridStyle = { gridTemplateColumns: `${OMR_GRID.questionColumnWidth}px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
-  const columns = [questions.slice(0, 50), questions.slice(50, 100)];
+  const splitIndex = Math.ceil(questions.length / 2);
+  const columns = [questions.slice(0, splitIndex), questions.slice(splitIndex)];
 
   return (
     <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto overflow-hidden bg-white text-black" style={{ width: OMR_PAGE_WIDTH, height: OMR_PAGE_HEIGHT }}>
