@@ -158,11 +158,9 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: 
           </button>
         )}
       </div>
-      {cameraOpen && (
-        <div className="mt-4 overflow-hidden rounded-xl border border-[#d6dfd7] bg-black">
-          <video ref={videoRef} muted playsInline autoPlay className="max-h-[420px] min-h-[220px] w-full object-contain" aria-label="ภาพจากกล้องสำหรับอ่าน QR" />
-        </div>
-      )}
+      <div className={cameraOpen ? "mt-4 overflow-hidden rounded-xl border border-[#d6dfd7] bg-black" : "hidden"}>
+        <video ref={videoRef} muted playsInline autoPlay className="max-h-[420px] min-h-[220px] w-full object-contain" aria-label="ภาพจากกล้องสำหรับอ่าน QR" />
+      </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-xs text-[#536b5b]">{notice}</p>
         {waitingForNext && <button type="button" onClick={scanNext} className="min-h-9 rounded-lg border border-[#cbd9ce] bg-white px-3 text-xs font-semibold text-[#1d4b35]">สแกนคนถัดไป</button>}
