@@ -225,7 +225,7 @@ export async function readOmrImage(
   const issues: OmrIssue[] = [];
   let recognizedCount = 0;
   for (let question = 1; question <= questionCount; question += 1) {
-    const scores = choiceKeys.map((_, choiceIndex) => readBubble(normalized, getOmrBubbleCenter(question, choiceIndex, choiceKeys.length)));
+    const scores = choiceKeys.map((_, choiceIndex) => readBubble(normalized, getOmrBubbleCenter(question, choiceIndex, choiceKeys.length, questionCount)));
     const ranked = scores.map((score, index) => ({ score, index })).sort((a, b) => b.score - a.score);
     const first = ranked[0];
     const second = ranked[1];
