@@ -8,13 +8,13 @@ export const OMR_MARKER_CENTERS = [
 ] as const;
 
 export const OMR_GRID = {
-  left: 52,
+  left: 53,
   top: 288,
   tableWidth: 335,
   columnGap: 20,
   questionColumnWidth: 32,
   headerHeight: 18,
-  rowTop: 306,
+  rowTop: 307,
   rowHeight: 14,
   rowsPerColumn: 50,
   choicesWidth: 301,
