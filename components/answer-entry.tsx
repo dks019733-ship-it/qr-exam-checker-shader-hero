@@ -34,6 +34,7 @@ export function AnswerEntry() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [scanResumeSignal, setScanResumeSignal] = useState(0);
+  const [omrTemplateCompatible, setOmrTemplateCompatible] = useState<boolean | null>(null);
 
   const eligibleExams = useMemo(
     () => exams.filter((item) => item.classId && item.questions?.length),
@@ -59,6 +60,7 @@ export function AnswerEntry() {
       setStudents([]);
       setStudentId("");
       setAnswers({});
+      setOmrTemplateCompatible(null);
       return;
     }
 
@@ -74,10 +76,23 @@ export function AnswerEntry() {
         setStudentId("");
         setAnswers(emptyAnswers(row));
 
-        const response = await fetch("/api/students?classId=" + encodeURIComponent(row.classId || ""));
-        if (!response.ok) throw new Error();
-        const studentRows: Student[] = await response.json();
-        if (!cancelled) setStudents(studentRows);
+        const [studentsResponse, templateResponse] = await Promise.all([
+          fetch("/api/students?classId=" + encodeURIComponent(row.classId || "")),
+          fetch("/api/answer-sheet/template"),
+        ]);
+        if (!studentsResponse.ok) throw new Error();
+        const studentRows: Student[] = await studentsResponse.json();
+        const template = templateResponse.ok ? await templateResponse.json() : null;
+        const templateQuestionCount = template?.questionCount ?? 40;
+        const templateChoiceCount = template?.choiceCount ?? 4;
+        if (!cancelled) {
+          setStudents(studentRows);
+          setOmrTemplateCompatible(
+            templateResponse.ok &&
+            templateQuestionCount === row.questions.length &&
+            templateChoiceCount === (row.choiceCount || 4),
+          );
+        }
       })
       .catch(() => {
         if (!cancelled) setMessage("โหลดข้อมูลข้อสอบหรือนักเรียนไม่สำเร็จ");
@@ -100,6 +115,7 @@ export function AnswerEntry() {
     setStudents([]);
     setStudentId("");
     setAnswers({});
+    setOmrTemplateCompatible(null);
     setMessage("");
   }
 
@@ -192,8 +208,15 @@ export function AnswerEntry() {
                 resumeSignal={scanResumeSignal}
                 questionCount={exam.questions.length}
                 choiceKeys={choiceKeys}
+                omrEnabled={omrTemplateCompatible === true}
                 onAnswersDetected={(detectedAnswers) => setAnswers((current) => ({ ...current, ...detectedAnswers }))}
               />
+            )}
+
+            {exam && omrTemplateCompatible === false && (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                ปิดการอ่าน OMR ชั่วคราว: จำนวนข้อหรือตัวเลือกของกระดาษคำตอบไม่ตรงกับข้อสอบนี้ กรุณาปรับและบันทึกแม่แบบกระดาษคำตอบให้ตรงกันก่อนสแกน หรือกรอกคำตอบด้วยตนเอง
+              </p>
             )}
 
             {exam && students.length === 0 && (
