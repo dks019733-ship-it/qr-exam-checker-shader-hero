@@ -190,6 +190,9 @@ export function AnswerEntry() {
                 students={students}
                 onStudentDetected={selectStudent}
                 resumeSignal={scanResumeSignal}
+                questionCount={exam.questions.length}
+                choiceKeys={choiceKeys}
+                onAnswersDetected={(detectedAnswers) => setAnswers((current) => ({ ...current, ...detectedAnswers }))}
               />
             )}
 
