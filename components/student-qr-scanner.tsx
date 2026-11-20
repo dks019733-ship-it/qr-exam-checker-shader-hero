@@ -182,6 +182,18 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
     setError("");
     setOmrSummary(null);
     try {
+      // Re-read the QR from the exact frame used for OMR when native QR decoding is available.
+      // This prevents a sheet swap between identity selection and answer capture.
+      if (detectorRef.current) {
+        const qrResults = await detectorRef.current.detect(video);
+        const qrPayload = qrResults.map((item) => item.rawValue.trim()).find((value) => value.startsWith(QR_PREFIX));
+        if (qrPayload) {
+          const token = qrPayload.slice(QR_PREFIX.length).trim();
+          const matchedStudent = studentsRef.current.find((item) => item.qrToken === token);
+          if (!matchedStudent) throw new Error("QR บนกระดาษไม่ตรงกับรายชื่อนักเรียนในห้องนี้");
+          onDetectedRef.current(matchedStudent.id);
+        }
+      }
       const result = await readOmrImage(video, questionCount, choiceKeys);
       onAnswersDetected(result.answers, result.issues);
       setOmrSummary({
