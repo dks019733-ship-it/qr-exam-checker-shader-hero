@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { createStudentQrPayload, parseStudentQrPayloadVersion } from "@/lib/student-qr-format";
+import { createStudentQrPayload, parseStudentQrPayloadVersion } from "./student-qr-format";
 
 /**
  * Server-only helpers. `qrcode`'s Node renderer uses pure-JS PNG encoding
