@@ -145,3 +145,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
     min-height: 7mm;
   }
 }
+
+/* Keep the OMR sheet visually separate from the app chrome on screen. */
+@media screen {
+  .omr-preview-stage { background: #e8ede9; padding: 20px 12px 88px; border-radius: 12px; }
+  .omr-answer-sheet { box-shadow: 0 8px 28px rgba(24, 42, 30, .18); outline: 1px solid rgba(20, 35, 25, .12); }
+}
+@media print {
+  .omr-preview-stage { background: #fff !important; padding: 0 !important; border-radius: 0 !important; }
+  .omr-answer-sheet { box-shadow: none !important; outline: none !important; }
+}
