@@ -135,10 +135,10 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
 
   return (
     <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto overflow-hidden bg-white text-black" style={{ width: OMR_PAGE_WIDTH, height: OMR_PAGE_HEIGHT }}>
-      <span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] bg-black" />
-      <span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] bg-black" />
-      <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] bg-black" />
-      <span aria-hidden="true" data-omr-marker="bottom-right" className="absolute bottom-8 right-8 h-[14px] w-[14px] bg-black" />
+      <span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] border-[7px] border-black" />
+      <span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] border-[7px] border-black" />
+      <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] border-[7px] border-black" />
+      <span aria-hidden="true" data-omr-marker="bottom-right" className="absolute bottom-8 right-8 h-[14px] w-[14px] border-[7px] border-black" />
 
       <header className="absolute left-[52px] right-[52px] top-[52px] flex h-[80px] items-center gap-4 border-b border-black pb-3">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center">
