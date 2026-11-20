@@ -231,10 +231,12 @@ export async function readOmrImage(
       continue;
     }
     if (second.score >= 0.16) {
+      answers[String(question)] = "";
       issues.push({ question, reason: "MULTIPLE_MARKS", scores });
       continue;
     }
     if (first.score < 0.22 || first.score - second.score < 0.08) {
+      answers[String(question)] = "";
       issues.push({ question, reason: "UNCLEAR_MARK", scores });
       continue;
     }
