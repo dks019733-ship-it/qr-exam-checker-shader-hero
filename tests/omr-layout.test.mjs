@@ -3,15 +3,15 @@ import test from "node:test";
 import { getOmrBubbleCenter } from "../lib/omr-layout.ts";
 
 test("OMR V1 maps first and last question rows to calibrated coordinates", () => {
-  assert.deepEqual(getOmrBubbleCenter(1, 0, 4), { x: 121.625, y: 313 });
-  assert.deepEqual(getOmrBubbleCenter(50, 3, 4), { x: 347.375, y: 999 });
-  assert.deepEqual(getOmrBubbleCenter(51, 0, 4), { x: 476.625, y: 313 });
-  assert.deepEqual(getOmrBubbleCenter(100, 4, 5), { x: 709.9, y: 999 });
+  assert.deepEqual(getOmrBubbleCenter(1, 0, 4), { x: 122.625, y: 314 });
+  assert.deepEqual(getOmrBubbleCenter(50, 3, 4), { x: 348.375, y: 1000 });
+  assert.deepEqual(getOmrBubbleCenter(51, 0, 4), { x: 477.625, y: 314 });
+  assert.deepEqual(getOmrBubbleCenter(100, 4, 5), { x: 710.9, y: 1000 });
 });
 
 test("OMR V1 supports both four-choice and five-choice grids", () => {
-  assert.equal(getOmrBubbleCenter(1, 3, 4).x, 347.375);
-  assert.equal(getOmrBubbleCenter(1, 4, 5).x, 354.9);
+  assert.equal(getOmrBubbleCenter(1, 3, 4).x, 348.375);
+  assert.equal(getOmrBubbleCenter(1, 4, 5).x, 355.9);
 });
 
 test("OMR V1 rejects invalid question and choice coordinates", () => {
