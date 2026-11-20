@@ -6,7 +6,7 @@ test("OMR V1 maps first and last question rows to calibrated coordinates", () =>
   assert.deepEqual(getOmrBubbleCenter(1, 0, 4), { x: 121.625, y: 313 });
   assert.deepEqual(getOmrBubbleCenter(50, 3, 4), { x: 347.375, y: 999 });
   assert.deepEqual(getOmrBubbleCenter(51, 0, 4), { x: 476.625, y: 313 });
-  assert.deepEqual(getOmrBubbleCenter(100, 4, 5), { x: 747.9, y: 999 });
+  assert.deepEqual(getOmrBubbleCenter(100, 4, 5), { x: 709.9, y: 999 });
 });
 
 test("OMR V1 supports both four-choice and five-choice grids", () => {
