@@ -166,7 +166,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         <div className="truncate">วิชา: {template.subject || "____________"}</div>
       </section>
 
-      <section className="absolute left-[52px] right-[52px] top-[207px] h-[60px] rounded border border-black px-3 py-2 text-[10px] leading-[15px]">
+      <section className="absolute left-[52px] right-[52px] top-[207px] h-[60px] rounded border border-black px-3 py-2 text-[10px] leading-[14px]">
         <p className="font-bold">คำชี้แจง</p>
         <p>1. ระบายวงกลมให้ทึบเต็มวงด้วยดินสอ 2B เพียงหนึ่งตัวเลือกต่อข้อ</p>
         <p>2. หากเปลี่ยนคำตอบ ให้ลบคำตอบเดิมให้สะอาด และห้ามทำเครื่องหมายบนสี่เหลี่ยมดำ 4 มุม</p>
