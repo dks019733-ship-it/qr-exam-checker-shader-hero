@@ -73,7 +73,7 @@ export function AnswerSheetEditor() {
     const reader = new FileReader(); reader.onload = () => updateTemplate("logoDataUrl", String(reader.result)); reader.readAsDataURL(file);
   }
 
-  return <main className="min-h-screen bg-[#f6f7f9] p-4 sm:p-6 lg:p-8 print:bg-white print:p-0">
+  return <main className="min-h-screen bg-[#f6f7f9] p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-28 print:bg-white print:p-0">
     <div className="mx-auto max-w-[1440px]">
       <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-[#dce8df] bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground"><FileImage className="h-4 w-4" />Answer sheet studio</div><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">สร้างกระดาษคำตอบ</h1><p className="mt-1 text-sm text-muted-foreground">ตั้งค่าข้อมูล แล้วดูตัวอย่างก่อนพิมพ์ได้ทันที</p></div>
@@ -118,7 +118,7 @@ export function AnswerSheetEditor() {
           <Panel title="เลือกนักเรียนสำหรับตัวอย่าง" subtitle="เลือกรายชื่อเพื่อดูตัวอย่างกระดาษคำตอบ"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input className="pl-9" placeholder="ค้นหาชื่อ เลขที่ หรือรหัส..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} /></div><select value={selectedStudentId} onChange={(e) => { const s = students.find((x) => x.id === e.target.value); if (s) selectStudent(s); }} className="mt-2"><option value="">เลือกนักเรียน ({filteredStudents.length})</option>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.rollNo} · {s.studentNo} — {s.name}</option>)}</select><Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">เพิ่มหรือแก้ไขรายชื่อนักเรียน →</Link></Panel>
         </section>
 
-        <section className="min-w-0 rounded-2xl border bg-white p-3 shadow-sm sm:p-5 print:border-0 print:p-0 print:shadow-none"><div className="mb-4 flex items-center justify-between print:hidden"><div><h2 className="font-semibold">ตัวอย่างก่อนพิมพ์</h2><p className="text-xs text-muted-foreground">A4 · ปรับตามข้อมูลด้านซ้าย</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-muted-foreground">{template.questionCount} ข้อ</span></div><div className="overflow-x-auto"><AnswerSheetPreview template={template} student={studentPreview} questions={questions} qrUrl={sheetMode === "qr" && selectedStudentId ? `/api/students/${selectedStudentId}/qr?v=2` : undefined} showQr={sheetMode === "qr"} /></div></section>
+        <section className="min-w-0 rounded-2xl border bg-white p-3 shadow-sm sm:p-5 print:border-0 print:p-0 print:shadow-none"><div className="mb-4 flex items-center justify-between print:hidden"><div><h2 className="font-semibold">ตัวอย่างก่อนพิมพ์</h2><p className="text-xs text-muted-foreground">A4 แนวตั้ง · 210 × 297 มม. · ขนาดพิมพ์จริง 100%</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-muted-foreground">{template.questionCount} ข้อ</span></div><div className="omr-preview-stage overflow-x-auto print:overflow-visible"><AnswerSheetPreview template={template} student={studentPreview} questions={questions} qrUrl={sheetMode === "qr" && selectedStudentId ? `/api/students/${selectedStudentId}/qr?v=2` : undefined} showQr={sheetMode === "qr"} /></div></section>
       </div>
     </div>
   </main>;
