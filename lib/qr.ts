@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { createStudentQrPayload, parseStudentQrPayloadVersion } from "@/lib/student-qr-format";
 
 /**
  * Server-only helpers. `qrcode`'s Node renderer uses pure-JS PNG encoding
@@ -11,19 +12,13 @@ import QRCode from "qrcode";
  * the fixed OMR V2 sheet layout. QEC1 remains accepted for legacy
  * identity-only sheets.
  */
-const QR_PREFIX = "QEC2:";
-const LEGACY_QR_PREFIX = "QEC1:";
-
 export function studentQrPayload(qrToken: string): string {
-  return `${QR_PREFIX}${qrToken}`;
+  return createStudentQrPayload(qrToken);
 }
 
 /** Extracts the qrToken back out of a scanned QR payload, or null if it's not ours. */
 export function parseStudentQrPayload(payload: string): string | null {
-  const prefix = payload.startsWith(QR_PREFIX) ? QR_PREFIX : payload.startsWith(LEGACY_QR_PREFIX) ? LEGACY_QR_PREFIX : null;
-  if (!prefix) return null;
-  const token = payload.slice(prefix.length).trim();
-  return token.length > 0 ? token : null;
+  return parseStudentQrPayloadVersion(payload)?.token ?? null;
 }
 
 export async function studentQrPngBuffer(qrToken: string, size = 240): Promise<Buffer> {
