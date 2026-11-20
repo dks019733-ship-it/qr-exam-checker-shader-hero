@@ -172,7 +172,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         <p>2. หากเปลี่ยนคำตอบ ให้ลบคำตอบเดิมให้สะอาด และห้ามทำเครื่องหมายบนสี่เหลี่ยมดำ 4 มุม</p>
       </section>
 
-      <div data-omr-grid="v1" className="absolute flex" style={{ left: OMR_GRID.left - 1, top: OMR_GRID.top, gap: OMR_GRID.columnGap }}>
+      <div data-omr-grid="v2" className="absolute flex" style={{ left: OMR_GRID.left - 1, top: OMR_GRID.top, gap: OMR_GRID.columnGap }}>
         {columns.map((column, colIndex) => (
           <div key={colIndex} className="overflow-hidden border border-black" style={{ width: OMR_GRID.tableWidth }} data-omr-column={colIndex}>
             <div className="grid border-b border-black bg-gray-50 text-center text-[9px] font-bold" style={{ ...choiceGridStyle, height: OMR_GRID.headerHeight }}>
@@ -200,7 +200,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
       </div>
 
       <footer className="absolute left-[52px] right-[52px] top-[1024px] border-t border-black pt-2 text-[9px] text-gray-600">
-        <p>{showQr ? "OMR FORM V2 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "กระดาษคำตอบแบบธรรมดา · ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
+        <p>{showQr ? "OMR FORM V2 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "OMR FORM V2 · แบบธรรมดา ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
       </footer>
     </div>
   );
