@@ -15,6 +15,7 @@
     "test:guardian:integration": "node --test tests/guardian-database-concurrency.test.mjs",
     "test:spreadsheet": "node --test tests/spreadsheet.test.mjs",
     "test:storage": "node --test tests/object-storage-url.test.mjs",
+    "test:attendance": "node --experimental-strip-types --test tests/attendance-period.test.mjs",
     "test:omr": "node --experimental-strip-types --test tests/omr-layout.test.mjs tests/qr.test.mjs"
   },
   "dependencies": {

@@ -105,6 +105,9 @@ jobs:
       - name: OMR geometry regression tests
         run: npm run test:omr
 
+      - name: Attendance period regression tests
+        run: npm run test:attendance
+
       - name: Guardian PostgreSQL concurrency tests
         run: npm run test:guardian:integration
 
