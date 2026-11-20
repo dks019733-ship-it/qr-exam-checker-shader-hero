@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, ScanLine } from "lucide-react";
+import { Camera, CameraOff, ScanLine, ScanSearch } from "lucide-react";
+import { readOmrImage, type OmrIssue } from "@/lib/omr-reader";
 
 type Student = { id: string; qrToken: string; name: string; studentNo: string; rollNo: string };
 type BarcodeResult = { rawValue: string };
@@ -13,11 +14,14 @@ type Props = {
   students: Student[];
   onStudentDetected: (studentId: string) => void;
   resumeSignal: number;
+  questionCount: number;
+  choiceKeys: string[];
+  onAnswersDetected: (answers: Record<string, string>, issues: OmrIssue[]) => void;
 };
 
 const QR_PREFIX = "QEC1:";
 
-export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: Props) {
+export function StudentQrScanner({ students, onStudentDetected, resumeSignal, questionCount, choiceKeys, onAnswersDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
@@ -31,7 +35,9 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: 
   const [cameraStarting, setCameraStarting] = useState(false);
   const [waitingForNext, setWaitingForNext] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("เปิดกล้องเพื่ออ่าน QR บนกระดาษคำตอบ");
+  const [notice, setNotice] = useState("เปิดกล้องเพื่ออ่าน QR และคำตอบบนกระดาษ");
+  const [omrBusy, setOmrBusy] = useState(false);
+  const [omrSummary, setOmrSummary] = useState<{ recognizedCount: number; questionCount: number; issues: OmrIssue[] } | null>(null);
 
   useEffect(() => { studentsRef.current = students; }, [students]);
   useEffect(() => { onDetectedRef.current = onStudentDetected; }, [onStudentDetected]);
@@ -170,6 +176,31 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: 
     }
   }
 
+  async function scanAnswers() {
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || omrBusy) {
+      setError("กล้องยังจับภาพไม่พร้อม กรุณารอสักครู่แล้วลองใหม่");
+      return;
+    }
+    setOmrBusy(true);
+    setError("");
+    setOmrSummary(null);
+    try {
+      const result = await readOmrImage(video, questionCount, choiceKeys);
+      onAnswersDetected(result.answers, result.issues);
+      setOmrSummary({
+        recognizedCount: result.recognizedCount,
+        questionCount: result.questionCount,
+        issues: result.issues,
+      });
+      setNotice("อ่านคำตอบได้ " + result.recognizedCount + " จาก " + result.questionCount + " ข้อ · ตรวจทานข้อที่แจ้งเตือนก่อนบันทึก");
+    } catch (scanError) {
+      setError(scanError instanceof Error ? scanError.message : "อ่านคำตอบจากภาพไม่สำเร็จ");
+    } finally {
+      setOmrBusy(false);
+    }
+  }
+
   function scanNext() {
     if (!cameraOpen || !activeRef.current) return;
     pausedRef.current = false;
@@ -196,7 +227,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-[#203e2d]"><ScanLine className="h-4 w-4" />สแกน QR จากกระดาษคำตอบ</h2>
-          <p className="mt-1 text-xs leading-5 text-[#718276]">QR ใช้ระบุตัวนักเรียนเท่านั้น จากนั้นตรวจคำตอบบนกระดาษและเลือกคำตอบด้านล่างก่อนบันทึก</p>
+          <p className="mt-1 text-xs leading-5 text-[#718276]">อ่าน QR เพื่อระบุตัวนักเรียน และอ่านวงกลมคำตอบจากกระดาษ OMR V1 จากนั้นครูตรวจทานก่อนบันทึก</p>
         </div>
         {!cameraOpen ? (
           <button type="button" disabled={cameraStarting} onClick={() => void startCamera()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:cursor-wait disabled:opacity-60">
@@ -211,12 +242,14 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal }: 
       <div className={cameraOpen ? "mt-4 overflow-hidden rounded-xl border border-[#d6dfd7] bg-black" : "hidden"}>
         <video ref={videoRef} muted playsInline autoPlay className="max-h-[420px] min-h-[220px] w-full object-contain" aria-label="ภาพจากกล้องสำหรับอ่าน QR" />
       </div>
+      {cameraOpen && <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void scanAnswers()} disabled={omrBusy} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:opacity-60"><ScanSearch className="h-4 w-4" />{omrBusy ? "กำลังอ่านวงกลม..." : "อ่านคำตอบจากภาพ"}</button><span className="text-[11px] text-[#718276]">ใช้กับกระดาษ OMR FORM V1 ที่พิมพ์จากระบบ</span></div>}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-xs text-[#536b5b]">{notice}</p>
         {waitingForNext && <button type="button" onClick={scanNext} className="min-h-9 rounded-lg border border-[#cbd9ce] bg-white px-3 text-xs font-semibold text-[#1d4b35]">สแกนคนถัดไป</button>}
       </div>
+      {omrSummary && <div className="mt-3 rounded-lg border border-[#d6dfd7] bg-white p-3 text-xs"><p className="font-semibold text-[#203e2d]">ผลการอ่าน: {omrSummary.recognizedCount}/{omrSummary.questionCount} ข้อ</p>{omrSummary.issues.length > 0 ? <p className="mt-1 leading-5 text-amber-800">ต้องตรวจทานข้อ: {omrSummary.issues.map((issue) => issue.question + (issue.reason === "MULTIPLE_MARKS" ? " (ฝนหลายตัวเลือก)" : " (รอยฝนไม่ชัด)")).join(", ")}</p> : <p className="mt-1 text-emerald-700">ไม่พบข้อที่ต้องแจ้งเตือน กรุณาตรวจทานคำตอบทั้งหมดอีกครั้ง</p>}<p className="mt-1 text-[#718276]">ระบบจะไม่เลือกคำตอบแทนในข้อที่อ่านไม่ชัดหรือฝนหลายตัวเลือก</p></div>}
       {error && <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">{error}</p>}
-      <p className="mt-3 text-[11px] leading-5 text-[#89958b]">หมายเหตุ: รุ่นนี้อ่าน QR เพื่อจับคู่นักเรียนและเปิดกล้องต่อเนื่องได้ แต่ยังไม่อ่านวงกลมคำตอบ (OMR) อัตโนมัติ ระบบจะไม่เดาคำตอบแทนผู้ตรวจ</p>
+      <p className="mt-3 text-[11px] leading-5 text-[#89958b]">หมายเหตุ: OMR ใช้จุดอ้างอิง 4 มุมเพื่อปรับภาพก่อนอ่านวงกลม ระบบจะแยกข้อว่าง ข้อที่ฝนหลายตัวเลือก และรอยฝนไม่ชัดให้ครูตรวจเอง ไม่ยืนยันผลสอบอัตโนมัติ</p>
     </section>
   );
 }
