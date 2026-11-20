@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AnswerSheetStudentTools } from "@/components/answer-sheet-student-tools";
 import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 import { getExamChoiceLabels } from "@/lib/exam-choices";
+import { OMR_GRID, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Student = { id: string; rollNo: string; studentNo: string; name: string; qrToken: string };
@@ -128,11 +129,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr = true }: { template: Template; student: { rollNo: string; studentNo: string; name: string }; questions: number[]; qrUrl?: string; showQr?: boolean }) {
   const choiceLabels = getExamChoiceLabels(template.choiceCount || 4, template.choiceLabelStyle || "LATIN");
-  const choiceGridStyle = { gridTemplateColumns: `32px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
+  const choiceGridStyle = { gridTemplateColumns: `${OMR_GRID.questionColumnWidth}px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
   const columns = [questions.slice(0, 50), questions.slice(50, 100)];
 
   return (
-    <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto h-[1123px] w-[794px] overflow-hidden bg-white text-black">
+    <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto overflow-hidden bg-white text-black" style={{ width: OMR_PAGE_WIDTH, height: OMR_PAGE_HEIGHT }}>
       <span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] bg-black" />
       <span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] bg-black" />
       <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] bg-black" />
@@ -170,24 +171,24 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         <p>2. หากเปลี่ยนคำตอบ ให้ลบคำตอบเดิมให้สะอาด และห้ามทำเครื่องหมายบนสี่เหลี่ยมดำ 4 มุม</p>
       </section>
 
-      <div data-omr-grid="v1" className="absolute left-[52px] top-[288px] flex gap-[20px]">
+      <div data-omr-grid="v1" className="absolute flex" style={{ left: OMR_GRID.left - 1, top: OMR_GRID.top, gap: OMR_GRID.columnGap }}>
         {columns.map((column, colIndex) => (
-          <div key={colIndex} className="w-[335px] overflow-hidden border border-black" data-omr-column={colIndex}>
-            <div className="grid h-[18px] border-b border-black bg-gray-50 text-center text-[9px] font-bold" style={choiceGridStyle}>
+          <div key={colIndex} className="overflow-hidden border border-black" style={{ width: OMR_GRID.tableWidth }} data-omr-column={colIndex}>
+            <div className="grid border-b border-black bg-gray-50 text-center text-[9px] font-bold" style={{ ...choiceGridStyle, height: OMR_GRID.headerHeight }}>
               <div className="border-r border-black">ข้อ</div>
               {choiceLabels.map((label) => <div key={label}>{label}</div>)}
             </div>
             {column.map((questionNumber) => (
-              <div key={questionNumber} data-omr-question={questionNumber} className="grid h-[14px] border-b border-gray-300 text-center text-[9px] leading-[14px]" style={choiceGridStyle}>
+              <div key={questionNumber} data-omr-question={questionNumber} className="grid border-b border-gray-300 text-center text-[9px]" style={{ ...choiceGridStyle, height: OMR_GRID.rowHeight, lineHeight: `${OMR_GRID.rowHeight}px` }}>
                 <div className="border-r border-gray-300">{questionNumber}</div>
                 {choiceLabels.map((choice, choiceIndex) => (
-                  <div key={choice} className="flex h-[14px] items-center justify-center">
+                  <div key={choice} className="flex items-center justify-center" style={{ height: OMR_GRID.rowHeight }}>
                     <span
                       data-omr-bubble="true"
                       data-omr-question-number={questionNumber}
                       data-omr-choice={choice}
                       aria-label={`ช่องคำตอบข้อ ${questionNumber} ตัวเลือก ${choice}`}
-                      className="block h-3 w-3 rounded-full border-[1.5px] border-black"
+                      className="block rounded-full border-[1.5px] border-black" style={{ width: OMR_GRID.bubbleDiameter, height: OMR_GRID.bubbleDiameter }}
                     />
                   </div>
                 ))}
