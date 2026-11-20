@@ -87,6 +87,7 @@ export function AttendanceManager() {
   const [topic, setTopic] = useState("");
   const [history, setHistory] = useState<AttendanceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -147,23 +148,26 @@ export function AttendanceManager() {
     }
   }, [assignmentId, date, period]);
 
-  const loadHistory = useCallback(async () => {
-    if (!assignmentId) { setHistory([]); return; }
+  const loadHistory = useCallback(async (page = 1, append = false) => {
+    if (!assignmentId) { setHistory([]); setHistoryHasMore(false); return; }
     setHistoryLoading(true);
     try {
-      const params = new URLSearchParams({ teachingAssignmentId: assignmentId });
+      const params = new URLSearchParams({ teachingAssignmentId: assignmentId, page: String(page) });
       const response = await fetch("/api/attendance/history?" + params.toString(), { cache: "no-store" });
-      const data = await response.json() as { sessions?: AttendanceHistoryItem[]; error?: string };
+      const data = await response.json() as { sessions?: AttendanceHistoryItem[]; hasMore?: boolean; error?: string };
       if (!response.ok) throw new Error(data.error || "โหลดประวัติการเช็กชื่อไม่สำเร็จ");
-      setHistory(Array.isArray(data.sessions) ? data.sessions : []);
+      const nextSessions = Array.isArray(data.sessions) ? data.sessions : [];
+      setHistory((current) => append ? [...current, ...nextSessions] : nextSessions);
+      setHistoryHasMore(data.hasMore === true);
     } catch (err) {
-      setHistory([]);
+      if (!append) setHistory([]);
+      setHistoryHasMore(false);
       setError(err instanceof Error ? err.message : "โหลดประวัติการเช็กชื่อไม่สำเร็จ");
     } finally { setHistoryLoading(false); }
   }, [assignmentId]);
 
   useEffect(() => { void loadAttendance(); }, [loadAttendance]);
-  useEffect(() => { void loadHistory(); }, [loadHistory]);
+  useEffect(() => { void loadHistory(1, false); }, [loadHistory]);
 
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("th-TH");
@@ -479,6 +483,7 @@ export function AttendanceManager() {
               })}
             </div>
           )}
+          {historyHasMore && <div className="mt-4 text-center"><button type="button" onClick={() => void loadHistory(Math.floor(history.length / 100) + 1, true)} disabled={historyLoading} className="rounded-full border border-[#EAE8E3] bg-white px-5 py-2.5 text-xs font-bold text-[#4d5f4a] transition hover:bg-[#F9F9F8] disabled:opacity-50">{historyLoading ? "กำลังโหลด..." : "ดูประวัติเพิ่มเติม"}</button></div>}
         </section>
 
         <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
