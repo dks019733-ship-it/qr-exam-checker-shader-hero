@@ -128,6 +128,78 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr = true }: { template: Template; student: { rollNo: string; studentNo: string; name: string }; questions: number[]; qrUrl?: string; showQr?: boolean }) {
   const choiceLabels = getExamChoiceLabels(template.choiceCount || 4, template.choiceLabelStyle || "LATIN");
-  const choiceGridStyle = { gridTemplateColumns: `40px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
-  return <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto min-h-[1123px] w-[794px] bg-white px-[52px] pb-[52px] pt-[52px] text-black"><span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] bg-black" /><span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] bg-black" /><span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] bg-black" /><span aria-hidden="true" data-omr-marker="bottom-right" className="absolute bottom-8 right-8 h-[14px] w-[14px] bg-black" /><header className="flex items-center gap-5 border-b pb-4"><div className="flex h-20 w-20 shrink-0 items-center justify-center">{template.logoDataUrl ? <img src={template.logoDataUrl} alt="" className="max-h-20 max-w-20 object-contain" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full border text-[10px] text-gray-500">ตราโรงเรียน</div>}</div><div className="min-w-0 flex-1 text-center"><h3 className="text-xl font-bold">{template.schoolName || "ชื่อโรงเรียน"}</h3><p className="mt-1 text-sm">{template.examTitle || "ชื่อแบบทดสอบ"}</p><p className="mt-1 text-sm">วิชา {template.subject || "________________"} · ชั้น {template.classLabel || "________"}</p></div>{showQr && <div className="flex w-20 shrink-0 flex-col items-center text-center text-[9px] text-gray-500">{qrUrl ? <img src={qrUrl} alt="QR ประจำตัวนักเรียน" className="h-16 w-16 object-contain" /> : <div className="flex h-16 w-16 items-center justify-center rounded border text-[10px]">QR</div>}<span className="mt-0.5">ประจำตัว</span></div>}</header><div className="mt-4 grid grid-cols-2 gap-x-8 gap-y-2 border-y py-3 text-sm"><div>ชื่อ-สกุล: <span className="font-semibold">{student.name || "________________________"}</span></div><div>รหัสประจำตัวนักเรียน: <span className="font-semibold">{student.studentNo || "____________"}</span></div><div>เลขที่: <span className="font-semibold">{student.rollNo || "____________"}</span></div><div>ห้อง: {template.classLabel || "________"}</div><div>วันที่สอบ: ____ / ____ / ______</div><div>วิชา: {template.subject || "________________"}</div></div><div className="mt-4 rounded-lg border p-3 text-xs"><p className="font-semibold">คำชี้แจง</p><ol className="mt-1 list-decimal space-y-0.5 pl-5"><li>ระบายวงกลมคำตอบให้ทึบเต็มวงด้วยดินสอ 2B เพียงหนึ่งตัวเลือกต่อข้อ</li><li>หากต้องการเปลี่ยนคำตอบ ให้ลบให้สะอาด แล้วระบายคำตอบใหม่</li><li>ห้ามขีด เขียน หรือทำเครื่องหมายบนสี่เหลี่ยมดำ 4 มุมของกระดาษ</li></ol></div><div className="mt-4 grid grid-cols-2 gap-4">{[questions.slice(0, Math.ceil(questions.length / 2)), questions.slice(Math.ceil(questions.length / 2))].map((column, colIndex) => <div key={colIndex} className="overflow-hidden rounded-lg border"><div className="grid border-b bg-gray-50 text-center text-xs font-semibold" style={choiceGridStyle}><div className="border-r p-2">ข้อ</div>{choiceLabels.map((label) => <div key={label} className="p-2">{label}</div>)}</div>{column.map((q) => <div key={q} className="grid border-b last:border-b-0 text-center text-xs" style={choiceGridStyle}><div className="border-r p-1.5 font-semibold">{q}</div>{choiceLabels.map((choice) => <div key={choice} className="flex items-center justify-center p-1.5"><span aria-label={`ช่องคำตอบข้อ ${q} ตัวเลือก ${choice}`} className="block h-6 w-6 rounded-full border-2 border-black" /></div>)}</div>)}</div>)}</div><footer className="mt-5 grid grid-cols-[1fr_220px] gap-5 rounded-lg border p-4 text-xs">{showQr ? <p className="col-span-2 text-[9px] tracking-wide text-gray-500">OMR FORM V1 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ</p> : <p className="col-span-2 text-[9px] tracking-wide text-gray-500">กระดาษคำตอบแบบธรรมดา · ไม่มี QR ระบุตัวนักเรียน</p>}<div><p>หมายเหตุ :</p><div className="mt-7 border-b" /><div className="mt-6 border-b" /></div><div className="border-l pl-5"><p>ลงชื่อผู้ตรวจ</p><div className="mt-8 border-b" /><p className="mt-3">วันที่ ____ / ____ / ______</p></div></footer></div>;
+  const choiceGridStyle = { gridTemplateColumns: `32px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
+  const columns = [questions.slice(0, 50), questions.slice(50, 100)];
+
+  return (
+    <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto h-[1123px] w-[794px] overflow-hidden bg-white text-black">
+      <span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] bg-black" />
+      <span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] bg-black" />
+      <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] bg-black" />
+      <span aria-hidden="true" data-omr-marker="bottom-right" className="absolute bottom-8 right-8 h-[14px] w-[14px] bg-black" />
+
+      <header className="absolute left-[52px] right-[52px] top-[52px] flex h-[80px] items-center gap-4 border-b border-black pb-3">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center">
+          {template.logoDataUrl ? <img src={template.logoDataUrl} alt="" className="max-h-16 max-w-16 object-contain" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full border text-[9px] text-gray-500">ตราโรงเรียน</div>}
+        </div>
+        <div className="min-w-0 flex-1 text-center">
+          <h3 className="truncate text-[16px] font-bold">{template.schoolName || "ชื่อโรงเรียน"}</h3>
+          <p className="mt-1 truncate text-[12px]">{template.examTitle || "ชื่อแบบทดสอบ"}</p>
+          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"} · ชั้น {template.classLabel || "________"}</p>
+        </div>
+        {showQr && (
+          <div className="flex w-16 shrink-0 flex-col items-center text-center text-[8px] text-gray-600">
+            {qrUrl ? <img src={qrUrl} alt="QR ประจำตัวนักเรียน" className="h-14 w-14 object-contain" /> : <div className="flex h-14 w-14 items-center justify-center rounded border text-[9px]">QR</div>}
+            <span className="mt-0.5">ประจำตัว</span>
+          </div>
+        )}
+      </header>
+
+      <section className="absolute left-[52px] right-[52px] top-[145px] grid h-[48px] grid-cols-3 grid-rows-2 gap-x-5 gap-y-1 border-y border-black py-1 text-[11px]">
+        <div className="truncate">ชื่อ-สกุล: <strong>{student.name || "________________"}</strong></div>
+        <div className="truncate">รหัสนักเรียน: <strong>{student.studentNo || "__________"}</strong></div>
+        <div className="truncate">เลขที่: <strong>{student.rollNo || "____"}</strong></div>
+        <div className="truncate">ห้อง: {template.classLabel || "________"}</div>
+        <div>วันที่สอบ: ____ / ____ / ______</div>
+        <div className="truncate">วิชา: {template.subject || "____________"}</div>
+      </section>
+
+      <section className="absolute left-[52px] right-[52px] top-[207px] h-[60px] rounded border border-black px-3 py-2 text-[10px] leading-[15px]">
+        <p className="font-bold">คำชี้แจง</p>
+        <p>1. ระบายวงกลมให้ทึบเต็มวงด้วยดินสอ 2B เพียงหนึ่งตัวเลือกต่อข้อ</p>
+        <p>2. หากเปลี่ยนคำตอบ ให้ลบคำตอบเดิมให้สะอาด และห้ามทำเครื่องหมายบนสี่เหลี่ยมดำ 4 มุม</p>
+      </section>
+
+      <div data-omr-grid="v1" className="absolute left-[52px] top-[288px] flex gap-[20px]">
+        {columns.map((column, colIndex) => (
+          <div key={colIndex} className="w-[335px] overflow-hidden border border-black" data-omr-column={colIndex}>
+            <div className="grid h-[18px] border-b border-black bg-gray-50 text-center text-[9px] font-bold" style={choiceGridStyle}>
+              <div className="border-r border-black">ข้อ</div>
+              {choiceLabels.map((label) => <div key={label}>{label}</div>)}
+            </div>
+            {column.map((questionNumber) => (
+              <div key={questionNumber} data-omr-question={questionNumber} className="grid h-[14px] border-b border-gray-300 text-center text-[9px] leading-[14px]" style={choiceGridStyle}>
+                <div className="border-r border-gray-300">{questionNumber}</div>
+                {choiceLabels.map((choice, choiceIndex) => (
+                  <div key={choice} className="flex h-[14px] items-center justify-center">
+                    <span
+                      data-omr-bubble="true"
+                      data-omr-question-number={questionNumber}
+                      data-omr-choice={choice}
+                      aria-label={`ช่องคำตอบข้อ ${questionNumber} ตัวเลือก ${choice}`}
+                      className="block h-3 w-3 rounded-full border-[1.5px] border-black"
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <footer className="absolute left-[52px] right-[52px] top-[1024px] border-t border-black pt-2 text-[9px] text-gray-600">
+        <p>{showQr ? "OMR FORM V1 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "กระดาษคำตอบแบบธรรมดา · ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
+      </footer>
+    </div>
+  );
 }
