@@ -82,6 +82,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
 
           pausedRef.current = true;
           setWaitingForNext(true);
+          setOmrSummary(null);
           setError("");
           setNotice("อ่าน QR สำเร็จ: เลขที่ " + student.rollNo + " · " + student.name);
           onDetectedRef.current(student.id);
@@ -185,13 +186,18 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       // Re-read the QR from the exact frame used for OMR when native QR decoding is available.
       // This prevents a sheet swap between identity selection and answer capture.
       if (detectorRef.current) {
-        const qrResults = await detectorRef.current.detect(video);
-        const qrPayload = qrResults.map((item) => item.rawValue.trim()).find((value) => value.startsWith(QR_PREFIX));
-        if (qrPayload) {
-          const token = qrPayload.slice(QR_PREFIX.length).trim();
-          const matchedStudent = studentsRef.current.find((item) => item.qrToken === token);
-          if (!matchedStudent) throw new Error("QR บนกระดาษไม่ตรงกับรายชื่อนักเรียนในห้องนี้");
-          onDetectedRef.current(matchedStudent.id);
+        try {
+          const qrResults = await detectorRef.current.detect(video);
+          const qrPayload = qrResults.map((item) => item.rawValue.trim()).find((value) => value.startsWith(QR_PREFIX));
+          if (qrPayload) {
+            const token = qrPayload.slice(QR_PREFIX.length).trim();
+            const matchedStudent = studentsRef.current.find((item) => item.qrToken === token);
+            if (!matchedStudent) throw new Error("QR บนกระดาษไม่ตรงกับรายชื่อนักเรียนในห้องนี้");
+            onDetectedRef.current(matchedStudent.id);
+          }
+        } catch (qrError) {
+          if (qrError instanceof Error && qrError.message.includes("QR บนกระดาษ")) throw qrError;
+          // A transient QR decode failure must not block OMR when the teacher selected a student manually.
         }
       }
       const result = await readOmrImage(video, questionCount, choiceKeys);
@@ -214,6 +220,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
     pausedRef.current = false;
     setWaitingForNext(false);
     setError("");
+    setOmrSummary(null);
     setNotice("กำลังค้นหา QR ของนักเรียนคนถัดไป");
     void scanFrame();
   }
