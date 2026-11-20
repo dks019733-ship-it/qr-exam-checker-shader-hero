@@ -1,4 +1,4 @@
-import { getOmrBubbleCenter, OMR_MARKER_CENTERS, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
+import { getOmrBubbleCenter, OMR_GRID, OMR_MARKER_CENTERS, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
 
 export type OmrIssue = {
   question: number;
@@ -183,7 +183,7 @@ function rectify(source: ImageData, sourcePoints: Point[]) {
 function readBubble(image: ImageData, center: Point) {
   let total = 0;
   let count = 0;
-  const radius = 4.5;
+  const radius = OMR_GRID.bubbleDiameter / 2 - 1.5;
   for (let y = Math.floor(center.y - radius); y <= Math.ceil(center.y + radius); y += 1) {
     for (let x = Math.floor(center.x - radius); x <= Math.ceil(center.x + radius); x += 1) {
       if (x < 0 || y < 0 || x >= image.width || y >= image.height) continue;
