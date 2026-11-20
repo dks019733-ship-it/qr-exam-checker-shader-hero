@@ -102,10 +102,6 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
 
     setError("");
     const Detector = (window as BarcodeWindow).BarcodeDetector;
-    if (!Detector) {
-      setError("เบราว์เซอร์นี้ยังไม่รองรับตัวอ่าน QR ในตัว แนะนำให้เปิดด้วย Chrome หรือ Edge เวอร์ชันล่าสุด หรือเลือกนักเรียนจากรายการแทน");
-      return;
-    }
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setError("การใช้กล้องต้องเปิดเว็บไซต์ผ่าน HTTPS และใช้เบราว์เซอร์ที่อนุญาตการเข้าถึงกล้อง");
       return;
@@ -116,7 +112,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
     try {
       // Create the detector before requesting camera permission so unsupported
       // QR formats fail without leaving a camera stream running.
-      const detector = new Detector({ formats: ["qr_code"] });
+      const detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -150,7 +146,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       activeRef.current = true;
       pausedRef.current = false;
       setWaitingForNext(false);
-      setNotice("กำลังค้นหา QR ของนักเรียน · ถือกล้องให้เห็น QR ชัดเจน");
+      setNotice(detector ? "กำลังค้นหา QR ของนักเรียน · ถือกล้องให้เห็น QR ชัดเจน" : "เบราว์เซอร์นี้อ่าน QR อัตโนมัติไม่ได้ กรุณาเลือกนักเรียนจากรายการ แล้วใช้ปุ่มอ่านคำตอบ OMR");
 
       const videoTrack = stream.getVideoTracks()[0];
       videoTrack?.addEventListener("ended", () => {
@@ -159,7 +155,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
         setError("กล้องหยุดทำงานหรือถูกปิด กรุณาเปิดกล้องอีกครั้ง");
       }, { once: true });
 
-      void scanFrame();
+      if (detector) void scanFrame();
     } catch (cameraError) {
       stopCamera();
       const name = cameraError instanceof Error ? cameraError.name : "";
