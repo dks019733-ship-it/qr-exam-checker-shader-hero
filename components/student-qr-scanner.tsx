@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, ScanLine, ScanSearch } from "lucide-react";
 import { readOmrImage, type OmrIssue } from "@/lib/omr-reader";
+import { parseStudentQrPayloadVersion } from "@/lib/student-qr-format";
 
 type Student = { id: string; qrToken: string; name: string; studentNo: string; rollNo: string };
 type BarcodeResult = { rawValue: string };
@@ -19,17 +20,6 @@ type Props = {
   omrEnabled: boolean;
   onAnswersDetected: (answers: Record<string, string>, issues: OmrIssue[]) => void;
 };
-
-const QR_PREFIX_V2 = "QEC2:";
-const QR_PREFIX_V1 = "QEC1:";
-
-function parseStudentQr(payload: string) {
-  const normalized = payload.trim();
-  const prefix = normalized.startsWith(QR_PREFIX_V2) ? QR_PREFIX_V2 : normalized.startsWith(QR_PREFIX_V1) ? QR_PREFIX_V1 : null;
-  if (!prefix) return null;
-  const token = normalized.slice(prefix.length).trim();
-  return token ? { token, version: prefix === QR_PREFIX_V2 ? 2 : 1 } : null;
-}
 
 export function StudentQrScanner({ students, onStudentDetected, resumeSignal, questionCount, choiceKeys, omrEnabled, onAnswersDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -80,7 +70,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       try {
         const results = await detectorRef.current.detect(video);
         for (const result of results) {
-          const qrCode = parseStudentQr(result.rawValue);
+          const qrCode = parseStudentQrPayloadVersion(result.rawValue);
           if (!qrCode) continue;
 
           const student = studentsRef.current.find((item) => item.qrToken === qrCode.token);
@@ -207,7 +197,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       if (detectorRef.current) {
         try {
           const qrResults = await detectorRef.current.detect(video);
-          const qrCode = qrResults.map((item) => parseStudentQr(item.rawValue)).find((value) => value !== null);
+          const qrCode = qrResults.map((item) => parseStudentQrPayloadVersion(item.rawValue)).find((value) => value !== null);
           if (qrCode) {
             if (qrCode.version === 1) {
               setLegacySheetDetected(true);
