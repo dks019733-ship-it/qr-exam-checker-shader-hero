@@ -134,7 +134,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
   const columns = [questions.slice(0, splitIndex), questions.slice(splitIndex)];
 
   return (
-    <div data-omr-sheet-version="1" className="omr-answer-sheet relative mx-auto overflow-hidden bg-white text-black" style={{ width: OMR_PAGE_WIDTH, height: OMR_PAGE_HEIGHT }}>
+    <div data-omr-sheet-version="2" className="omr-answer-sheet relative mx-auto overflow-hidden bg-white text-black" style={{ width: OMR_PAGE_WIDTH, height: OMR_PAGE_HEIGHT }}>
       <span aria-hidden="true" data-omr-marker="top-left" className="absolute left-8 top-8 h-[14px] w-[14px] border-[7px] border-black" />
       <span aria-hidden="true" data-omr-marker="top-right" className="absolute right-8 top-8 h-[14px] w-[14px] border-[7px] border-black" />
       <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] border-[7px] border-black" />
@@ -200,7 +200,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
       </div>
 
       <footer className="absolute left-[52px] right-[52px] top-[1024px] border-t border-black pt-2 text-[9px] text-gray-600">
-        <p>{showQr ? "OMR FORM V1 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "กระดาษคำตอบแบบธรรมดา · ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
+        <p>{showQr ? "OMR FORM V2 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "กระดาษคำตอบแบบธรรมดา · ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
       </footer>
     </div>
   );
