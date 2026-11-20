@@ -188,7 +188,8 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
           <h3 className="truncate text-[16px] font-bold">{template.schoolName || "ชื่อโรงเรียน"}</h3>
           <p className="mt-1 truncate text-[12px]">{template.examTitle || "ชื่อแบบทดสอบ"}</p>
           <p className="mt-1 truncate text-[11px]">รหัสวิชา {template.subjectCode || "____________"}</p>
-          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"}</p>\n          <p className="mt-1 truncate text-[11px]">{classDisplay.grade ? `ชั้น${classDisplay.grade}` : "ระดับชั้น: __________"} · ห้อง {classDisplay.room || "____"}</p>
+          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"}</p>
+          <p className="mt-1 truncate text-[11px]">{classDisplay.grade ? `ชั้น${classDisplay.grade}` : "ระดับชั้น: __________"} · ห้อง {classDisplay.room || "____"}</p>
         </div>
         {showQr && (
           <div className="flex w-16 shrink-0 flex-col items-center text-center text-[8px] text-gray-600">
