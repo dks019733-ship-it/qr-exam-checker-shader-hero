@@ -100,6 +100,9 @@ jobs:
       - name: Guardian unit tests
         run: npm run test:guardian
 
+      - name: OMR geometry regression tests
+        run: npm run test:omr
+
       - name: Guardian PostgreSQL concurrency tests
         run: npm run test:guardian:integration
 
