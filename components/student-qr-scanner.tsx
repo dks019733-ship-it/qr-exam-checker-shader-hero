@@ -16,12 +16,13 @@ type Props = {
   resumeSignal: number;
   questionCount: number;
   choiceKeys: string[];
+  omrEnabled: boolean;
   onAnswersDetected: (answers: Record<string, string>, issues: OmrIssue[]) => void;
 };
 
 const QR_PREFIX = "QEC1:";
 
-export function StudentQrScanner({ students, onStudentDetected, resumeSignal, questionCount, choiceKeys, onAnswersDetected }: Props) {
+export function StudentQrScanner({ students, onStudentDetected, resumeSignal, questionCount, choiceKeys, omrEnabled, onAnswersDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorLike | null>(null);
@@ -175,6 +176,10 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
 
   async function scanAnswers() {
     const video = videoRef.current;
+    if (!omrEnabled) {
+      setError("แม่แบบกระดาษคำตอบไม่ตรงกับจำนวนข้อหรือตัวเลือกของข้อสอบที่เลือก");
+      return;
+    }
     if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || omrBusy) {
       setError("กล้องยังจับภาพไม่พร้อม กรุณารอสักครู่แล้วลองใหม่");
       return;
@@ -257,7 +262,7 @@ export function StudentQrScanner({ students, onStudentDetected, resumeSignal, qu
       <div className={cameraOpen ? "mt-4 overflow-hidden rounded-xl border border-[#d6dfd7] bg-black" : "hidden"}>
         <video ref={videoRef} muted playsInline autoPlay className="max-h-[420px] min-h-[220px] w-full object-contain" aria-label="ภาพจากกล้องสำหรับอ่าน QR" />
       </div>
-      {cameraOpen && <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void scanAnswers()} disabled={omrBusy} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:opacity-60"><ScanSearch className="h-4 w-4" />{omrBusy ? "กำลังอ่านวงกลม..." : "อ่านคำตอบจากภาพ"}</button><span className="text-[11px] text-[#718276]">ใช้กับกระดาษ OMR FORM V1 ที่พิมพ์จากระบบ</span></div>}
+      {cameraOpen && <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={() => void scanAnswers()} disabled={omrBusy || !omrEnabled} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#173d2b] disabled:opacity-60"><ScanSearch className="h-4 w-4" />{omrBusy ? "กำลังอ่านวงกลม..." : omrEnabled ? "อ่านคำตอบจากภาพ" : "ตั้งค่าแม่แบบให้ตรงก่อน"}</button><span className="text-[11px] text-[#718276]">{omrEnabled ? "ใช้กับกระดาษ OMR FORM V1 ที่พิมพ์จากระบบ" : "จำนวนข้อและตัวเลือกต้องตรงกับข้อสอบที่เลือก"}</span></div>}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-xs text-[#536b5b]">{notice}</p>
         {waitingForNext && <button type="button" onClick={scanNext} className="min-h-9 rounded-lg border border-[#cbd9ce] bg-white px-3 text-xs font-semibold text-[#1d4b35]">สแกนคนถัดไป</button>}
