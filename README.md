@@ -80,7 +80,7 @@ This package combines the UX-complete branch with the Shader Hero branch.
 - The UX-complete dashboard and answer-sheet editor are retained.
 - Student, classroom, answer-sheet template, ownership checks, and API routes are retained.
 - The answer-sheet editor supports school logo/name, exam title, subject, class, question count, student name/ID, and QR token preview.
-- The OMR scanner, Google Drive file operations, exports, backup/recovery, and production hardening remain planned implementation work rather than mocked as complete.
+- The scan workspace now supports live camera QR identification for students on browsers that expose the native BarcodeDetector API. The QR token is matched only against students in the selected exam's class; the camera can remain open for consecutive sheets. Answer bubbles still require teacher review/input: automatic OMR recognition, perspective correction, image calibration, and phone-to-desktop live pairing are not implemented.
 
 
 ## Vercel deployment readiness
@@ -103,7 +103,7 @@ For a deployed domain, configure the Google OAuth client with:
 
 ### Current status
 
-Deployment scaffolding is ready, but production Google credentials and a production PostgreSQL database must be supplied outside source control. The OMR scanner, real Google Drive file workflow, review/confirmation workflow, exports, and backup/recovery are not yet complete and should not be represented as production-ready.
+Deployment scaffolding is ready, but production Google credentials and a production PostgreSQL database must be supplied outside source control. Automatic OMR recognition, perspective correction, real Google Drive file workflow, exports, and backup/recovery are not yet complete and should not be represented as production-ready. The current camera feature reads student QR codes only; it does not read answer bubbles.
 
 
 ## System Guardian and LINE task queue
