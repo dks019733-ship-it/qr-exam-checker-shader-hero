@@ -205,18 +205,24 @@ async function renderSheetToPng(element: HTMLElement): Promise<Uint8Array> {
       windowWidth: Math.max(window.innerWidth, PAGE_WIDTH),
     });
 
-    let png: Blob;
     try {
-      png = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("สร้างภาพกระดาษคำตอบไม่สำเร็จ")), "image/png");
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "SecurityError") {
-        throw new Error("ส่งออก PDF ไม่ได้ เพราะเบราว์เซอร์ปฏิเสธการอ่านภาพจากแหล่งภายนอก กรุณาตรวจสอบรูปภาพในกระดาษคำตอบ");
+      let png: Blob;
+      try {
+        png = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("สร้างภาพกระดาษคำตอบไม่สำเร็จ")), "image/png");
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "SecurityError") {
+          throw new Error("ส่งออก PDF ไม่ได้ เพราะเบราว์เซอร์ปฏิเสธการอ่านภาพจากแหล่งภายนอก กรุณาตรวจสอบรูปภาพในกระดาษคำตอบ");
+        }
+        throw error;
       }
-      throw error;
+      return new Uint8Array(await png.arrayBuffer());
+    } finally {
+      // Release the large 3x backing store before the next page in a class batch.
+      canvas.width = 0;
+      canvas.height = 0;
     }
-    return new Uint8Array(await png.arrayBuffer());
   } finally {
     stagingHost.remove();
   }
