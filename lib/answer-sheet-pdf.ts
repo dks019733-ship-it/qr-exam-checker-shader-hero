@@ -23,18 +23,32 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 
 async function fetchResourceAsDataUrl(source: string): Promise<string> {
   if (!source || source.startsWith("data:") || source.startsWith("#")) return source;
-  const url = new URL(source, document.baseURI);
+
+  let url: URL;
+  try {
+    url = new URL(source, document.baseURI);
+  } catch {
+    throw new Error("URL ของรูปภาพหรือทรัพยากรในกระดาษคำตอบไม่ถูกต้อง");
+  }
   if (url.protocol !== "http:" && url.protocol !== "https:") return source;
+
+  const resourceLabel = url.origin + url.pathname;
   let response: Response;
   try {
     response = await fetch(url.href, {
       credentials: url.origin === window.location.origin ? "same-origin" : "omit",
       mode: "cors",
+      cache: "force-cache",
     });
-  } catch {
-    throw new Error("ไม่สามารถฝังรูปภาพหรือทรัพยากรจากภายนอกลงใน PDF ได้ กรุณาใช้ไฟล์ที่อยู่บนเว็บไซต์หรืออัปโหลดไฟล์ใหม่");
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "network/CORS error";
+    console.error("[AnswerSheetPDF] resource fetch failed", resourceLabel, reason);
+    throw new Error("ฝังรูปภาพหรือทรัพยากรใน PDF ไม่สำเร็จ: " + resourceLabel + " (" + reason + ")");
   }
-  if (!response.ok) throw new Error("โหลดรูปภาพหรือทรัพยากรสำหรับ PDF ไม่สำเร็จ");
+  if (!response.ok) {
+    console.error("[AnswerSheetPDF] resource returned HTTP error", resourceLabel, response.status);
+    throw new Error("โหลดทรัพยากรใน PDF ไม่สำเร็จ: " + resourceLabel + " (HTTP " + response.status + ")");
+  }
   return blobToDataUrl(await response.blob());
 }
 
