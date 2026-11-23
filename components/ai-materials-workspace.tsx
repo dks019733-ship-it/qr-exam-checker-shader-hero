@@ -107,7 +107,7 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
           <label className="block text-sm font-medium text-slate-700">หัวข้อ<input required maxLength={160} value={topic} onChange={(e) => setTopic(e.target.value)} className={fieldClass} placeholder="เช่น ระบบสุริยะ" /></label>
           <label className="block text-sm font-medium text-slate-700">ตัวชี้วัดหรือจุดประสงค์<textarea rows={3} maxLength={3000} value={objectives} onChange={(e) => setObjectives(e.target.value)} className={fieldClass} placeholder="ระบุสิ่งที่ต้องการให้นักเรียนรู้หรือทำได้" /></label>
 
-          {kind === "exam" ? (
+          {kind !== "document" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">จำนวนข้อ (1–40)<input required type="number" min={1} max={40} value={questionCount} onChange={(e) => setQuestionCount(Number(e.target.value))} className={fieldClass} /></label>
               <label className="block text-sm font-medium text-slate-700">ความยาก<select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={fieldClass}><option>ง่าย</option><option>ปานกลาง</option><option>ยาก</option></select></label>
@@ -141,7 +141,7 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
                 <p className="mt-1 text-xs text-slate-500">{item.subject} · {item.grade_level} · {kind === "google_form" ? "แบบทดสอบออนไลน์" : kind === "exam" ? "ข้อสอบกระดาษ" : "เอกสาร"}</p>
               </button></div>
             ))}
-            {!materials.length && !pageError && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มี{kind === "exam" ? "ข้อสอบ" : "เอกสาร"}ที่สร้างไว้</p>}
+            {!materials.length && !pageError && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มี{kind === "google_form" ? "แบบทดสอบออนไลน์" : kind === "exam" ? "ข้อสอบกระดาษ" : "เอกสาร"}ที่สร้างไว้</p>}
           </div>
         </section>
       </div>
