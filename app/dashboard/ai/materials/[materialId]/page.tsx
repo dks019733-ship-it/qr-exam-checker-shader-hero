@@ -89,7 +89,7 @@ export default function MaterialReviewPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-5 py-8 sm:px-8 print:max-w-none print:px-0 print:py-0">
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => router.push(material.kind === "document" ? "/dashboard/documents" : material.kind === "google_form" ? "/dashboard/google-forms" : "/dashboard/exams")} className="text-sm text-brand-700 hover:underline">← กลับไปหน้าจัดการ{material.kind === "document" ? "เอกสาร" : "ข้อสอบ"}</button>
+        <button onClick={() => router.push(material.kind === "document" ? "/dashboard/documents" : material.kind === "google_form" ? "/dashboard/google-forms" : "/dashboard/exams")} className="text-sm text-brand-700 hover:underline">← กลับไปหน้าจัดการ{material.kind === "document" ? "เอกสาร" : material.kind === "google_form" ? "Google Forms" : "ข้อสอบกระดาษ"}</button>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${locked ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{locked ? "ครูอนุมัติแล้ว" : "รอครูตรวจสอบ"}</span>
       </div>
 
@@ -123,7 +123,7 @@ export default function MaterialReviewPage() {
         {!cuteWorksheet && <p className="mb-5 text-sm text-slate-500">หัวข้อ: {material.topic}</p>}
         {!!content.overview?.trim() && <label className="mb-5 block text-sm font-medium text-slate-700">ภาพรวม<textarea disabled={locked} rows={3} value={content.overview || ""} onChange={(e) => setContent((current) => ({ ...current, overview: e.target.value }))} className={`${inputClass} mt-1`} /></label>}
 
-        {material.kind === "exam" ? (
+        {(material.kind === "exam" || material.kind === "google_form") ? (
           <>
             <label className="mb-5 block text-sm font-medium text-slate-700">คำชี้แจง<textarea disabled={locked} rows={2} value={content.instructions || ""} onChange={(e) => setContent((current) => ({ ...current, instructions: e.target.value }))} className={`${inputClass} mt-1`} /></label>
             <div className="space-y-5">
