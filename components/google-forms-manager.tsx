@@ -23,7 +23,7 @@ export function GoogleFormsManager() {
     setError("");
     try {
       const result = await materialsApi.list();
-      setMaterials(result.materials.filter((item) => item.kind === "exam"));
+      setMaterials(result.materials.filter((item) => item.kind === "google_form" || Boolean(item.google_form)));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "โหลดรายการข้อสอบไม่สำเร็จ");
     } finally {
@@ -79,12 +79,12 @@ export function GoogleFormsManager() {
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold tracking-[.18em] text-[#c6ddcb]"><FileSpreadsheet className="h-4 w-4" />ONLINE ASSESSMENT</div>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Google Forms</h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-[#e0eee3]">จัดการแบบทดสอบออนไลน์ที่สร้างจากข้อสอบซึ่งครูตรวจทานและอนุมัติแล้ว</p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[#e0eee3]">สร้างแบบทดสอบออนไลน์ด้วย AI แยกจากข้อสอบกระดาษ ตรวจแก้และอนุมัติก่อนสร้าง Google Form</p>
             </div>
-            <Link href="/dashboard/exams" className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#1b4932] transition hover:bg-[#edf5ee] sm:self-auto">ไปหน้าจัดการข้อสอบ <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/dashboard/ai/materials?kind=google_form" className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#1b4932] transition hover:bg-[#edf5ee] sm:self-auto">สร้างฟอร์มด้วย AI <Plus className="h-4 w-4" /></Link>
           </div>
           <div className="grid grid-cols-2 divide-x divide-[#e7eee8] sm:grid-cols-3">
-            <div className="px-6 py-5"><p className="text-xs text-[#708477]">ข้อสอบทั้งหมด</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "—" : materials.length}</p></div>
+            <div className="px-6 py-5"><p className="text-xs text-[#708477]">แบบทดสอบออนไลน์</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "—" : materials.length}</p></div>
             <div className="px-6 py-5"><p className="text-xs text-[#708477]">อนุมัติแล้ว</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "—" : approvedCount}</p></div>
             <div className="col-span-2 border-t border-[#e7eee8] px-6 py-5 sm:col-span-1 sm:border-l sm:border-t-0"><p className="text-xs text-[#708477]">สร้างฟอร์มแล้ว</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "—" : formCount}</p></div>
           </div>
@@ -92,7 +92,7 @@ export function GoogleFormsManager() {
 
         <section className="mt-6 rounded-[24px] border border-[#dce9df] bg-white p-5 shadow-[0_12px_38px_-34px_rgba(19,60,39,.4)] sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="text-lg font-semibold">แบบทดสอบของฉัน</h2><p className="mt-1 text-sm text-[#75867a]">แสดงเฉพาะงานประเภทข้อสอบ ไม่รวมใบงานหรือเอกสาร</p></div>
+            <div><h2 className="text-lg font-semibold">Google Forms ของฉัน</h2><p className="mt-1 text-sm text-[#75867a]">แสดงเฉพาะแบบทดสอบออนไลน์ที่สร้างแยกจากข้อสอบกระดาษ</p></div>
             <button type="button" onClick={() => void load(true)} disabled={refreshing || loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dce9df] px-3 py-2 text-sm font-medium text-[#315b41] transition hover:bg-[#f3f8f4] disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />รีเฟรช</button>
           </div>
 
@@ -114,7 +114,7 @@ export function GoogleFormsManager() {
                     <p className="mt-1 text-xs text-[#7b8a7e]">{material.subject} · {material.grade_level} · {material.content.questions?.length || 0} ข้อ</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <Link href={`/dashboard/ai/materials/${material.id}`} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#dce9df] px-3 py-2 text-xs font-semibold text-[#345a40] hover:bg-[#f1f7f2]">ดูข้อสอบ</Link>
+                    <Link href={`/dashboard/ai/materials/${material.id}`} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#dce9df] px-3 py-2 text-xs font-semibold text-[#345a40] hover:bg-[#f1f7f2]">ตรวจแบบทดสอบ</Link>
                     {material.google_form ? (
                       <>
                         <a href={material.google_form.responder_url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#1d4b35] px-3 py-2 text-xs font-semibold text-white hover:bg-[#163d2b]">ลิงก์นักเรียน <ExternalLink className="h-3.5 w-3.5" /></a>
@@ -130,9 +130,9 @@ export function GoogleFormsManager() {
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-[#d5e4d8] bg-[#f8fbf8] px-5 py-12 text-center">
               <FileSpreadsheet className="mx-auto h-8 w-8 text-[#75917b]" />
-              <h3 className="mt-3 font-semibold text-[#294a34]">ยังไม่มีข้อสอบที่พร้อมสร้าง Google Forms</h3>
-              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#78877b]">ไปที่หน้าจัดการข้อสอบเพื่อสร้างข้อสอบ ตรวจคำถามและเฉลย แล้วอนุมัติก่อนกลับมาสร้าง Google Forms</p>
-              <Link href="/dashboard/exams" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#163d2b]">ไปหน้าจัดการข้อสอบ <ArrowUpRight className="h-4 w-4" /></Link>
+              <h3 className="mt-3 font-semibold text-[#294a34]">ยังไม่มีแบบทดสอบออนไลน์</h3>
+              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#78877b]">เริ่มสร้างแบบทดสอบออนไลน์ด้วย AI ได้ที่หน้านี้ โดยตรวจคำถามและเฉลยก่อนอนุมัติและสร้าง Google Forms</p>
+              <Link href="/dashboard/ai/materials?kind=google_form" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#163d2b]">สร้างแบบทดสอบด้วย AI <ArrowUpRight className="h-4 w-4" /></Link>
             </div>
           )}
         </section>

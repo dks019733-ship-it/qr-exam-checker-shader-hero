@@ -47,7 +47,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ma
     const { materialId } = await params;
     const material = await prisma.generatedMaterial.findFirst({ where: { id: materialId, ownerId }, include: { googleForm: true } });
     if (!material) throw new AIRequestError("ไม่พบข้อสอบนี้ หรือไม่มีสิทธิ์เข้าถึง", 404);
-    if (material.kind !== "exam") throw new AIRequestError("สร้าง Google Form ได้จากชิ้นงานประเภทข้อสอบเท่านั้น", 400);
+    if (material.kind !== "exam" && material.kind !== "google_form") throw new AIRequestError("สร้าง Google Form ได้จากชิ้นงานประเภทข้อสอบหรือแบบทดสอบออนไลน์เท่านั้น", 400);
     if (material.status !== "approved") throw new AIRequestError("กรุณาตรวจแก้และอนุมัติข้อสอบก่อนสร้าง Google Form", 409);
     if (material.googleForm) return Response.json({ googleForm: { form_id: material.googleForm.formId, edit_url: material.googleForm.editUrl, responder_url: material.googleForm.responderUrl } });
 

@@ -25,7 +25,7 @@ export default function MaterialReviewPage() {
         setMaterial(row);
         setTitle(row.title);
         const reviewedContent = row.content || {};
-        setContent(row.kind === "exam" && reviewedContent.questions
+        setContent((row.kind === "exam" || row.kind === "google_form") && reviewedContent.questions
           ? { ...reviewedContent, totalPoints: reviewedContent.questions.length, questions: reviewedContent.questions.map((question) => ({ ...question, points: 1 })) }
           : row.kind === "document" && row.document_type === "ใบงาน"
             ? { ...reviewedContent, worksheetStyle: reviewedContent.worksheetStyle || "cute" }
@@ -89,7 +89,7 @@ export default function MaterialReviewPage() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-5 py-8 sm:px-8 print:max-w-none print:px-0 print:py-0">
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => router.push(material.kind === "document" ? "/dashboard/documents" : "/dashboard/exams")} className="text-sm text-brand-700 hover:underline">← กลับไปหน้าจัดการ{material.kind === "document" ? "เอกสาร" : "ข้อสอบ"}</button>
+        <button onClick={() => router.push(material.kind === "document" ? "/dashboard/documents" : material.kind === "google_form" ? "/dashboard/google-forms" : "/dashboard/exams")} className="text-sm text-brand-700 hover:underline">← กลับไปหน้าจัดการ{material.kind === "document" ? "เอกสาร" : material.kind === "google_form" ? "Google Forms" : "ข้อสอบกระดาษ"}</button>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${locked ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{locked ? "ครูอนุมัติแล้ว" : "รอครูตรวจสอบ"}</span>
       </div>
 
@@ -118,12 +118,12 @@ export default function MaterialReviewPage() {
             </div>
           </div>
         )}
-        <p className={`mb-2 text-sm font-medium text-brand-700 ${cuteWorksheet ? "print:hidden" : ""}`}>{material.kind === "exam" ? "ข้อสอบ" : material.document_type || "เอกสาร"} · {material.subject} · {material.grade_level}</p>
+        <p className={`mb-2 text-sm font-medium text-brand-700 ${cuteWorksheet ? "print:hidden" : ""}`}>{material.kind === "google_form" ? "แบบทดสอบออนไลน์" : material.kind === "exam" ? "ข้อสอบกระดาษ" : material.document_type || "เอกสาร"} · {material.subject} · {material.grade_level}</p>
         {!cuteWorksheet && <input aria-label="ชื่อชิ้นงาน" disabled={locked} value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputClass} mb-4 text-2xl font-semibold`} />}
         {!cuteWorksheet && <p className="mb-5 text-sm text-slate-500">หัวข้อ: {material.topic}</p>}
         {!!content.overview?.trim() && <label className="mb-5 block text-sm font-medium text-slate-700">ภาพรวม<textarea disabled={locked} rows={3} value={content.overview || ""} onChange={(e) => setContent((current) => ({ ...current, overview: e.target.value }))} className={`${inputClass} mt-1`} /></label>}
 
-        {material.kind === "exam" ? (
+        {(material.kind === "exam" || material.kind === "google_form") ? (
           <>
             <label className="mb-5 block text-sm font-medium text-slate-700">คำชี้แจง<textarea disabled={locked} rows={2} value={content.instructions || ""} onChange={(e) => setContent((current) => ({ ...current, instructions: e.target.value }))} className={`${inputClass} mt-1`} /></label>
             <div className="space-y-5">
@@ -189,9 +189,9 @@ export default function MaterialReviewPage() {
             <button disabled={saving} onClick={() => save("pending_review")} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">{saving ? "กำลังบันทึก..." : "บันทึกฉบับตรวจแก้"}</button>
             <button disabled={saving} onClick={() => save("approved")} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{saving ? "กำลังบันทึก..." : "ตรวจแล้ว อนุมัติและล็อกฉบับนี้"}</button>
           </> : <>
-            {(material.kind !== "document" || !cuteWorksheet) && <button onClick={downloadDocx} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">ดาวน์โหลด Word (.docx)</button>}
-            {(material.kind !== "document" || cuteWorksheet) && <button onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{cuteWorksheet ? "พิมพ์ / บันทึกใบงาน PDF" : "พิมพ์ / บันทึกเป็น PDF"}</button>}
-            {material.kind === "exam" && <button onClick={() => router.push("/dashboard/google-forms")} className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">ไปจัดการ Google Forms</button>}
+            {(material.kind === "exam" || (material.kind === "document" && !cuteWorksheet)) && <button onClick={downloadDocx} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">ดาวน์โหลด Word (.docx)</button>}
+            {(material.kind === "exam" || (material.kind === "document" && cuteWorksheet)) && <button onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{cuteWorksheet ? "พิมพ์ / บันทึกใบงาน PDF" : "พิมพ์ / บันทึกเป็น PDF"}</button>}
+            {(material.kind === "exam" || material.kind === "google_form") && <button onClick={() => router.push("/dashboard/google-forms")} className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">ไปจัดการ Google Forms</button>}
             {material.kind === "document" && material.document_type === "ใบงาน" && <p className="self-center text-xs text-slate-500">{cuteWorksheet ? "พิมพ์บนกระดาษ A4 แล้วเลือก “บันทึกเป็น PDF” เพื่อได้ใบงานพร้อมพิมพ์" : "ดาวน์โหลด Word เพื่อแก้ไขต่อ หรือพิมพ์เป็น PDF ได้เช่นกัน"}</p>}
           </>}
         </div>

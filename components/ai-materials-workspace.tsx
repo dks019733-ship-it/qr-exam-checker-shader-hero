@@ -62,7 +62,7 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
         topic,
         learningObjectives: objectives,
         difficulty,
-        ...(kind === "exam"
+        ...(kind !== "document"
           ? { questionCount, questionTypes: ["ปรนัย", "อัตนัยสั้น"] }
           : { documentType, ...(documentType === "ใบงาน" ? { worksheetStyle } : {}) }),
       });
@@ -89,8 +89,8 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
     <main className="mx-auto min-h-screen w-full max-w-6xl bg-[#f7f6f0] px-4 py-6 text-[#303832] sm:px-8 sm:py-8">
       <header className="mb-7 flex items-center justify-between">
         <div>
-          <button onClick={() => router.push(kind === "exam" ? "/dashboard/exams" : "/dashboard/documents")} className="mb-3 text-sm text-[#5c7057] hover:underline">← กลับหน้าจัดการ{kind === "exam" ? "ข้อสอบ" : "เอกสาร"}</button>
-          <h1 className="text-2xl font-semibold text-slate-900">{kind === "exam" ? "สร้างข้อสอบด้วย AI" : "สร้างเอกสารด้วย AI"}</h1>
+          <button onClick={() => router.push(kind === "document" ? "/dashboard/documents" : kind === "google_form" ? "/dashboard/google-forms" : "/dashboard/exams")} className="mb-3 text-sm text-[#5c7057] hover:underline">← กลับหน้าจัดการ{kind === "google_form" ? "Google Forms" : kind === "exam" ? "ข้อสอบกระดาษ" : "เอกสาร"}</button>
+          <h1 className="text-2xl font-semibold text-slate-900">{kind === "google_form" ? "สร้าง Google Forms ด้วย AI" : kind === "exam" ? "สร้างข้อสอบกระดาษด้วย AI" : "สร้างเอกสารด้วย AI"}</h1>
           <p className="mt-1 text-sm text-slate-500">AI จะสร้างเป็นร่างให้ครูตรวจ แก้ไข และอนุมัติก่อนใช้งาน</p>
         </div>
       </header>
@@ -107,7 +107,7 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
           <label className="block text-sm font-medium text-slate-700">หัวข้อ<input required maxLength={160} value={topic} onChange={(e) => setTopic(e.target.value)} className={fieldClass} placeholder="เช่น ระบบสุริยะ" /></label>
           <label className="block text-sm font-medium text-slate-700">ตัวชี้วัดหรือจุดประสงค์<textarea rows={3} maxLength={3000} value={objectives} onChange={(e) => setObjectives(e.target.value)} className={fieldClass} placeholder="ระบุสิ่งที่ต้องการให้นักเรียนรู้หรือทำได้" /></label>
 
-          {kind === "exam" ? (
+          {kind !== "document" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">จำนวนข้อ (1–40)<input required type="number" min={1} max={40} value={questionCount} onChange={(e) => setQuestionCount(Number(e.target.value))} className={fieldClass} /></label>
               <label className="block text-sm font-medium text-slate-700">ความยาก<select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className={fieldClass}><option>ง่าย</option><option>ปานกลาง</option><option>ยาก</option></select></label>
@@ -132,16 +132,16 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
         </form>
 
         <section className="rounded-3xl border border-[#e2e6de] bg-[#fffefa] p-5 shadow-sm sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-slate-900">{kind === "exam" ? "ข้อสอบที่สร้างไว้" : "เอกสารที่สร้างไว้"}</h2><p className="mt-1 text-sm text-slate-500">เลือกงานเพื่อลบหลายรายการพร้อมกันได้</p></div>{selectedIds.length > 0 && <button onClick={() => void deleteSelected()} disabled={loading} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700">ลบที่เลือก ({selectedIds.length})</button>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-semibold text-slate-900">{kind === "google_form" ? "แบบทดสอบออนไลน์ที่สร้างไว้" : kind === "exam" ? "ข้อสอบกระดาษที่สร้างไว้" : "เอกสารที่สร้างไว้"}</h2><p className="mt-1 text-sm text-slate-500">เลือกงานเพื่อลบหลายรายการพร้อมกันได้</p></div>{selectedIds.length > 0 && <button onClick={() => void deleteSelected()} disabled={loading} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700">ลบที่เลือก ({selectedIds.length})</button>}</div>
           <div className="mt-4 space-y-3">
             {materials.map((item) => (
               <div key={item.id} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 transition hover:border-brand-300 hover:bg-brand-50/30"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} aria-label={`เลือก ${item.title} เพื่อลบ`} className="!w-4 !min-w-4 !p-0 !m-0 mt-1 shrink-0" /><button onClick={() => router.push(`/dashboard/ai/materials/${item.id}`)} className="min-w-0 flex-1 text-left">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{item.status === "approved" ? "อนุมัติแล้ว" : "รอครูตรวจ"}</span>
                 <h3 className="mt-3 font-medium text-slate-900">{item.title}</h3>
-                <p className="mt-1 text-xs text-slate-500">{item.subject} · {item.grade_level} · {kind === "exam" ? "ข้อสอบ" : "เอกสาร"}</p>
+                <p className="mt-1 text-xs text-slate-500">{item.subject} · {item.grade_level} · {kind === "google_form" ? "แบบทดสอบออนไลน์" : kind === "exam" ? "ข้อสอบกระดาษ" : "เอกสาร"}</p>
               </button></div>
             ))}
-            {!materials.length && !pageError && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มี{kind === "exam" ? "ข้อสอบ" : "เอกสาร"}ที่สร้างไว้</p>}
+            {!materials.length && !pageError && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">ยังไม่มี{kind === "google_form" ? "แบบทดสอบออนไลน์" : kind === "exam" ? "ข้อสอบกระดาษ" : "เอกสาร"}ที่สร้างไว้</p>}
           </div>
         </section>
       </div>

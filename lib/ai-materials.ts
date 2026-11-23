@@ -1,6 +1,6 @@
 import { AIRequestError, generateWithGemini } from "@/lib/ai-server";
 
-export type MaterialKind = "exam" | "document";
+export type MaterialKind = "exam" | "document" | "google_form";
 export type MaterialStatus = "pending_review" | "approved";
 
 export interface ExamQuestion {
@@ -44,7 +44,7 @@ export function normalizeContent(kind: MaterialKind, value: unknown): MaterialCo
     learningObjectives: Array.isArray(raw.learningObjectives) ? raw.learningObjectives.filter((item: unknown): item is string => typeof item === "string").slice(0, 30).map((item: string) => item.slice(0, 1000)) : [],
   };
   if (raw.worksheetStyle === "cute" || raw.worksheetStyle === "editable") content.worksheetStyle = raw.worksheetStyle;
-  if (kind === "exam") {
+  if (kind !== "document") {
     if (!Array.isArray(raw.questions) || raw.questions.length === 0 || raw.questions.length > 40) throw new AIRequestError("AI ไม่ได้สร้างรายการข้อสอบที่ถูกต้อง กรุณาลองใหม่", 502);
     content.instructions = typeof raw.instructions === "string" ? raw.instructions : "";
     content.questions = raw.questions.map((item: any, index: number) => {
@@ -77,7 +77,7 @@ export function normalizeContent(kind: MaterialKind, value: unknown): MaterialCo
 }
 
 export async function generateMaterialContent(input: GenerateMaterialInput) {
-  if (!input || !["exam", "document"].includes(input.kind)) throw new AIRequestError("ประเภทชิ้นงานไม่ถูกต้อง", 400);
+  if (!input || !["exam", "document", "google_form"].includes(input.kind)) throw new AIRequestError("ประเภทชิ้นงานไม่ถูกต้อง", 400);
   for (const [label, value] of [["วิชา", input.subject], ["ระดับชั้น", input.gradeLevel], ["หัวข้อ", input.topic]] as const) {
     if (typeof value !== "string" || !value.trim() || value.length > 160) throw new AIRequestError(`กรุณากรอก${label} (ไม่เกิน 160 ตัวอักษร)`, 400);
   }
@@ -85,7 +85,7 @@ export async function generateMaterialContent(input: GenerateMaterialInput) {
   if (input.difficulty !== undefined && (typeof input.difficulty !== "string" || input.difficulty.length > 160)) throw new AIRequestError("รายละเอียดความยากไม่ถูกต้อง", 400);
   if (input.documentType !== undefined && (typeof input.documentType !== "string" || input.documentType.length > 100)) throw new AIRequestError("ประเภทเอกสารไม่ถูกต้อง", 400);
   if (input.worksheetStyle !== undefined && !["cute", "editable"].includes(input.worksheetStyle)) throw new AIRequestError("รูปแบบใบงานไม่ถูกต้อง", 400);
-  if (input.kind === "exam" && (!Number.isInteger(input.questionCount ?? 10) || (input.questionCount ?? 10) < 1 || (input.questionCount ?? 10) > 40)) throw new AIRequestError("จำนวนข้อสอบต้องอยู่ระหว่าง 1 ถึง 40 ข้อ", 400);
+  if (input.kind !== "document" && (!Number.isInteger(input.questionCount ?? 10) || (input.questionCount ?? 10) < 1 || (input.questionCount ?? 10) > 40)) throw new AIRequestError("จำนวนข้อสอบต้องอยู่ระหว่าง 1 ถึง 40 ข้อ", 400);
   if (input.questionTypes !== undefined && (!Array.isArray(input.questionTypes) || input.questionTypes.length > 5 || input.questionTypes.some((type) => typeof type !== "string" || type.length > 50))) throw new AIRequestError("รูปแบบข้อสอบไม่ถูกต้อง", 400);
   const objectives = input.learningObjectives?.trim() || "ให้สอดคล้องกับหัวข้อและระดับชั้น";
   const documentStyle = input.documentType !== "ใบงาน"
@@ -118,9 +118,18 @@ export async function generateMaterialContent(input: GenerateMaterialInput) {
     "- ไม่ใส่เฉลยในใบงาน; เนื้อหาทุกส่วนต้องสอดคล้องกับวิชา ระดับชั้น และหัวข้อจริง",
     `ตอบ JSON เท่านั้น รูปแบบ ${documentOutputShape}`,
   ].join("\n");
-  const prompt = input.kind === "exam"
-    ? `สร้างข้อสอบภาษาไทยสำหรับครู โดยยึดข้อมูลนี้\nวิชา: ${input.subject}\nระดับชั้น: ${input.gradeLevel}\nหัวข้อ: ${input.topic}\nตัวชี้วัด/จุดประสงค์: ${objectives}\nจำนวนข้อ: ${input.questionCount ?? 10}\nรูปแบบข้อ: ${(input.questionTypes || ["ปรนัย", "อัตนัยสั้น"]).join(", ")}\nความยาก: ${input.difficulty || "ปานกลาง"}\nตอบเป็น JSON เท่านั้น ใช้รูปแบบ {"overview":"...","instructions":"...","learningObjectives":["..."],"questions":[{"number":1,"type":"ปรนัย","prompt":"...","choices":["ก. ...","ข. ...","ค. ...","ง. ..."],"answer":"...","rationale":"...","points":1}]}. ให้คะแนนทุกข้อข้อละ 1 คะแนน และระบุว่าเป็นร่างที่ครูต้องตรวจสอบก่อนใช้`
-    : documentPrompt;
+  const prompt = input.kind === "document"
+    ? documentPrompt
+    : `สร้าง${input.kind === "google_form" ? "แบบทดสอบออนไลน์สำหรับ Google Forms" : "ข้อสอบสำหรับพิมพ์เป็นข้อสอบกระดาษ"} ภาษาไทย โดยยึดข้อมูลนี้
+วิชา: ${input.subject}
+ระดับชั้น: ${input.gradeLevel}
+หัวข้อ: ${input.topic}
+ตัวชี้วัด/จุดประสงค์: ${objectives}
+จำนวนข้อ: ${input.questionCount ?? 10}
+รูปแบบข้อ: ${(input.questionTypes || ["ปรนัย", "อัตนัยสั้น"]).join(", ")}
+ความยาก: ${input.difficulty || "ปานกลาง"}
+${input.kind === "google_form" ? "เน้นคำถามที่ตอบบนโทรศัพท์ได้ชัดเจน ใช้ตัวเลือกที่ไม่กำกวม และเฉลยต้องตรงกับตัวเลือกทุกข้อ" : "ออกแบบข้อสอบให้อ่านและเขียนคำตอบบนกระดาษได้สะดวก"}
+ตอบเป็น JSON เท่านั้น ใช้รูปแบบ {"overview":"...","instructions":"...","learningObjectives":["..."],"questions":[{"number":1,"type":"ปรนัย","prompt":"...","choices":["ก. ...","ข. ...","ค. ...","ง. ..."],"answer":"...","rationale":"...","points":1}]}. ให้คะแนนทุกข้อข้อละ 1 คะแนน และระบุว่าเป็นร่างที่ครูต้องตรวจสอบก่อนใช้`;
   const text = await generateWithGemini([{ role: "user", parts: [{ text: prompt }] }], { json: true, temperature: 0.35 });
   let parsed: unknown;
   try { parsed = JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")); }
@@ -129,7 +138,7 @@ export async function generateMaterialContent(input: GenerateMaterialInput) {
   if (input.kind === "document" && input.documentType === "ใบงาน") {
     content.worksheetStyle = input.worksheetStyle || "cute";
   }
-  if (input.kind === "exam" && content.questions?.length !== (input.questionCount ?? 10)) throw new AIRequestError("AI สร้างจำนวนข้อไม่ครบตามที่เลือก กรุณาลองใหม่", 502);
+  if (input.kind !== "document" && content.questions?.length !== (input.questionCount ?? 10)) throw new AIRequestError("AI สร้างจำนวนข้อไม่ครบตามที่เลือก กรุณาลองใหม่", 502);
   return content;
 }
 
