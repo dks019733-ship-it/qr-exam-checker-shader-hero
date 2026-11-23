@@ -66,6 +66,12 @@ async function inlineComputedStyles(source: Element, target: Element): Promise<v
     await target.decode();
   }
 
+  if (source instanceof SVGImageElement && target instanceof SVGImageElement) {
+    const href = source.href.baseVal || source.getAttribute("href") || "";
+    if (href) target.setAttribute("href", await fetchResourceAsDataUrl(href));
+    target.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+  }
+
   const sourceChildren = Array.from(source.children);
   const targetChildren = Array.from(target.children);
   for (let index = 0; index < sourceChildren.length; index += 1) {
