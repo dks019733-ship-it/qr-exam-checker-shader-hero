@@ -93,6 +93,7 @@ export function AttendanceManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -127,12 +128,14 @@ export function AttendanceManager() {
       setStudents([]);
       setLoading(false);
       setDirty(false);
+      setLoadedSessionId(null);
       return;
     }
     setLoading(true);
     setError("");
     setNotice("");
     setDirty(false);
+    setLoadedSessionId(null);
     try {
       const params = new URLSearchParams({ teachingAssignmentId: assignmentId, date, period: String(period) });
       const response = await fetch("/api/attendance?" + params.toString(), { cache: "no-store" });
@@ -140,9 +143,11 @@ export function AttendanceManager() {
       if (!response.ok) throw new Error(data.error || "โหลดข้อมูลเช็กชื่อไม่สำเร็จ");
       setStudents(data.students);
       setTopic(data.session?.topic || "");
+      setLoadedSessionId(data.session?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
       setStudents([]);
+      setLoadedSessionId(null);
     } finally {
       setLoading(false);
     }
@@ -267,8 +272,9 @@ export function AttendanceManager() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      setLoadedSessionId(data.session?.id ?? loadedSessionId);
       setDirty(false);
-      setNotice("บันทึกสถานะนักเรียน " + data.savedRecords + " คนแล้ว");
+      setNotice((loadedSessionId ? "อัปเดตประวัติ" : "บันทึกสถานะ") + "นักเรียน " + data.savedRecords + " คนแล้ว");
       void loadHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
@@ -479,6 +485,7 @@ export function AttendanceManager() {
                   <div className="flex items-center justify-between gap-2"><span className="text-xs font-black text-[#1A1A1A]">{thaiDate(item.date)}</span><span className="rounded-full bg-[#F4F4F2] px-2.5 py-1 text-[10px] font-bold text-[#4d5f4a]">คาบ {item.period}</span></div>
                   <p className="mt-2 truncate text-[11px] text-[#777777]">{item.topic || "ไม่ระบุหัวข้อการสอน"}</p>
                   <p className="mt-3 text-[10px] font-semibold text-[#777777]">มา {item.present} · สาย {item.late} · ลา {item.leave} · ขาด {item.absent} · มีข้อมูล {item.total} คน</p>
+                  <p className="mt-2 text-[10px] font-bold text-[#2C3E32]">เปิดรายการเพื่อแก้ไขสถานะย้อนหลัง →</p>
                 </button>;
               })}
             </div>
@@ -527,6 +534,12 @@ export function AttendanceManager() {
         {notice && (
           <div role="status" className="flex items-center gap-2 rounded-2xl border border-[#C9D8CC] bg-[#EFF5F0] px-4 py-3 text-sm font-semibold text-[#2C3E32]">
             <CheckCircle2 className="h-4 w-4 shrink-0" />{notice}
+          </div>
+        )}
+
+        {loadedSessionId && !loading && (
+          <div role="status" className="rounded-2xl border border-[#C9D8CC] bg-[#EFF5F0] px-4 py-3 text-xs font-semibold text-[#2C3E32]">
+            กำลังแก้ไขประวัติการเช็กชื่อวันที่ {thaiDate(date)} คาบ {period} · เปลี่ยนสถานะนักเรียนหรือหัวข้อ แล้วกดบันทึกเพื่ออัปเดตรายการเดิม
           </div>
         )}
 
@@ -620,7 +633,7 @@ export function AttendanceManager() {
             ) : notice && !dirty ? (
               <><CheckCircle2 className="h-4 w-4" /> บันทึกแล้ว</>
             ) : (
-              <><Save className="h-4 w-4" /> บันทึกข้อมูล</>
+              <><Save className="h-4 w-4" /> {loadedSessionId ? "บันทึกการแก้ไข" : "บันทึกข้อมูล"}</>
             )}
           </button>
         </div>
