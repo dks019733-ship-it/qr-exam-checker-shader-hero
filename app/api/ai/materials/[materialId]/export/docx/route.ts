@@ -13,6 +13,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const material = await prisma.generatedMaterial.findFirst({ where: { id: materialId, ownerId } });
     if (!material) throw new AIRequestError("ไม่พบชิ้นงานนี้ หรือไม่มีสิทธิ์เข้าถึง", 404);
     if (material.status !== "approved") throw new AIRequestError("ต้องให้ครูตรวจและอนุมัติก่อนส่งออก", 409);
+    if (material.kind === "google_form") throw new AIRequestError("แบบทดสอบออนไลน์จัดการและเผยแพร่ผ่านหน้า Google Forms ไม่รองรับการส่งออกเป็น Word", 400);
 
     const content = material.content as MaterialContent;
     const paragraphs: DocxParagraph[] = [
