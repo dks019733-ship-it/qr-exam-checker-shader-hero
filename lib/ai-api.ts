@@ -20,7 +20,7 @@ export interface ChatTeacherProfile {
   instructions: string;
 }
 
-export type MaterialKind = "exam" | "document";
+export type MaterialKind = "exam" | "document" | "google_form";
 export type MaterialStatus = "pending_review" | "approved";
 
 export interface ExamQuestion {
