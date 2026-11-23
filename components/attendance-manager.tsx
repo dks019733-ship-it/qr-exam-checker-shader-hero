@@ -128,6 +128,7 @@ export function AttendanceManager() {
       setStudents([]);
       setLoading(false);
       setDirty(false);
+      setLoadedSessionId(null);
       return;
     }
     setLoading(true);
