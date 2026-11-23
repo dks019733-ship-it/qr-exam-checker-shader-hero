@@ -39,7 +39,7 @@ async function fetchResourceAsDataUrl(source: string): Promise<string> {
 }
 
 async function inlineCssUrls(value: string): Promise<string> {
-  const matches = [...value.matchAll(/url\\(\\s*(?:(["'])(.*?)\\1|([^)]*?))\\s*\\)/gi)];
+  const matches = [...value.matchAll(/url\(\s*(?:(["'])(.*?)\\1|([^)]*?))\s*\)/gi)];
   let result = value;
   for (const match of matches) {
     const rawUrl = (match[2] ?? match[3] ?? "").trim();
