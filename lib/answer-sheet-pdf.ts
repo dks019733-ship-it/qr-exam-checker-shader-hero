@@ -9,17 +9,45 @@ const A4_HEIGHT_PT = 841.89;
 
 async function imageToDataUrl(image: HTMLImageElement) {
   const source = image.currentSrc || image.src;
-  if (!source || source.startsWith("data:")) return source;
+  return fetchResourceAsDataUrl(source);
+}
 
-  const response = await fetch(source, { credentials: "same-origin" });
-  if (!response.ok) throw new Error("โหลดรูปภาพบนกระดาษคำตอบไม่สำเร็จ");
-  const blob = await response.blob();
+async function blobToDataUrl(blob: Blob): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("อ่านรูปภาพไม่สำเร็จ"));
+    reader.onerror = () => reject(new Error("อ่านทรัพยากรสำหรับ PDF ไม่สำเร็จ"));
     reader.readAsDataURL(blob);
   });
+}
+
+async function fetchResourceAsDataUrl(source: string): Promise<string> {
+  if (!source || source.startsWith("data:") || source.startsWith("#")) return source;
+  const url = new URL(source, document.baseURI);
+  if (url.protocol !== "http:" && url.protocol !== "https:") return source;
+  let response: Response;
+  try {
+    response = await fetch(url.href, {
+      credentials: url.origin === window.location.origin ? "same-origin" : "omit",
+      mode: "cors",
+    });
+  } catch {
+    throw new Error("ไม่สามารถฝังรูปภาพหรือทรัพยากรจากภายนอกลงใน PDF ได้ กรุณาใช้ไฟล์ที่อยู่บนเว็บไซต์หรืออัปโหลดไฟล์ใหม่");
+  }
+  if (!response.ok) throw new Error("โหลดรูปภาพหรือทรัพยากรสำหรับ PDF ไม่สำเร็จ");
+  return blobToDataUrl(await response.blob());
+}
+
+async function inlineCssUrls(value: string): Promise<string> {
+  const matches = [...value.matchAll(/url\\(\\s*(?:(["'])(.*?)\\1|([^)]*?))\\s*\\)/gi)];
+  let result = value;
+  for (const match of matches) {
+    const rawUrl = (match[2] ?? match[3] ?? "").trim();
+    if (!rawUrl || rawUrl.startsWith("data:") || rawUrl.startsWith("#") || rawUrl.startsWith("blob:")) continue;
+    const dataUrl = await fetchResourceAsDataUrl(rawUrl);
+    result = result.replace(match[0], `url("${dataUrl}")`);
+  }
+  return result;
 }
 
 async function inlineComputedStyles(source: Element, target: Element): Promise<void> {
@@ -27,7 +55,8 @@ async function inlineComputedStyles(source: Element, target: Element): Promise<v
   const style = (target as HTMLElement | SVGElement).style;
   for (let index = 0; index < computed.length; index += 1) {
     const property = computed.item(index);
-    style.setProperty(property, computed.getPropertyValue(property), computed.getPropertyPriority(property));
+    const value = await inlineCssUrls(computed.getPropertyValue(property));
+    style.setProperty(property, value, computed.getPropertyPriority(property));
   }
 
   if (source instanceof HTMLImageElement && target instanceof HTMLImageElement) {
@@ -89,9 +118,17 @@ async function renderSheetToPng(element: HTMLElement): Promise<Uint8Array> {
     context.scale(scale, scale);
     context.drawImage(image, 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
 
-    const png = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("สร้างภาพกระดาษคำตอบไม่สำเร็จ")), "image/png");
-    });
+    let png: Blob;
+    try {
+      png = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("สร้างภาพกระดาษคำตอบไม่สำเร็จ")), "image/png");
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "SecurityError") {
+        throw new Error("ส่งออก PDF ไม่ได้เนื่องจากมีรูปภาพหรือ CSS จากแหล่งภายนอกที่ยังไม่ได้ฝัง กรุณาตรวจสอบรูปภาพในกระดาษคำตอบ");
+      }
+      throw error;
+    }
     return new Uint8Array(await png.arrayBuffer());
   } finally {
     URL.revokeObjectURL(svgUrl);
