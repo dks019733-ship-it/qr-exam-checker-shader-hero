@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const ownerId = await requireAIUser();
     const body = await request.json().catch(() => ({})) as GenerateMaterialInput;
     const content = await generateMaterialContent(body);
-    const title = body.kind === "exam" ? `ข้อสอบ ${body.subject} — ${body.topic}` : `${body.documentType || "เอกสาร"} ${body.subject} — ${body.topic}`;
+    const title = body.kind === "google_form" ? `แบบทดสอบออนไลน์ ${body.subject} — ${body.topic}` : body.kind === "exam" ? `ข้อสอบ ${body.subject} — ${body.topic}` : `${body.documentType || "เอกสาร"} ${body.subject} — ${body.topic}`;
     const row = await prisma.generatedMaterial.create({
       data: {
         ownerId,
