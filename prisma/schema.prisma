@@ -271,6 +271,7 @@ model AnswerSheetTemplate {
   logoDataUrl     String?  @db.Text
   examTitle       String   @default("แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน")
   subject         String   @default("")
+  subjectCode     String   @default("")
   questionCount   Int      @default(40)
   choiceCount     Int      @default(4)
   choiceLabelStyle String  @default("LATIN")
@@ -592,6 +593,7 @@ model AttendanceSession {
   classId              String
   teachingAssignmentId String
   date                 DateTime @db.Date
+  period               Int      @default(1)
   topic                String   @default("")
   owner                User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   classroom            Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
@@ -600,7 +602,7 @@ model AttendanceSession {
   assignments          Assignment[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  @@unique([teachingAssignmentId, date])
+  @@unique([teachingAssignmentId, date, period])
   @@index([ownerId, classId, date])
   @@index([classId])
 }

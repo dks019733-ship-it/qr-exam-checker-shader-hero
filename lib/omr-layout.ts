@@ -15,7 +15,7 @@ export const OMR_GRID = {
   questionColumnWidth: 32,
   headerHeight: 18,
   rowTop: 307,
-  rowHeight: 14,
+  rowHeight: 15,
   rowsPerColumn: 50,
   choicesWidth: 301,
   bubbleDiameter: 12,

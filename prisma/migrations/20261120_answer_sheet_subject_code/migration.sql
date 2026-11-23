@@ -1,0 +1,1 @@
+ALTER TABLE "AnswerSheetTemplate" ADD COLUMN IF NOT EXISTS "subjectCode" TEXT NOT NULL DEFAULT '';

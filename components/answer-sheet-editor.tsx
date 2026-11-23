@@ -1,24 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ChevronDown, FileImage, ImagePlus, Loader2, Printer, Save, Search, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Download, FileImage, ImagePlus, Loader2, Save, Search, X } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AnswerSheetStudentTools } from "@/components/answer-sheet-student-tools";
 import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 import { getExamChoiceLabels } from "@/lib/exam-choices";
 import { OMR_GRID, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
+import { downloadAnswerSheetsPdf } from "@/lib/answer-sheet-pdf";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
 type Student = { id: string; rollNo: string; studentNo: string; name: string; qrToken: string };
-type Template = { schoolName: string; logoDataUrl: string | null; examTitle: string; subject: string; questionCount: number; choiceCount: number; choiceLabelStyle: string; classLabel: string };
+type TeachingAssignment = { id: string; subject: { code: string; name: string }; classroom: { id: string; name: string } };
+type Template = { schoolName: string; logoDataUrl: string | null; examTitle: string; subject: string; subjectCode: string; questionCount: number; choiceCount: number; choiceLabelStyle: string; classLabel: string };
 
-const initialTemplate: Template = { schoolName: "โรงเรียนตัวอย่างวิทยา", logoDataUrl: "/school-logo-reference.png", examTitle: "แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน", subject: "วิชาตัวอย่าง", questionCount: 40, choiceCount: 4, choiceLabelStyle: "LATIN", classLabel: "ม.4/1" };
+const initialTemplate: Template = { schoolName: "โรงเรียนตัวอย่างวิทยา", logoDataUrl: "/school-logo-reference.png", examTitle: "แบบทดสอบวัดผลสัมฤทธิ์ทางการเรียน", subject: "วิชาตัวอย่าง", subjectCode: "", questionCount: 40, choiceCount: 4, choiceLabelStyle: "LATIN", classLabel: "ม.4/1" };
 
 export function AnswerSheetEditor() {
   const [template, setTemplate] = useState<Template>(initialTemplate);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classId, setClassId] = useState("");
+  const [teachingAssignments, setTeachingAssignments] = useState<TeachingAssignment[]>([]);
+  const [selectedTeachingAssignmentId, setSelectedTeachingAssignmentId] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [studentPreview, setStudentPreview] = useState({ rollNo: "", studentNo: "", name: "", qrToken: "" });
@@ -28,6 +32,8 @@ export function AnswerSheetEditor() {
   const [dirty, setDirty] = useState(false);
   const [sheetMode, setSheetMode] = useState<"qr" | "plain">("qr");
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
 
   const questions = useMemo(() => Array.from({ length: template.questionCount }, (_, i) => i + 1), [template.questionCount]);
   const filteredStudents = useMemo(() => students.filter((s) => `${s.rollNo} ${s.studentNo} ${s.name}`.toLowerCase().includes(studentSearch.toLowerCase())), [students, studentSearch]);
@@ -37,7 +43,7 @@ export function AnswerSheetEditor() {
       fetch("/api/answer-sheet/template").then((r) => r.ok ? r.json() : null),
       fetch("/api/classes").then((r) => r.ok ? r.json() : []),
     ]).then(([saved, classes]) => {
-      if (saved) setTemplate({ ...initialTemplate, ...saved, subject: saved.subject ?? "" });
+      if (saved) setTemplate({ ...initialTemplate, ...saved, subject: saved.subject ?? "", subjectCode: saved.subjectCode ?? "" });
       const uniqueClasses = Array.isArray(classes) ? [...new Map((classes as Classroom[]).map((classroom) => [classroom.id, classroom])).values()] : [];
       setClassrooms(uniqueClasses);
       if (uniqueClasses[0]) setClassId(uniqueClasses[0].id);
@@ -45,7 +51,14 @@ export function AnswerSheetEditor() {
   }, []);
 
   useEffect(() => {
-    if (!classId) { setStudents([]); return; }
+    if (!classId) { setStudents([]); setTeachingAssignments([]); setSelectedTeachingAssignmentId(""); return; }
+    fetch("/api/teaching-assignments").then((r) => r.ok ? r.json() : []).then((rows: TeachingAssignment[]) => {
+      const matching = rows.filter((row) => row.classroom.id === classId);
+      setTeachingAssignments(matching);
+      const selected = matching.find((row) => row.id === selectedTeachingAssignmentId) ?? matching[0];
+      setSelectedTeachingAssignmentId(selected?.id ?? "");
+      if (selected) { setTemplate((current) => ({ ...current, subject: selected.subject.name, subjectCode: selected.subject.code })); setDirty(true); }
+    }).catch(() => setTeachingAssignments([]));
     fetch(`/api/students?classId=${encodeURIComponent(classId)}`).then((r) => r.ok ? r.json() : []).then((rows: Student[]) => {
       setStudents(rows);
       if (rows[0]) selectStudent(rows[0]);
@@ -54,8 +67,27 @@ export function AnswerSheetEditor() {
   }, [classId]);
 
   function updateTemplate<K extends keyof Template>(key: K, value: Template[K]) { setTemplate((current) => ({ ...current, [key]: value })); setDirty(true); }
+  function selectTeachingAssignment(id: string) {
+    setSelectedTeachingAssignmentId(id);
+    const assignment = teachingAssignments.find((row) => row.id === id);
+    if (assignment) setTemplate((current) => ({ ...current, subject: assignment.subject.name, subjectCode: assignment.subject.code }));
+    setDirty(true);
+  }
   function selectStudent(student: Student) { setSelectedStudentId(student.id); setStudentPreview({ rollNo: student.rollNo, studentNo: student.studentNo, name: student.name, qrToken: student.qrToken }); }
   function notify(type: "success" | "error" | "info", text: string) { setStatus({ type, text }); }
+
+  async function downloadPreviewPdf() {
+    const sheet = previewRef.current?.querySelector<HTMLElement>(".omr-answer-sheet");
+    if (!sheet) return notify("error", "ไม่พบตัวอย่างกระดาษคำตอบ");
+    setExporting(true);
+    try {
+      const safeName = (template.classLabel || "preview").replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "preview";
+      await downloadAnswerSheetsPdf([sheet], `answer-sheet-${safeName}.pdf`);
+      notify("success", "ดาวน์โหลดกระดาษคำตอบ PDF แล้ว");
+    } catch (error) {
+      notify("error", error instanceof Error ? error.message : "สร้าง PDF ไม่สำเร็จ");
+    } finally { setExporting(false); }
+  }
 
   async function saveTemplate() {
     setSaving(true); notify("info", "กำลังบันทึกการตั้งค่า...");
@@ -76,8 +108,8 @@ export function AnswerSheetEditor() {
   return <main className="min-h-screen bg-[#f6f7f9] p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-28 print:bg-white print:p-0">
     <div className="mx-auto max-w-[1440px]">
       <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-[#dce8df] bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between print:hidden">
-        <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground"><FileImage className="h-4 w-4" />Answer sheet studio</div><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">สร้างกระดาษคำตอบ</h1><p className="mt-1 text-sm text-muted-foreground">ตั้งค่าข้อมูล แล้วดูตัวอย่างก่อนพิมพ์ได้ทันที</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => window.print()}><Printer className="mr-2 h-4 w-4" />พิมพ์ / PDF</Button><Button onClick={saveTemplate} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{dirty ? "บันทึกการเปลี่ยนแปลง" : "บันทึกแล้ว"}</Button></div>
+        <div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground"><FileImage className="h-4 w-4" />Answer sheet studio</div><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">สร้างกระดาษคำตอบ</h1><p className="mt-1 text-sm text-muted-foreground">ตั้งค่าข้อมูล แล้วดาวน์โหลดกระดาษคำตอบเป็น PDF ได้ทันที</p></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={downloadPreviewPdf} disabled={exporting}>{exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}{exporting ? "กำลังสร้าง PDF..." : "ดาวน์โหลด PDF"}</Button><Button onClick={saveTemplate} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{dirty ? "บันทึกการเปลี่ยนแปลง" : "บันทึกแล้ว"}</Button></div>
       </header>
       <div className="mb-5 print:hidden"><ExamWorkspaceNav active="sheets" /></div>
 
@@ -92,7 +124,7 @@ export function AnswerSheetEditor() {
           aria-disabled={!classId}
           className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-medium ${classId ? "hover:bg-muted" : "pointer-events-none opacity-50"}`}
         >
-          <Printer className="mr-2 h-4 w-4" />พิมพ์แบบ{sheetMode === "qr" ? " QR" : "ธรรมดา"} ทั้งห้อง ({students.length} คน)
+          <Download className="mr-2 h-4 w-4" />ดาวน์โหลด PDF แบบ{sheetMode === "qr" ? " QR" : "ธรรมดา"} ทั้งห้อง ({students.length} คน)
         </a>
       </div>
 
@@ -101,24 +133,24 @@ export function AnswerSheetEditor() {
           <Panel title="ข้อมูลแบบทดสอบ" subtitle="ข้อมูลที่จะแสดงบนหัวกระดาษ">
             <Field label="ชื่อโรงเรียน"><input value={template.schoolName} onChange={(e) => updateTemplate("schoolName", e.target.value)} /></Field>
             <Field label="ชื่อแบบทดสอบ"><input value={template.examTitle} onChange={(e) => updateTemplate("examTitle", e.target.value)} /></Field>
-            <div className="grid gap-3 sm:grid-cols-2"><Field label="วิชาที่สอบ"><input value={template.subject} onChange={(e) => updateTemplate("subject", e.target.value)} /></Field><Field label="ชั้น / ห้อง"><input value={template.classLabel} onChange={(e) => updateTemplate("classLabel", e.target.value)} /></Field></div>
+            <div className="grid gap-3 sm:grid-cols-2"><Field label="วิชาที่สอบ"><input value={template.subject} onChange={(e) => updateTemplate("subject", e.target.value)} /></Field><Field label="รหัสวิชา"><input value={template.subjectCode} onChange={(e) => updateTemplate("subjectCode", e.target.value)} placeholder="เช่น ส23101" maxLength={40} /></Field></div><Field label="ชั้น / ห้อง"><input value={template.classLabel} onChange={(e) => updateTemplate("classLabel", e.target.value)} /></Field>
             <Field label="จำนวนข้อ"><select value={template.questionCount} onChange={(e) => updateTemplate("questionCount", Number(e.target.value))}>{[10,20,30,40,50,60,80,100].map((n) => <option key={n} value={n}>{n} ข้อ</option>)}</select></Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="จำนวนตัวเลือก"><select value={template.choiceCount} onChange={(e) => updateTemplate("choiceCount", Number(e.target.value))}><option value={4}>4 ตัวเลือก</option><option value={5}>5 ตัวเลือก</option></select></Field>
               <Field label="รูปแบบตัวเลือก"><select value={template.choiceLabelStyle} onChange={(e) => updateTemplate("choiceLabelStyle", e.target.value)}><option value="LATIN">A, B, C, D, E</option><option value="THAI">ก, ข, ค, ง, จ</option><option value="NUMERIC">1, 2, 3, 4, 5</option></select></Field>
             </div>
-            <p className="text-[11px] leading-5 text-amber-700">ตั้งค่าให้ตรงกับจำนวนและรูปแบบตัวเลือกของข้อสอบก่อนพิมพ์กระดาษคำตอบ</p>
+            <p className="text-[11px] leading-5 text-amber-700">ตั้งค่าให้ตรงกับจำนวนและรูปแบบตัวเลือกของข้อสอบก่อนดาวน์โหลด PDF</p>
           </Panel>
 
           <Panel title="ตราโรงเรียน" subtitle="ไฟล์ PNG, JPG หรือ WebP ไม่เกิน 500 KB"><div className="flex items-center gap-4"><div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border bg-slate-50 p-2">{template.logoDataUrl ? <img src={template.logoDataUrl} alt="ตราโรงเรียน" className="max-h-full max-w-full object-contain" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}</div><div className="min-w-0"><button className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted" onClick={() => logoInputRef.current?.click()}>เปลี่ยนตราโรงเรียน</button><input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleLogo(e.target.files?.[0])} /><button className="ml-2 text-xs text-muted-foreground underline" onClick={() => updateTemplate("logoDataUrl", null)}>ลบ</button></div></div></Panel>
 
-          <Panel title="เลือกห้องสำหรับตัวอย่าง" subtitle="ตั้งค่าห้องและรายชื่อนักเรียนแยกที่หน้าจัดการห้องเรียน"><select className="w-full" value={classId} onChange={(e) => { setClassId(e.target.value); const c = classrooms.find((x) => x.id === e.target.value); if (c) updateTemplate("classLabel", c.name); }}><option value="">เลือกห้องเรียน</option>{classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}{c._count ? ` (${c._count.students} คน)` : ""}</option>)}</select><Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">ไปจัดการห้องเรียนและนักเรียน →</Link></Panel>
+          <Panel title="เลือกห้องและรายวิชา" subtitle="ดึงรหัสวิชาและชื่อวิชาจากรายวิชาที่สร้างไว้ หรือแก้ไขช่องด้านบนเองได้"><select className="w-full" value={classId} onChange={(e) => { setClassId(e.target.value); const c = classrooms.find((x) => x.id === e.target.value); if (c) updateTemplate("classLabel", c.name); }}><option value="">เลือกห้องเรียน</option>{classrooms.map((c) => <option key={c.id} value={c.id}>{c.name}{c._count ? ` (${c._count.students} คน)` : ""}</option>)}</select>{teachingAssignments.length > 0 ? <Field label="รายวิชาที่ผูกกับห้องนี้"><select value={selectedTeachingAssignmentId} onChange={(e) => selectTeachingAssignment(e.target.value)}>{teachingAssignments.map((row) => <option key={row.id} value={row.id}>{row.subject.code} · {row.subject.name}</option>)}</select></Field> : <p className="text-xs text-amber-700">ยังไม่มีรายวิชาที่ผูกกับห้องนี้ สามารถกรอกรหัสวิชาและชื่อวิชาเองได้</p>}<Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">ไปจัดการห้องเรียนและนักเรียน →</Link></Panel>
 
           <Panel title="จัดการรายชื่อนักเรียน" subtitle="นำเข้ารายชื่อหลายคนพร้อมกัน หรือแก้ไขข้อมูลนักเรียนที่เลือก"><AnswerSheetStudentTools classId={classId} students={students} selectedStudentId={selectedStudentId} onSelect={selectStudent} onStudentsChange={setStudents} /></Panel>
           <Panel title="เลือกนักเรียนสำหรับตัวอย่าง" subtitle="เลือกรายชื่อเพื่อดูตัวอย่างกระดาษคำตอบ"><div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input className="pl-9" placeholder="ค้นหาชื่อ เลขที่ หรือรหัส..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} /></div><select value={selectedStudentId} onChange={(e) => { const s = students.find((x) => x.id === e.target.value); if (s) selectStudent(s); }} className="mt-2"><option value="">เลือกนักเรียน ({filteredStudents.length})</option>{filteredStudents.map((s) => <option key={s.id} value={s.id}>{s.rollNo} · {s.studentNo} — {s.name}</option>)}</select><Link href="/dashboard/classes" className="mt-3 inline-flex text-sm font-medium text-blue-700 hover:underline">เพิ่มหรือแก้ไขรายชื่อนักเรียน →</Link></Panel>
         </section>
 
-        <section className="min-w-0 rounded-2xl border bg-white p-3 shadow-sm sm:p-5 print:border-0 print:p-0 print:shadow-none"><div className="mb-4 flex items-center justify-between print:hidden"><div><h2 className="font-semibold">ตัวอย่างก่อนพิมพ์</h2><p className="text-xs text-muted-foreground">A4 แนวตั้ง · 210 × 297 มม. · ขนาดพิมพ์จริง 100%</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-muted-foreground">{template.questionCount} ข้อ</span></div><div className="omr-preview-stage overflow-x-auto print:overflow-visible"><AnswerSheetPreview template={template} student={studentPreview} questions={questions} qrUrl={sheetMode === "qr" && selectedStudentId ? `/api/students/${selectedStudentId}/qr?v=2` : undefined} showQr={sheetMode === "qr"} /></div></section>
+        <section className="min-w-0 rounded-2xl border bg-white p-3 shadow-sm sm:p-5 print:border-0 print:p-0 print:shadow-none"><div className="mb-4 flex items-center justify-between print:hidden"><div><h2 className="font-semibold">ตัวอย่างกระดาษคำตอบ</h2><p className="text-xs text-muted-foreground">A4 แนวตั้ง · 210 × 297 มม. · ขนาดพิมพ์จริง 100%</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-muted-foreground">{template.questionCount} ข้อ</span></div><div ref={previewRef} className="omr-preview-stage overflow-x-auto print:overflow-visible"><AnswerSheetPreview template={template} student={studentPreview} questions={questions} qrUrl={sheetMode === "qr" && selectedStudentId ? `/api/students/${selectedStudentId}/qr?v=2` : undefined} showQr={sheetMode === "qr"} /></div></section>
       </div>
     </div>
   </main>;
@@ -127,8 +159,16 @@ export function AnswerSheetEditor() {
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) { return <div className="rounded-2xl border bg-white p-5 shadow-sm"><div className="mb-4"><h2 className="font-semibold">{title}</h2>{subtitle && <p className="mt-1 text-xs leading-5 text-muted-foreground">{subtitle}</p>}</div><div className="space-y-3">{children}</div></div>; }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm"><span className="mb-1.5 block text-xs font-medium text-muted-foreground">{label}</span>{children}</label>; }
 
+function getClassDisplay(classLabel: string) {
+  const value = classLabel.trim();
+  const match = value.match(/^(?:ม\.?\s*|มัธยมศึกษาปีที่\s*)(\d+)\s*\/\s*(\d+)$/);
+  if (match) return { grade: `มัธยมศึกษาปีที่ ${match[1]}`, room: `${match[1]}/${match[2]}` };
+  return { grade: "", room: value };
+}
+
 export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr = true }: { template: Template; student: { rollNo: string; studentNo: string; name: string }; questions: number[]; qrUrl?: string; showQr?: boolean }) {
   const choiceLabels = getExamChoiceLabels(template.choiceCount || 4, template.choiceLabelStyle || "LATIN");
+  const classDisplay = getClassDisplay(template.classLabel || "");
   const choiceGridStyle = { gridTemplateColumns: `${OMR_GRID.questionColumnWidth}px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
   const splitIndex = Math.ceil(questions.length / 2);
   const columns = [questions.slice(0, splitIndex), questions.slice(splitIndex)];
@@ -147,7 +187,9 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         <div className="min-w-0 flex-1 text-center">
           <h3 className="truncate text-[16px] font-bold">{template.schoolName || "ชื่อโรงเรียน"}</h3>
           <p className="mt-1 truncate text-[12px]">{template.examTitle || "ชื่อแบบทดสอบ"}</p>
-          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"} · ชั้น {template.classLabel || "________"}</p>
+          <p className="mt-1 truncate text-[11px]">รหัสวิชา {template.subjectCode || "____________"}</p>
+          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"}</p>
+          <p className="mt-1 truncate text-[11px]">{classDisplay.grade ? `ชั้น${classDisplay.grade}` : "ระดับชั้น: __________"} · ห้อง {classDisplay.room || "____"}</p>
         </div>
         {showQr && (
           <div className="flex w-16 shrink-0 flex-col items-center text-center text-[8px] text-gray-600">
@@ -161,9 +203,9 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         <div className="truncate">ชื่อ-สกุล: <strong>{student.name || "________________"}</strong></div>
         <div className="truncate">รหัสนักเรียน: <strong>{student.studentNo || "__________"}</strong></div>
         <div className="truncate">เลขที่: <strong>{student.rollNo || "____"}</strong></div>
-        <div className="truncate">ห้อง: {template.classLabel || "________"}</div>
-        <div>วันที่สอบ: ____ / ____ / ______</div>
-        <div className="truncate">วิชา: {template.subject || "____________"}</div>
+        <div className="truncate">ระดับชั้น: {classDisplay.grade || "____________"}</div>
+        <div>ห้อง: <strong>{classDisplay.room || "____"}</strong></div>
+        <div className="truncate">รหัสวิชา: <strong>{template.subjectCode || "____________"}</strong></div>
       </section>
 
       <section className="absolute left-[52px] right-[52px] top-[207px] h-[60px] rounded border border-black px-3 py-2 text-[10px] leading-[14px]">
@@ -199,7 +241,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         ))}
       </div>
 
-      <footer className="absolute left-[52px] right-[52px] top-[1024px] border-t border-black pt-2 text-[9px] text-gray-600">
+      <footer className="absolute left-[52px] right-[52px] top-[1064px] border-t border-black pt-1 text-[9px] text-gray-600">
         <p>{showQr ? "OMR FORM V2 · QR ใช้ระบุตัวนักเรียนเท่านั้น ไม่ใช่ผลการตรวจคำตอบ" : "OMR FORM V2 · แบบธรรมดา ไม่มี QR ระบุตัวนักเรียน"} · {questions.length} ข้อ · {choiceLabels.length} ตัวเลือก</p>
       </footer>
     </div>

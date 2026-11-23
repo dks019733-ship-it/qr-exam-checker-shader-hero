@@ -141,7 +141,7 @@ export function AssignmentManager() {
   async function resolveAttendanceSession() {
     if (!autoMarkAttendance) return null;
     if (!teachingAssignmentId || !attendanceDate) throw new Error("เลือกวิชาและวันที่ของคาบเช็กชื่อก่อน");
-    const params = new URLSearchParams({ teachingAssignmentId, date: attendanceDate });
+    const params = new URLSearchParams({ teachingAssignmentId, date: attendanceDate, period: "1" });
     const response = await fetch("/api/attendance?" + params.toString(), { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "ตรวจสอบคาบเช็กชื่อไม่สำเร็จ");
@@ -434,7 +434,7 @@ export function AssignmentManager() {
                   </label>
                   {autoMarkAttendance && (
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <label className="block"><span className={labelClass}>วันที่ของคาบเช็กชื่อ</span><input required type="date" value={attendanceDate} onChange={async (event) => { setAttendanceDate(event.target.value); setAttendanceSessionId(""); if (event.target.value && teachingAssignmentId) { const params = new URLSearchParams({ teachingAssignmentId, date: event.target.value }); const response = await fetch("/api/attendance?" + params.toString()); const data = await response.json(); if (response.ok && data.session?.id) setAttendanceSessionId(data.session.id); } }} className={fieldClass} /></label>
+                      <label className="block"><span className={labelClass}>วันที่ของคาบเช็กชื่อ (คาบ 1)</span><input required type="date" value={attendanceDate} onChange={async (event) => { setAttendanceDate(event.target.value); setAttendanceSessionId(""); if (event.target.value && teachingAssignmentId) { const params = new URLSearchParams({ teachingAssignmentId, date: event.target.value, period: "1" }); const response = await fetch("/api/attendance?" + params.toString()); const data = await response.json(); if (response.ok && data.session?.id) setAttendanceSessionId(data.session.id); } }} className={fieldClass} /></label>
                       <p className="self-end rounded-xl bg-white p-3 text-xs leading-5 text-[#687565]">{attendanceSessionId ? "พบคาบเช็กชื่อแล้ว ระบบจะบันทึก “มา” เฉพาะกรณีที่ยังไม่มีสถานะเดิม" : "ต้องบันทึกคาบเช็กชื่อของวันที่เลือกก่อน จึงจะเปิดใช้ตัวเลือกนี้ได้"}</p>
                     </div>
                   )}
