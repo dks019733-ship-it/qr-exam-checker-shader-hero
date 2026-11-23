@@ -438,6 +438,7 @@ enum AIChatRole {
 enum GeneratedMaterialKind {
   exam
   document
+  google_form
 }
 
 enum GeneratedMaterialStatus {
