@@ -131,6 +131,14 @@ async function prepareCanvasClone(source: Element, target: Element): Promise<voi
     ? sourceChildren.map((child) => child.getBoundingClientRect())
     : [];
 
+  // Finish copying descendant computed styles first. Otherwise a recursive
+  // call would overwrite the absolute coordinates assigned by this parent.
+  for (let index = 0; index < sourceChildren.length; index += 1) {
+    const sourceChild = sourceChildren[index];
+    const targetChild = targetChildren[index];
+    if (sourceChild && targetChild) await prepareCanvasClone(sourceChild, targetChild);
+  }
+
   if (isLayoutContainer && sourceRect) {
     targetStyle.display = "block";
     targetStyle.position = computed.position === "static" ? "relative" : computed.position;
@@ -150,12 +158,6 @@ async function prepareCanvasClone(source: Element, target: Element): Promise<voi
       child.style.boxSizing = "border-box";
       child.style.transform = "none";
     });
-  }
-
-  for (let index = 0; index < sourceChildren.length; index += 1) {
-    const sourceChild = sourceChildren[index];
-    const targetChild = targetChildren[index];
-    if (sourceChild && targetChild) await prepareCanvasClone(sourceChild, targetChild);
   }
 }
 
