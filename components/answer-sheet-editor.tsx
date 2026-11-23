@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AnswerSheetStudentTools } from "@/components/answer-sheet-student-tools";
 import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 import { getExamChoiceLabels } from "@/lib/exam-choices";
-import { OMR_GRID, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
+import { getOmrRowHeight, OMR_GRID, OMR_PAGE_HEIGHT, OMR_PAGE_WIDTH } from "@/lib/omr-layout";
 import { downloadAnswerSheetsPdf } from "@/lib/answer-sheet-pdf";
 
 type Classroom = { id: string; name: string; _count?: { students: number } };
@@ -170,6 +170,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
   const choiceLabels = getExamChoiceLabels(template.choiceCount || 4, template.choiceLabelStyle || "LATIN");
   const classDisplay = getClassDisplay(template.classLabel || "");
   const choiceGridStyle = { gridTemplateColumns: `${OMR_GRID.questionColumnWidth}px repeat(${choiceLabels.length}, minmax(0, 1fr))` };
+  const rowHeight = getOmrRowHeight(questions.length);
   const splitIndex = Math.ceil(questions.length / 2);
   const columns = [questions.slice(0, splitIndex), questions.slice(splitIndex)];
 
@@ -180,16 +181,16 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
       <span aria-hidden="true" data-omr-marker="bottom-left" className="absolute bottom-8 left-8 h-[14px] w-[14px] border-[7px] border-black" />
       <span aria-hidden="true" data-omr-marker="bottom-right" className="absolute bottom-8 right-8 h-[14px] w-[14px] border-[7px] border-black" />
 
-      <header className="absolute left-[52px] right-[52px] top-[52px] flex h-[80px] items-center gap-4 border-b border-black pb-3">
+      <header className="absolute left-[52px] right-[52px] top-[52px] flex h-[84px] items-center gap-4 border-b border-black pb-1">
         <div className="flex h-16 w-16 shrink-0 items-center justify-center">
           {template.logoDataUrl ? <img src={template.logoDataUrl} alt="" className="max-h-16 max-w-16 object-contain" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full border text-[9px] text-gray-500">ตราโรงเรียน</div>}
         </div>
         <div className="min-w-0 flex-1 text-center">
-          <h3 className="truncate text-[16px] font-bold">{template.schoolName || "ชื่อโรงเรียน"}</h3>
-          <p className="mt-1 truncate text-[12px]">{template.examTitle || "ชื่อแบบทดสอบ"}</p>
-          <p className="mt-1 truncate text-[11px]">รหัสวิชา {template.subjectCode || "____________"}</p>
-          <p className="mt-1 truncate text-[11px]">วิชา {template.subject || "________________"}</p>
-          <p className="mt-1 truncate text-[11px]">{classDisplay.grade ? `ชั้น${classDisplay.grade}` : "ระดับชั้น: __________"} · ห้อง {classDisplay.room || "____"}</p>
+          <h3 className="truncate text-[16px] font-bold leading-5">{template.schoolName || "ชื่อโรงเรียน"}</h3>
+          <p className="truncate text-[12px] leading-[14px]">{template.examTitle || "ชื่อแบบทดสอบ"}</p>
+          <p className="truncate text-[11px] leading-[13px]">รหัสวิชา {template.subjectCode || "____________"}</p>
+          <p className="truncate text-[11px] leading-[13px]">วิชา {template.subject || "________________"}</p>
+          <p className="truncate text-[11px] leading-[13px]">{classDisplay.grade ? `ชั้น${classDisplay.grade}` : "ระดับชั้น: __________"} · ห้อง {classDisplay.room || "____"}</p>
         </div>
         {showQr && (
           <div className="flex w-16 shrink-0 flex-col items-center text-center text-[8px] text-gray-600">
@@ -199,7 +200,7 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
         )}
       </header>
 
-      <section className="absolute left-[52px] right-[52px] top-[145px] grid h-[48px] grid-cols-3 grid-rows-2 gap-x-5 gap-y-1 border-y border-black py-1 text-[11px]">
+      <section className="absolute left-[52px] right-[52px] top-[145px] grid h-[52px] grid-cols-3 grid-rows-2 content-center gap-x-5 gap-y-1 border-y border-black py-1 text-[11px] leading-[14px]">
         <div className="truncate">ชื่อ-สกุล: <strong>{student.name || "________________"}</strong></div>
         <div className="truncate">รหัสนักเรียน: <strong>{student.studentNo || "__________"}</strong></div>
         <div className="truncate">เลขที่: <strong>{student.rollNo || "____"}</strong></div>
@@ -222,10 +223,10 @@ export function AnswerSheetPreview({ template, student, questions, qrUrl, showQr
               {choiceLabels.map((label) => <div key={label}>{label}</div>)}
             </div>
             {column.map((questionNumber) => (
-              <div key={questionNumber} data-omr-question={questionNumber} className="grid border-b border-gray-300 text-center text-[9px]" style={{ ...choiceGridStyle, height: OMR_GRID.rowHeight, lineHeight: `${OMR_GRID.rowHeight}px` }}>
+              <div key={questionNumber} data-omr-question={questionNumber} className="grid border-b border-gray-300 text-center text-[9px]" style={{ ...choiceGridStyle, height: rowHeight, lineHeight: `${rowHeight}px` }}>
                 <div className="border-r border-gray-300">{questionNumber}</div>
                 {choiceLabels.map((choice, choiceIndex) => (
-                  <div key={choice} className="flex items-center justify-center" style={{ height: OMR_GRID.rowHeight }}>
+                  <div key={choice} className="flex items-center justify-center" style={{ height: rowHeight }}>
                     <span
                       data-omr-bubble="true"
                       data-omr-question-number={questionNumber}

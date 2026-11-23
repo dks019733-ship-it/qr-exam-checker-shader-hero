@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { GeneratedMaterial, MaterialContent, materialsApi } from "@/lib/ai-api";
 
 const inputClass = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:border-transparent disabled:bg-transparent disabled:px-0 disabled:text-slate-800 disabled:opacity-100";
@@ -17,12 +16,6 @@ export default function MaterialReviewPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [googleForm, setGoogleForm] = useState<GeneratedMaterial["google_form"]>(null);
-  const [creatingForm, setCreatingForm] = useState(false);
-  const [needsGoogleReauth, setNeedsGoogleReauth] = useState(false);
-  const [correctionNotice, setCorrectionNotice] = useState("");
-  const [corrections, setCorrections] = useState<{ number: number; oldAnswer: string; newAnswer: string; reason: string }[]>([]);
-  const [unresolvedQuestions, setUnresolvedQuestions] = useState<number[]>([]);
   const locked = material?.status === "approved";
   const cuteWorksheet = material?.kind === "document" && material.document_type === "ใบงาน" && content.worksheetStyle !== "editable";
 
@@ -38,7 +31,6 @@ export default function MaterialReviewPage() {
             ? { ...reviewedContent, worksheetStyle: reviewedContent.worksheetStyle || "cute" }
             : reviewedContent);
         setReviewNotes(row.review_notes || "");
-        setGoogleForm(row.google_form || null);
       })
       .catch((err) => setError(err.message || "โหลดชิ้นงานไม่สำเร็จ"))
       .finally(() => setLoading(false));
@@ -68,9 +60,6 @@ export default function MaterialReviewPage() {
       setTitle(saved.title);
       setContent(saved.content);
       setReviewNotes(saved.review_notes || "");
-      setCorrectionNotice("");
-      setCorrections([]);
-      setUnresolvedQuestions([]);
     } catch (err: any) {
       setError(err.message || "บันทึกไม่สำเร็จ");
     } finally {
@@ -93,41 +82,14 @@ export default function MaterialReviewPage() {
     }
   }
 
-  async function createGoogleForm() {
-    if (!material) return;
-    setCreatingForm(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/ai/materials/${encodeURIComponent(material.id)}/google-form`, { method: "POST" });
-      const body = await response.json().catch(() => ({}));
-      setNeedsGoogleReauth(body.action === "reauthorize");
-      if (!response.ok && body.material) {
-        setMaterial(body.material);
-        setTitle(body.material.title);
-        setContent(body.material.content || {});
-        setReviewNotes(body.material.review_notes || "");
-        setCorrections(body.corrections || []);
-        setUnresolvedQuestions(body.unresolved_question_numbers || []);
-        setCorrectionNotice(body.error || "AI เสนอแก้เฉลยแล้ว กรุณาตรวจและอนุมัติอีกครั้ง");
-        return;
-      }
-      if (!response.ok) throw new Error(body.error || "สร้าง Google Form ไม่สำเร็จ");
-      setGoogleForm(body.googleForm);
-      setCorrectionNotice("");
-    } catch (err: any) {
-      setError(err.message || "สร้าง Google Form ไม่สำเร็จ");
-    } finally {
-      setCreatingForm(false);
-    }
-  }
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">กำลังโหลด...</div>;
-  if (!material) return <main className="mx-auto max-w-3xl p-8"><p role="alert" className="text-sm text-red-700">{error || "ไม่พบชิ้นงาน"}</p><button onClick={() => router.push("/dashboard/ai/materials")} className="mt-4 text-sm text-brand-700">← กลับไปหน้างานของฉัน</button></main>;
+  if (!material) return <main className="mx-auto max-w-3xl p-8"><p role="alert" className="text-sm text-red-700">{error || "ไม่พบชิ้นงาน"}</p><button onClick={() => router.push("/dashboard/ai")} className="mt-4 text-sm text-brand-700">← กลับไปหน้างานของฉัน</button></main>;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-4xl px-5 py-8 sm:px-8 print:max-w-none print:px-0 print:py-0">
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => router.push("/dashboard/ai/materials")} className="text-sm text-brand-700 hover:underline">← กลับไปงานของฉัน</button>
+        <button onClick={() => router.push(material.kind === "document" ? "/dashboard/documents" : "/dashboard/exams")} className="text-sm text-brand-700 hover:underline">← กลับไปหน้าจัดการ{material.kind === "document" ? "เอกสาร" : "ข้อสอบ"}</button>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${locked ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{locked ? "ครูอนุมัติแล้ว" : "รอครูตรวจสอบ"}</span>
       </div>
 
@@ -220,16 +182,7 @@ export default function MaterialReviewPage() {
 
         {material.learning_objectives && <p className="mt-6 text-sm text-slate-600">จุดประสงค์ที่ระบุ: {material.learning_objectives}</p>}
         {!locked && <label className="no-print mt-6 block text-sm font-medium text-slate-700">หมายเหตุการตรวจ<textarea rows={2} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} className={`${inputClass} mt-1`} placeholder="จดสิ่งที่แก้ไขหรือควรตรวจเพิ่มเติม" /></label>}
-        {error && <div role="alert" className="no-print mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          <p>{error}</p>
-          {needsGoogleReauth && <button onClick={() => void signIn("google", { redirectTo: window.location.href })} className="mt-2 rounded-lg border border-red-300 bg-white px-3 py-2 font-medium hover:bg-red-100">ยืนยันสิทธิ์ Google ใหม่</button>}
-        </div>}
-        {correctionNotice && <section role="status" className="no-print mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-          <p className="font-semibold">ตรวจเฉลยที่ AI ปรับก่อนอนุมัติใหม่</p>
-          <p className="mt-1">{correctionNotice}</p>
-          {corrections.length > 0 && <ul className="mt-2 list-inside list-disc space-y-1">{corrections.map((item) => <li key={item.number}>ข้อ {item.number}: <span className="line-through">{item.oldAnswer}</span> → <strong>{item.newAnswer}</strong>{item.reason ? ` · ${item.reason}` : ""}</li>)}</ul>}
-          {unresolvedQuestions.length > 0 && <p className="mt-2 font-medium">ข้อที่ยังต้องแก้เอง: {unresolvedQuestions.join(", ")}</p>}
-        </section>}
+        {error && <p role="alert" className="no-print mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="no-print mt-7 flex flex-wrap gap-3 border-t border-slate-200 pt-5">
           {!locked ? <>
@@ -238,19 +191,10 @@ export default function MaterialReviewPage() {
           </> : <>
             {(material.kind !== "document" || !cuteWorksheet) && <button onClick={downloadDocx} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">ดาวน์โหลด Word (.docx)</button>}
             {(material.kind !== "document" || cuteWorksheet) && <button onClick={() => window.print()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">{cuteWorksheet ? "พิมพ์ / บันทึกใบงาน PDF" : "พิมพ์ / บันทึกเป็น PDF"}</button>}
-            {material.kind === "exam" && !googleForm && <button disabled={creatingForm} onClick={createGoogleForm} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">{creatingForm ? "กำลังสร้าง Google Form..." : "สร้าง Google Form ให้นักเรียนทำ"}</button>}
+            {material.kind === "exam" && <button onClick={() => router.push("/dashboard/google-forms")} className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50">ไปจัดการ Google Forms</button>}
             {material.kind === "document" && material.document_type === "ใบงาน" && <p className="self-center text-xs text-slate-500">{cuteWorksheet ? "พิมพ์บนกระดาษ A4 แล้วเลือก “บันทึกเป็น PDF” เพื่อได้ใบงานพร้อมพิมพ์" : "ดาวน์โหลด Word เพื่อแก้ไขต่อ หรือพิมพ์เป็น PDF ได้เช่นกัน"}</p>}
           </>}
         </div>
-        {googleForm && <section className="no-print mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <h2 className="font-semibold text-emerald-900">Google Form พร้อมส่งให้นักเรียน</h2>
-          <p className="mt-1 text-sm text-emerald-800">หน้าแรกให้นักเรียนกรอกเลขที่ ห้อง และชื่อ-นามสกุล จากนั้นกด “ถัดไป” เพื่อไปทำข้อสอบ ซึ่งจะตรวจคะแนนอัตโนมัติ</p>
-          <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            <a href={googleForm.responder_url} target="_blank" rel="noreferrer" className="rounded-lg bg-emerald-700 px-3 py-2 font-medium text-white">เปิดลิงก์สำหรับนักเรียน</a>
-            <a href={googleForm.edit_url} target="_blank" rel="noreferrer" className="rounded-lg border border-emerald-300 px-3 py-2 font-medium text-emerald-900">แก้ไขใน Google Forms</a>
-          </div>
-          <p className="mt-3 break-all text-xs text-emerald-900">{googleForm.responder_url}</p>
-        </section>}
       </article>
     </main>
   );
