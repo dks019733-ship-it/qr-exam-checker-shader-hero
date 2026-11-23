@@ -21,6 +21,14 @@ export const OMR_GRID = {
   bubbleDiameter: 12,
 } as const;
 
+export function getOmrRowHeight(questionCount: number) {
+  if (!Number.isInteger(questionCount) || questionCount < 1 || questionCount > 100) {
+    throw new RangeError("OMR question count must be between 1 and 100");
+  }
+  const rowsPerColumn = Math.ceil(questionCount / 2);
+  return Math.min(30, Math.max(OMR_GRID.rowHeight, 300 / rowsPerColumn));
+}
+
 export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, choiceCount: number, questionCount = 100) {
   if (!Number.isInteger(questionNumber) || questionNumber < 1 || questionNumber > 100) {
     throw new RangeError("OMR question number must be between 1 and 100");
@@ -43,6 +51,6 @@ export function getOmrBubbleCenter(questionNumber: number, choiceIndex: number, 
   const tableLeft = OMR_GRID.left + column * (OMR_GRID.tableWidth + OMR_GRID.columnGap);
   return {
     x: tableLeft + OMR_GRID.questionColumnWidth + ((choiceIndex + 0.5) * OMR_GRID.choicesWidth) / choiceCount,
-    y: OMR_GRID.rowTop + row * OMR_GRID.rowHeight + OMR_GRID.rowHeight / 2,
+    y: OMR_GRID.rowTop + row * getOmrRowHeight(questionCount) + getOmrRowHeight(questionCount) / 2,
   };
 }

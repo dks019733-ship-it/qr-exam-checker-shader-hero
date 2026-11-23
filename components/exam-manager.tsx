@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BarChart3, BookOpen, FileText, Loader2, Save, Plus } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BarChart3, BookOpen, FileText, Loader2, Save, Plus } from "lucide-react";
 import { ScoreReport } from "@/components/score-report";
 import { ExamWorkspaceNav } from "@/components/exam-workspace-nav";
 
@@ -131,7 +131,8 @@ export function ExamManager() {
     <Link href="/" className="inline-flex items-center gap-2 text-sm text-slate-600"><ArrowLeft className="h-4 w-4" />กลับหน้าแรก</Link>
     <header className="mt-5 rounded-2xl border border-[#e6e5dc] bg-white p-5 shadow-sm sm:p-6">
       <h1 className="text-2xl font-bold text-[#26382b]">ศูนย์จัดการข้อสอบ</h1>
-      <p className="mt-2 text-sm text-[#697568]">สร้างข้อสอบ จัดการกระดาษคำตอบ ตรวจผล และติดตามคะแนนจากพื้นที่เดียว</p>
+      <p className="mt-2 text-sm text-[#697568]">สร้างข้อสอบ กำหนดเฉลย จัดการกระดาษคำตอบ ตรวจผล และติดตามคะแนนจากพื้นที่เดียว</p>
+      <Link href="/dashboard/ai/materials?kind=exam" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#163d2b]">สร้างข้อสอบด้วย AI <ArrowUpRight className="h-4 w-4" /></Link>
     </header>
     <ExamWorkspaceNav active={activeTab === "scores" ? "scores" : "exams"} onNavigate={(section) => { if (section === "scores") setActiveTab("scores"); if (section === "exams") setActiveTab("work"); }} />
     <div className="mt-4 rounded-2xl border border-[#e6e5dc] bg-white p-1.5 shadow-sm">

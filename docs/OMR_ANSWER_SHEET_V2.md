@@ -9,7 +9,7 @@ OMR FORM V2 is the fixed A4 portrait layout for camera-based answer-bubble recog
 - Paper: A4 portrait at 100% / actual size. The rendered page is fixed at 794 × 1123 CSS pixels.
 - Four solid black 14 × 14 px calibration markers are centered at (39, 39), (755, 39), (755, 1084), and (39, 1084) in page coordinates. Keep all four markers visible; do not crop, cover, write on, or punch through them.
 - Newly generated student QR codes use the `QEC2:` prefix. Existing `QEC1:` QR codes remain readable for student identity, but are treated as legacy sheets and cannot start OMR recognition.
-- The answer grid has two balanced columns, up to 50 questions per column, 4 or 5 choices, and fixed bubble centers defined in `lib/omr-layout.ts`.
+- The answer grid has two balanced columns, up to 50 questions per column, 4 or 5 choices, and bubble centers defined in `lib/omr-layout.ts`. For short exams, row spacing expands up to 30 px; the OMR reader uses the same question-count-dependent geometry.
 - The school logo/seal remains configurable through the existing PNG, JPEG, or WebP upload control.
 - The printed footer identifies this layout as OMR FORM V2.
 

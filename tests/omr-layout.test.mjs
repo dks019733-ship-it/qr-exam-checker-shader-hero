@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getOmrBubbleCenter } from "../lib/omr-layout.ts";
+import { getOmrBubbleCenter, getOmrRowHeight } from "../lib/omr-layout.ts";
 
 test("OMR V2 maps first and last question rows to calibrated coordinates", () => {
   assert.deepEqual(getOmrBubbleCenter(1, 0, 4, 100), { x: 122.625, y: 314.5 });
@@ -25,4 +25,18 @@ test("OMR V2 rejects invalid question and choice coordinates", () => {
   assert.throws(() => getOmrBubbleCenter(101, 0, 4, 100), RangeError);
   assert.throws(() => getOmrBubbleCenter(1, 4, 4, 100), RangeError);
   assert.throws(() => getOmrBubbleCenter(1, 0, 3, 100), RangeError);
+});
+
+test("OMR V2 expands short answer grids while keeping scan coordinates aligned", () => {
+  assert.equal(getOmrRowHeight(10), 30);
+  assert.equal(getOmrRowHeight(20), 30);
+  assert.equal(getOmrRowHeight(30), 20);
+  assert.equal(getOmrRowHeight(40), 15);
+  assert.equal(getOmrRowHeight(50), 15);
+  assert.equal(getOmrRowHeight(60), 15);
+  assert.equal(getOmrRowHeight(80), 15);
+  assert.equal(getOmrRowHeight(100), 15);
+  assert.deepEqual(getOmrBubbleCenter(1, 0, 4, 10), { x: 122.625, y: 322 });
+  assert.deepEqual(getOmrBubbleCenter(10, 3, 4, 10), { x: 703.375, y: 442 });
+  assert.deepEqual(getOmrBubbleCenter(100, 3, 4, 100), { x: 703.375, y: 1049.5 });
 });

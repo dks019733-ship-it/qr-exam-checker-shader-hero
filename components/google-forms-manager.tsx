@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, CheckCircle2, ExternalLink, FileSpreadsheet, Loader2, Plus, RefreshCw } from "lucide-react";
 import { GeneratedMaterial, materialsApi } from "@/lib/ai-api";
@@ -12,6 +13,10 @@ export function GoogleFormsManager() {
   const [creatingId, setCreatingId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [reviewRequiredId, setReviewRequiredId] = useState("");
+  const [needsGoogleReauth, setNeedsGoogleReauth] = useState(false);
+  const [corrections, setCorrections] = useState<{ number: number; oldAnswer: string; newAnswer: string; reason: string }[]>([]);
+  const [unresolvedQuestions, setUnresolvedQuestions] = useState<number[]>([]);
 
   const load = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true); else setLoading(true);
@@ -33,11 +38,28 @@ export function GoogleFormsManager() {
     setCreatingId(material.id);
     setError("");
     setNotice("");
+    setReviewRequiredId("");
+    setNeedsGoogleReauth(false);
+    setCorrections([]);
+    setUnresolvedQuestions([]);
     try {
       const response = await fetch(`/api/ai/materials/${encodeURIComponent(material.id)}/google-form`, { method: "POST" });
       const body = await response.json().catch(() => ({}));
+      setNeedsGoogleReauth(body.action === "reauthorize");
+      if (!response.ok && body.material) {
+        setMaterials((current) => current.map((item) => item.id === material.id ? body.material : item));
+        setReviewRequiredId(material.id);
+        setCorrections(Array.isArray(body.corrections) ? body.corrections : []);
+        setUnresolvedQuestions(Array.isArray(body.unresolved_question_numbers) ? body.unresolved_question_numbers : []);
+        setError(body.error || "ข้อสอบต้องตรวจแก้และอนุมัติอีกครั้งก่อนสร้างฟอร์ม");
+        return;
+      }
       if (!response.ok) throw new Error(body.error || "สร้าง Google Forms ไม่สำเร็จ");
       setMaterials((current) => current.map((item) => item.id === material.id ? { ...item, google_form: body.googleForm } : item));
+      setReviewRequiredId("");
+      setNeedsGoogleReauth(false);
+      setCorrections([]);
+      setUnresolvedQuestions([]);
       setNotice(`สร้าง Google Forms สำหรับ “${material.title}” แล้ว`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "สร้าง Google Forms ไม่สำเร็จ");
@@ -57,9 +79,9 @@ export function GoogleFormsManager() {
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold tracking-[.18em] text-[#c6ddcb]"><FileSpreadsheet className="h-4 w-4" />ONLINE ASSESSMENT</div>
               <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Google Forms</h1>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-[#e0eee3]">จัดการแบบทดสอบออนไลน์จากข้อสอบที่ครูตรวจทานและอนุมัติแล้ว โดยแยกจากเครื่องมือสร้างเอกสาร</p>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-[#e0eee3]">จัดการแบบทดสอบออนไลน์ที่สร้างจากข้อสอบซึ่งครูตรวจทานและอนุมัติแล้ว</p>
             </div>
-            <Link href="/dashboard/ai/materials?kind=exam" className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#1b4932] transition hover:bg-[#edf5ee] sm:self-auto">สร้างข้อสอบด้วย AI <ArrowUpRight className="h-4 w-4" /></Link>
+            <Link href="/dashboard/exams" className="inline-flex min-h-11 items-center justify-center gap-2 self-start rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[#1b4932] transition hover:bg-[#edf5ee] sm:self-auto">ไปหน้าจัดการข้อสอบ <ArrowUpRight className="h-4 w-4" /></Link>
           </div>
           <div className="grid grid-cols-2 divide-x divide-[#e7eee8] sm:grid-cols-3">
             <div className="px-6 py-5"><p className="text-xs text-[#708477]">ข้อสอบทั้งหมด</p><p className="mt-1 text-2xl font-semibold tabular-nums">{loading ? "—" : materials.length}</p></div>
@@ -74,7 +96,7 @@ export function GoogleFormsManager() {
             <button type="button" onClick={() => void load(true)} disabled={refreshing || loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dce9df] px-3 py-2 text-sm font-medium text-[#315b41] transition hover:bg-[#f3f8f4] disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />รีเฟรช</button>
           </div>
 
-          {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
+          {error && <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><p>{error}</p>{corrections.length > 0 && <ul className="mt-2 list-inside list-disc space-y-1">{corrections.map((item) => <li key={item.number}>ข้อ {item.number}: <span className="line-through">{item.oldAnswer}</span> → <strong>{item.newAnswer}</strong>{item.reason ? ` · ${item.reason}` : ""}</li>)}</ul>}{unresolvedQuestions.length > 0 && <p className="mt-2 font-medium">ข้อที่ยังต้องตรวจเอง: {unresolvedQuestions.join(", ")}</p>}{reviewRequiredId && <Link href={`/dashboard/ai/materials/${reviewRequiredId}`} className="mt-2 inline-flex font-semibold underline">เปิดข้อสอบเพื่อตรวจแก้และอนุมัติอีกครั้ง</Link>}{needsGoogleReauth && <button type="button" onClick={() => void signIn("google", { redirectTo: window.location.href })} className="mt-2 block rounded-lg border border-red-300 bg-white px-3 py-2 font-medium hover:bg-red-100">เชื่อมบัญชี Google ใหม่</button>}</div>}
           {notice && <p role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-[#cfe5d4] bg-[#f1f8f2] px-4 py-3 text-sm text-[#245238]"><CheckCircle2 className="h-4 w-4 shrink-0" />{notice}</p>}
 
           {loading ? (
@@ -108,9 +130,9 @@ export function GoogleFormsManager() {
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-[#d5e4d8] bg-[#f8fbf8] px-5 py-12 text-center">
               <FileSpreadsheet className="mx-auto h-8 w-8 text-[#75917b]" />
-              <h3 className="mt-3 font-semibold text-[#294a34]">ยังไม่มีข้อสอบสำหรับสร้างฟอร์ม</h3>
-              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#78877b]">สร้างข้อสอบ ตรวจคำถามและเฉลย แล้วกดอนุมัติ จากนั้นกลับมาสร้าง Google Forms ได้ที่หน้านี้</p>
-              <Link href="/dashboard/ai/materials?kind=exam" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#163d2b]">เริ่มสร้างข้อสอบ <ArrowUpRight className="h-4 w-4" /></Link>
+              <h3 className="mt-3 font-semibold text-[#294a34]">ยังไม่มีข้อสอบที่พร้อมสร้าง Google Forms</h3>
+              <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[#78877b]">ไปที่หน้าจัดการข้อสอบเพื่อสร้างข้อสอบ ตรวจคำถามและเฉลย แล้วอนุมัติก่อนกลับมาสร้าง Google Forms</p>
+              <Link href="/dashboard/exams" className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#1d4b35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#163d2b]">ไปหน้าจัดการข้อสอบ <ArrowUpRight className="h-4 w-4" /></Link>
             </div>
           )}
         </section>
