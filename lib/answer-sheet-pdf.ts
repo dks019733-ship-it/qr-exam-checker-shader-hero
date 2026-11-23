@@ -50,13 +50,64 @@ async function inlineCssUrls(value: string): Promise<string> {
   return result;
 }
 
-async function inlineComputedStyles(source: Element, target: Element): Promise<void> {
+type Html2Canvas = (
+  element: HTMLElement,
+  options: {
+    allowTaint: boolean;
+    backgroundColor: string;
+    foreignObjectRendering: boolean;
+    imageTimeout: number;
+    logging: boolean;
+    scale: number;
+    useCORS: boolean;
+    windowHeight: number;
+    windowWidth: number;
+  },
+) => Promise<HTMLCanvasElement>;
+
+declare global {
+  interface Window {
+    html2canvas?: Html2Canvas;
+  }
+}
+
+let html2CanvasPromise: Promise<Html2Canvas> | null = null;
+
+function loadHtml2Canvas(): Promise<Html2Canvas> {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (!html2CanvasPromise) {
+    html2CanvasPromise = new Promise<Html2Canvas>((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/vendor/html2canvas.min.js";
+      script.async = true;
+      script.dataset.html2canvas = "true";
+      script.onload = () => {
+        if (window.html2canvas) resolve(window.html2canvas);
+        else reject(new Error("โหลดตัวสร้างภาพ PDF ไม่สำเร็จ"));
+      };
+      script.onerror = () => reject(new Error("โหลดตัวสร้างภาพ PDF ไม่สำเร็จ"));
+      document.head.appendChild(script);
+    }).catch((error) => {
+      html2CanvasPromise = null;
+      throw error;
+    });
+  }
+  return html2CanvasPromise;
+}
+
+/**
+ * html2canvas 1.4.1 does not implement CSS Grid. Freeze the browser's already
+ * calculated flex/grid child geometry as absolute positions in an export-only
+ * clone, so the OMR table and header retain their exact on-screen coordinates.
+ */
+async function prepareCanvasClone(source: Element, target: Element): Promise<void> {
   const computed = window.getComputedStyle(source);
-  const style = (target as HTMLElement | SVGElement).style;
+  const targetStyle = (target as HTMLElement | SVGElement).style;
+
   for (let index = 0; index < computed.length; index += 1) {
     const property = computed.item(index);
     const value = await inlineCssUrls(computed.getPropertyValue(property));
-    style.setProperty(property, value, computed.getPropertyPriority(property));
+    targetStyle.setProperty(property, value, computed.getPropertyPriority(property));
   }
 
   if (source instanceof HTMLImageElement && target instanceof HTMLImageElement) {
@@ -74,55 +125,83 @@ async function inlineComputedStyles(source: Element, target: Element): Promise<v
 
   const sourceChildren = Array.from(source.children);
   const targetChildren = Array.from(target.children);
+  const isLayoutContainer = ["flex", "inline-flex", "grid", "inline-grid"].includes(computed.display);
+  const sourceRect = isLayoutContainer ? source.getBoundingClientRect() : null;
+  const childRects = isLayoutContainer
+    ? sourceChildren.map((child) => child.getBoundingClientRect())
+    : [];
+
+  if (isLayoutContainer && sourceRect) {
+    targetStyle.display = "block";
+    targetStyle.position = computed.position === "static" ? "relative" : computed.position;
+    targetStyle.width = `${sourceRect.width}px`;
+    targetStyle.height = `${sourceRect.height}px`;
+    targetStyle.boxSizing = "border-box";
+
+    targetChildren.forEach((child, index) => {
+      const rect = childRects[index];
+      if (!rect || !(child instanceof HTMLElement)) return;
+      child.style.position = "absolute";
+      child.style.left = `${rect.left - sourceRect.left - source.clientLeft + source.scrollLeft}px`;
+      child.style.top = `${rect.top - sourceRect.top - source.clientTop + source.scrollTop}px`;
+      child.style.width = `${rect.width}px`;
+      child.style.height = `${rect.height}px`;
+      child.style.margin = "0";
+      child.style.boxSizing = "border-box";
+      child.style.transform = "none";
+    });
+  }
+
   for (let index = 0; index < sourceChildren.length; index += 1) {
     const sourceChild = sourceChildren[index];
     const targetChild = targetChildren[index];
-    if (sourceChild && targetChild) await inlineComputedStyles(sourceChild, targetChild);
+    if (sourceChild && targetChild) await prepareCanvasClone(sourceChild, targetChild);
   }
 }
 
 async function renderSheetToPng(element: HTMLElement): Promise<Uint8Array> {
   await document.fonts?.ready;
-  const images = Array.from(element.querySelectorAll("img"));
-  await Promise.all(images.map(async (image) => {
-    if (image.complete) {
-      if (image.naturalWidth === 0) throw new Error("โหลด QR Code หรือโลโก้ไม่สำเร็จ");
-      return;
-    }
-    await new Promise<void>((resolve, reject) => {
-      image.addEventListener("load", () => resolve(), { once: true });
-      image.addEventListener("error", () => reject(new Error("โหลด QR Code หรือโลโก้ไม่สำเร็จ")), { once: true });
-    });
-  }));
+  const html2canvas = await loadHtml2Canvas();
 
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-  clone.style.width = `${PAGE_WIDTH}px`;
-  clone.style.height = `${PAGE_HEIGHT}px`;
-  clone.style.margin = "0";
-  clone.style.transform = "none";
-  await inlineComputedStyles(element, clone);
+  const stagingHost = document.createElement("div");
+  stagingHost.style.position = "fixed";
+  stagingHost.style.left = "0";
+  stagingHost.style.top = "0";
+  stagingHost.style.width = `${PAGE_WIDTH}px`;
+  stagingHost.style.height = `${PAGE_HEIGHT}px`;
+  stagingHost.style.overflow = "hidden";
+  stagingHost.style.visibility = "hidden";
+  stagingHost.style.pointerEvents = "none";
+  stagingHost.style.zIndex = "-1";
 
-  const serialized = new XMLSerializer().serializeToString(clone);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${PAGE_WIDTH}" height="${PAGE_HEIGHT}" viewBox="0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}"><foreignObject x="0" y="0" width="100%" height="100%">${serialized}</foreignObject></svg>`;
-  const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  const stagingSource = element.cloneNode(true) as HTMLElement;
+  stagingSource.style.width = `${PAGE_WIDTH}px`;
+  stagingSource.style.height = `${PAGE_HEIGHT}px`;
+  stagingSource.style.margin = "0";
+  stagingSource.style.transform = "none";
+  stagingSource.style.position = "relative";
+  stagingSource.style.visibility = "visible";
+  stagingSource.style.boxShadow = "none";
+  stagingSource.style.outline = "none";
+  stagingHost.appendChild(stagingSource);
+  document.body.appendChild(stagingHost);
 
   try {
-    const image = new Image();
-    image.decoding = "sync";
-    image.src = svgUrl;
-    await image.decode();
+    const canvasClone = stagingSource.cloneNode(true) as HTMLElement;
+    await prepareCanvasClone(stagingSource, canvasClone);
+    stagingHost.replaceChild(canvasClone, stagingSource);
 
-    const canvas = document.createElement("canvas");
-    const scale = 3;
-    canvas.width = PAGE_WIDTH * scale;
-    canvas.height = PAGE_HEIGHT * scale;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("เบราว์เซอร์ไม่รองรับการสร้าง PDF");
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.scale(scale, scale);
-    context.drawImage(image, 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
+    const canvas = await html2canvas(canvasClone, {
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      foreignObjectRendering: false,
+      imageTimeout: 15_000,
+      logging: false,
+      scale: 3,
+      useCORS: true,
+      windowHeight: Math.max(window.innerHeight, PAGE_HEIGHT),
+      windowWidth: Math.max(window.innerWidth, PAGE_WIDTH),
+    });
 
     let png: Blob;
     try {
@@ -131,13 +210,13 @@ async function renderSheetToPng(element: HTMLElement): Promise<Uint8Array> {
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "SecurityError") {
-        throw new Error("ส่งออก PDF ไม่ได้เนื่องจากมีรูปภาพหรือ CSS จากแหล่งภายนอกที่ยังไม่ได้ฝัง กรุณาตรวจสอบรูปภาพในกระดาษคำตอบ");
+        throw new Error("ส่งออก PDF ไม่ได้ เพราะเบราว์เซอร์ปฏิเสธการอ่านภาพจากแหล่งภายนอก กรุณาตรวจสอบรูปภาพในกระดาษคำตอบ");
       }
       throw error;
     }
     return new Uint8Array(await png.arrayBuffer());
   } finally {
-    URL.revokeObjectURL(svgUrl);
+    stagingHost.remove();
   }
 }
 
