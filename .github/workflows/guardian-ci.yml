@@ -84,7 +84,7 @@ jobs:
             20261112100000_student_welcome_dismissal \
             20261119000000_exam_choice_configuration \
             20261120_answer_sheet_subject_code \
-            20261120_secure_student_welcome_dismissal \\
+            20261120_secure_student_welcome_dismissal \
             20261123000000_add_google_form_material_kind
           do
             npx prisma migrate resolve --applied "$migration"
