@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   BookOpen,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   FileSpreadsheet,
   GraduationCap,
-  Plus,
   Search,
   Sparkles,
   Target,
@@ -534,7 +532,7 @@ export function AiMaterialsWorkspace({ initialKind }: { initialKind: MaterialKin
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="ค้นหาชื่อแบบทดสอบหรือระดับชั้น..."
                   aria-label="ค้นหาแบบทดสอบ"
-                  className="w-full rounded-xl border border-[#e0e8dd] bg-[#fafcf9] py-2.5 pl-9 pr-3 text-xs outline-none transition placeholder:text-[#9aa79b] focus:border-[#789274] focus:ring-3 focus:ring-[#496344]/10"
+                  className="w-full rounded-xl border border-[#e0e8dd] bg-[#fafcf9] py-2.5 pl-9 pr-3 text-xs outline-none transition placeholder:text-[#9aa79b] focus:border-[#789274] focus:ring-2 focus:ring-[#496344]/10"
                 />
               </label>
               <button
