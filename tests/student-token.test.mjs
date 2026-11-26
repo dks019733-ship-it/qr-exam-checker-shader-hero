@@ -64,6 +64,7 @@ test("rejects plaintext, weak and malformed legacy PIN hashes", async () => {
     "1234",
     "salt:" + "a".repeat(64),
     "pbkdf2-sha256$1000$" + "a".repeat(32) + "$" + "b".repeat(64),
+    "pbkdf2-sha256$999999999$" + "a".repeat(32) + "$" + "b".repeat(64),
     "pbkdf2-sha256$600000$salt$abc",
     "pbkdf2-sha256$600000$" + "a".repeat(32) + "$" + "b".repeat(63),
     "pbkdf2-sha256$600000$" + "a".repeat(32) + "$" + "b".repeat(64) + "$extra",
