@@ -116,8 +116,10 @@ export async function verifyStudentPin(pin: string, storedHash: string): Promise
     extra.length !== 0 ||
     !Number.isSafeInteger(iterations) ||
     iterations < STUDENT_PIN_ITERATIONS ||
-    !/^[a-f0-9]{32}$/i.test(salt || "") ||
-    !/^[a-f0-9]{64}$/i.test(expectedHex || "")
+    !salt ||
+    !expectedHex ||
+    !/^[a-f0-9]{32}$/i.test(salt) ||
+    !/^[a-f0-9]{64}$/i.test(expectedHex)
   ) {
     return false;
   }
