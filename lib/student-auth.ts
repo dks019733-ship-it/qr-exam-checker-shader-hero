@@ -1,5 +1,3 @@
-import { verifyStudentPin } from "./student-token";
-
 export type StudentLoginCandidate = {
   studentNo: string;
   rollNo: string;
@@ -11,7 +9,7 @@ export function hasRequiredStudentLoginFactors(studentCode: string, secondFactor
 }
 
 function normalizeRollNumber(value: string) {
-  return value.trim().replace(/^0+/, "");
+  return value.trim().replace(/^0+(?=\\d)/, "");
 }
 
 /**
@@ -22,7 +20,8 @@ export async function matchesStudentLogin(
   candidate: StudentLoginCandidate,
   studentCode: string,
   secondFactor: string,
-): Promise<boolean> {
+  pinMatches = false,
+): boolean {
   if (!hasRequiredStudentLoginFactors(studentCode, secondFactor)) return false;
 
   const codeMatches = candidate.studentNo.toLocaleLowerCase("en") === studentCode.trim().toLocaleLowerCase("en");
@@ -32,7 +31,5 @@ export async function matchesStudentLogin(
     candidate.rollNo === secondFactor.trim() ||
     normalizeRollNumber(candidate.rollNo) === normalizeRollNumber(secondFactor);
 
-  if (rollMatches) return true;
-  if (!candidate.identity?.pinHash) return false;
-  return verifyStudentPin(secondFactor, candidate.identity.pinHash);
+  return rollMatches || pinMatches;
 }
