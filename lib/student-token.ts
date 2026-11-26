@@ -90,7 +90,7 @@ export function verifyStudentToken(token: string): StudentTokenPayload | null {
  */
 export async function hashStudentPin(pin: string): Promise<string> {
   const normalizedPin = pin.trim();
-  if (!normalizedPin) throw new Error("STUDENT_PIN_EMPTY");
+  if (normalizedPin.length < 4 || normalizedPin.length > 32) throw new Error("STUDENT_PIN_LENGTH_INVALID");
 
   const salt = randomBytes(16).toString("hex");
   const derived = await pbkdf2Async(
@@ -108,7 +108,7 @@ export async function hashStudentPin(pin: string): Promise<string> {
  * Plain-text and weak legacy hashes are intentionally rejected; no PINs are currently configured.
  */
 export async function verifyStudentPin(pin: string, storedHash: string): Promise<boolean> {
-  if (typeof pin !== "string" || typeof storedHash !== "string") return false;
+  if (typeof pin !== "string" || pin.trim().length < 4 || pin.trim().length > 32 || typeof storedHash !== "string") return false;
   const [algorithm, iterationsText, salt, expectedHex, ...extra] = storedHash.split("$");
   const iterations = Number(iterationsText);
   if (
@@ -116,6 +116,7 @@ export async function verifyStudentPin(pin: string, storedHash: string): Promise
     extra.length !== 0 ||
     !Number.isSafeInteger(iterations) ||
     iterations < STUDENT_PIN_ITERATIONS ||
+    iterations > 1_000_000 ||
     !salt ||
     !expectedHex ||
     !/^[a-f0-9]{32}$/i.test(salt) ||
