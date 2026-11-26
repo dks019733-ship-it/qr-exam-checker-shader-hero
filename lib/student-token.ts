@@ -1,6 +1,20 @@
-import crypto from "crypto";
+import {
+  createHmac,
+  pbkdf2,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
+import { promisify } from "node:util";
 
-const SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "student-portal-secret-token-key-2026";
+const pbkdf2Async = promisify(pbkdf2);
+const STUDENT_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STUDENT_PIN_ITERATIONS = 600_000;
+const STUDENT_PIN_KEY_LENGTH = 32;
+
+function getStudentTokenSecret(): string | null {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  return typeof secret === "string" && secret.length > 0 ? secret : null;
+}
 
 export interface StudentTokenPayload {
   studentId: string;
@@ -10,71 +24,118 @@ export interface StudentTokenPayload {
 }
 
 /**
- * Creates an HMAC-SHA256 signed token for authenticated student sessions.
+ * Creates an HMAC-SHA256 signed student session.
+ * A missing server secret is a configuration error; never fall back to a source-code key.
  */
-export function signStudentToken(payload: { studentId: string; studentNo: string; classId: string }): string {
+export function signStudentToken(payload: {
+  studentId: string;
+  studentNo: string;
+  classId: string;
+}): string {
+  const secret = getStudentTokenSecret();
+  if (!secret) throw new Error("STUDENT_TOKEN_SECRET_NOT_CONFIGURED");
+
   const data: StudentTokenPayload = {
     ...payload,
-    exp: Date.now() + 14 * 24 * 60 * 60 * 1000, // 14 days expiration
+    exp: Date.now() + STUDENT_TOKEN_TTL_MS,
   };
   const json = Buffer.from(JSON.stringify(data)).toString("base64url");
-  const signature = crypto.createHmac("sha256", SECRET).update(json).digest("base64url");
+  const signature = createHmac("sha256", secret).update(json).digest("base64url");
   return `${json}.${signature}`;
 }
 
 /**
- * Verifies an HMAC-SHA256 signed student token.
+ * Verifies the signature, expiry and complete student identity claims.
+ * Invalid configuration or malformed input always fails closed.
  */
 export function verifyStudentToken(token: string): StudentTokenPayload | null {
-  if (!token || !token.includes(".")) return null;
+  const secret = getStudentTokenSecret();
+  if (!secret || typeof token !== "string" || !token || !token.includes(".")) return null;
+
   const parts = token.split(".");
   if (parts.length !== 2) return null;
   const [json, signature] = parts;
   if (!json || !signature) return null;
 
   const signatureBytes = Buffer.from(signature);
-  const expectedSig = crypto.createHmac("sha256", SECRET).update(json).digest("base64url");
+  const expectedSig = createHmac("sha256", secret).update(json).digest("base64url");
   const expectedBytes = Buffer.from(expectedSig);
-  if (signatureBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(signatureBytes, expectedBytes)) {
+  if (
+    signatureBytes.length !== expectedBytes.length ||
+    !timingSafeEqual(signatureBytes, expectedBytes)
+  ) {
     return null;
   }
 
   try {
-    const data = JSON.parse(Buffer.from(json, "base64url").toString("utf-8")) as StudentTokenPayload;
-    if (!data.studentId || !data.exp || Date.now() > data.exp) {
+    const data = JSON.parse(Buffer.from(json, "base64url").toString("utf-8")) as Partial<StudentTokenPayload>;
+    if (
+      typeof data.studentId !== "string" || !data.studentId ||
+      typeof data.studentNo !== "string" || !data.studentNo ||
+      typeof data.classId !== "string" || !data.classId ||
+      typeof data.exp !== "number" || !Number.isSafeInteger(data.exp) ||
+      Date.now() >= data.exp
+    ) {
       return null;
     }
-    return data;
+    return data as StudentTokenPayload;
   } catch {
     return null;
   }
 }
 
 /**
- * Hashes a student PIN using SHA-256 with salt.
+ * Hashes a student PIN with PBKDF2-HMAC-SHA256 and a per-PIN random salt.
+ * The asynchronous implementation avoids blocking the Node.js event loop.
  */
-export function hashStudentPin(pin: string): string {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.pbkdf2Sync(pin.trim(), salt, 1000, 32, "sha256").toString("hex");
-  return `${salt}:${hash}`;
+export async function hashStudentPin(pin: string): Promise<string> {
+  const normalizedPin = pin.trim();
+  if (normalizedPin.length < 4 || normalizedPin.length > 32) throw new Error("STUDENT_PIN_LENGTH_INVALID");
+
+  const salt = randomBytes(16).toString("hex");
+  const derived = await pbkdf2Async(
+    normalizedPin,
+    salt,
+    STUDENT_PIN_ITERATIONS,
+    STUDENT_PIN_KEY_LENGTH,
+    "sha256",
+  ) as Buffer;
+  return `pbkdf2-sha256$${STUDENT_PIN_ITERATIONS}$${salt}$${derived.toString("hex")}`;
 }
 
 /**
- * Validates a student PIN against its stored PBKDF2 hash, or plain match if legacy.
+ * Verifies only the current versioned PBKDF2 format.
+ * Plain-text and weak legacy hashes are intentionally rejected; no PINs are currently configured.
  */
-export function verifyStudentPin(pin: string, storedHashOrValue: string): boolean {
-  if (!storedHashOrValue) return false;
-  if (storedHashOrValue.includes(":")) {
-    try {
-      const [salt, hash, ...extra] = storedHashOrValue.split(":");
-      if (!salt || !hash || extra.length > 0 || !/^[a-f0-9]{64}$/i.test(hash)) return false;
-      const testHash = crypto.pbkdf2Sync(pin.trim(), salt, 1000, 32, "sha256").toString("hex");
-      const storedBytes = Buffer.from(hash, "hex");
-      const testBytes = Buffer.from(testHash, "hex");
-      return storedBytes.length === testBytes.length && crypto.timingSafeEqual(storedBytes, testBytes);
-    } catch {
-      return false;
-    }
+export async function verifyStudentPin(pin: string, storedHash: string): Promise<boolean> {
+  if (typeof pin !== "string" || pin.trim().length < 4 || pin.trim().length > 32 || typeof storedHash !== "string") return false;
+  const [algorithm, iterationsText, salt, expectedHex, ...extra] = storedHash.split("$");
+  const iterations = Number(iterationsText);
+  if (
+    algorithm !== "pbkdf2-sha256" ||
+    extra.length !== 0 ||
+    !Number.isSafeInteger(iterations) ||
+    iterations < STUDENT_PIN_ITERATIONS ||
+    iterations > 1_000_000 ||
+    !salt ||
+    !expectedHex ||
+    !/^[a-f0-9]{32}$/i.test(salt) ||
+    !/^[a-f0-9]{64}$/i.test(expectedHex)
+  ) {
+    return false;
   }
-  return storedHashOrValue.trim() === pin.trim();
+
+  try {
+    const actual = await pbkdf2Async(
+      pin.trim(),
+      salt,
+      iterations,
+      STUDENT_PIN_KEY_LENGTH,
+      "sha256",
+    ) as Buffer;
+    const expected = Buffer.from(expectedHex, "hex");
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
