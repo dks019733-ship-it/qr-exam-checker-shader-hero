@@ -106,6 +106,6 @@ test("rejects a correct roll number without the student code", async () => {
 test("accepts a configured PIN only with the correct student code", async () => {
   const pinHash = await hashStudentPin("7391");
   const candidate = { studentNo: "S001", rollNo: "5", identity: { pinHash } };
-  assert.equal(await matchesStudentLogin(candidate, "S001", "7391"), true);
+  assert.equal(await matchesStudentLogin(candidate, "S001", "7391", true), true);
   assert.equal(await matchesStudentLogin(candidate, "S002", "7391"), false);
 });
