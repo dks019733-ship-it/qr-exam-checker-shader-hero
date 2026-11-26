@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { signStudentToken, verifyStudentToken } from "@/lib/student-token";
-import { matchesStudentLogin, hasRequiredStudentLoginFactors } from "@/lib/student-auth";
+import { signStudentToken, verifyStudentToken, verifyStudentPin } from "@/lib/student-token";
+import { matchesStudentLogin, matchesStudentCode, hasRequiredStudentLoginFactors } from "@/lib/student-auth";
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -64,7 +64,13 @@ export async function POST(request: Request) {
     });
 
     const matchedFlags = await Promise.all(
-      candidates.map((candidate) => matchesStudentLogin(candidate, studentCode, rollNoOrPin)),
+      candidates.map(async (candidate) => {
+        if (!matchesStudentCode(candidate, studentCode)) return false;
+        if (matchesStudentLogin(candidate, studentCode, rollNoOrPin)) return true;
+        if (!candidate.identity?.pinHash) return false;
+        const pinMatches = await verifyStudentPin(rollNoOrPin, candidate.identity.pinHash);
+        return matchesStudentLogin(candidate, studentCode, rollNoOrPin, pinMatches);
+      }),
     );
     let matched = candidates.filter((_, index) => matchedFlags[index]);
 
