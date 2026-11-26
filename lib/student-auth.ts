@@ -12,6 +12,13 @@ function normalizeRollNumber(value: string) {
   return value.trim().replace(/^0+(?=\d)/, "");
 }
 
+export function matchesStudentCode(candidate: StudentLoginCandidate, studentCode: string) {
+  return Boolean(
+    studentCode.trim() &&
+    candidate.studentNo.toLocaleLowerCase("en") === studentCode.trim().toLocaleLowerCase("en"),
+  );
+}
+
 /**
  * A student must prove both their student code and either their class roll number
  * or a configured PIN. Supplying only one identifier must never authenticate.
@@ -24,8 +31,7 @@ export function matchesStudentLogin(
 ): boolean {
   if (!hasRequiredStudentLoginFactors(studentCode, secondFactor)) return false;
 
-  const codeMatches = candidate.studentNo.toLocaleLowerCase("en") === studentCode.trim().toLocaleLowerCase("en");
-  if (!codeMatches) return false;
+  if (!matchesStudentCode(candidate, studentCode)) return false;
 
   const rollMatches =
     candidate.rollNo === secondFactor.trim() ||
