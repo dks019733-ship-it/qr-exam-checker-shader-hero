@@ -11,6 +11,10 @@ const noStoreHeaders = {
 
 export async function POST(request: Request) {
   try {
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(contentLength) && contentLength > 8_192) {
+      return NextResponse.json({ error: "คำขอมีขนาดใหญ่เกินกำหนด" }, { status: 413, headers: noStoreHeaders });
+    }
     const body = await request.json().catch(() => null);
 
     // Accept the current client contract (studentId + studentNo) and the
@@ -90,7 +94,7 @@ export async function POST(request: Request) {
     if (matched.length === 0) {
       return NextResponse.json(
         { error: "เลขที่ หรือ รหัสประจำตัวไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่อีกครั้ง" },
-        { status: 401 }
+        { status: 401, headers: noStoreHeaders }
       );
     }
 
@@ -151,7 +155,7 @@ export async function GET() {
     if (!token) return NextResponse.json({ authenticated: false }, { headers: noStoreHeaders });
 
     const payload = verifyStudentToken(token);
-    if (!payload?.studentId) return NextResponse.json({ authenticated: false });
+    if (!payload?.studentId) return NextResponse.json({ authenticated: false }, { headers: noStoreHeaders });
 
     const student = await prisma.student.findUnique({
       where: { id: payload.studentId, isActive: true },
@@ -170,7 +174,7 @@ export async function GET() {
       },
     });
 
-    if (!student) return NextResponse.json({ authenticated: false });
+    if (!student) return NextResponse.json({ authenticated: false }, { headers: noStoreHeaders });
 
     return NextResponse.json({
       authenticated: true,
