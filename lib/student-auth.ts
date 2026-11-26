@@ -1,4 +1,4 @@
-import { verifyStudentPin } from "@/lib/student-token";
+import { verifyStudentPin } from "./student-token";
 
 export type StudentLoginCandidate = {
   studentNo: string;
